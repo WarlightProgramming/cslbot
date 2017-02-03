@@ -1,0 +1,10 @@
+language: python
+python:
+- '2.7'
+install: pip install -r requirements.txt
+script: nosetests --with-coverage
+after_success:
+- codeclimate-test-reporter
+env:
+  global:
+    secure: bavXK7Ia+2yQazn5EtSpW3W8VtTEbx/AGb2R0Tq+9+51iICgzEFFJUHn0I5eZKvsDf3XKkCUc3EYlDdfr0g/Cac7hX7WdW/DiloN3Q7EIIusjYwxmwXXDNwWu89+VBIzxN1Zd0dTOoHhGcN8svBT7hgxph2NMCkvawqC/ochbcIrICwdBgbAKFLDGpT+a8RtOCLM01hQwiqJJKWLHKJo8X3wbmxDbmsHc11MR/qKlx8uPmytfLlrjRIL5Y2AOdkiDvYo5W+JtbcTU3+ImdiQ7YdlvC+8KBqjRw0+NYYlu+3/hxzpPMkcmNXmZ+dbbRr7mlKbhZR5x/PWJl+My4xRmWlmi9iH7hCfCIs+WLNjOyFca5qek/vLjCPuvq40twEPWD3EchT/6coV2uE3b6uxGejGWc/8eTctZF2vdufKsCXFgMR+q6qSzbkgunUw8gFE92yeFuN5MRhiKZpFKivBRJihav9KJFnkgpZc1FSmNRSrGBOjumjVveb+jHnf1GHukspkCNaw+/u02IrOT9QP3FiQ8Jyc++CpvHDO82vsbgfboEqwsMwJX0Jyjs0ofXvMJFeK9pwQazUkPRnRwzzDasNZgZDqSXaodlI4/Xa8cbp62FCF9XR74Rr24QPK+MYoBY3LZCGTLCW6rP4NWDiqFZSM1Lr+8r2pzzxjlCHqJz8=
