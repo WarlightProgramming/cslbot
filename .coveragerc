@@ -1,4 +1,8 @@
 [run]
 branch = True
+omit =
+    cslbot/test/*
 [report]
 show_missing = True
+include =
+    cslbot/*
