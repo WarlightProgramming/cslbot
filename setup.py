@@ -6,6 +6,7 @@ setup(
         'sheetDB==0.1.1',
         'wl_parsers==0.1.1',
         'wl_api==0.1.4',
+        'skills==0.3.0',
     ],
     version = '0.0.1',
     description = 'a bot to automate Warlight leagues',
