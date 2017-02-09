@@ -1,7 +1,7 @@
 from distutils.core import setup
 setup(
-    name = 'cslbot',
-    packages = ['cslbot'],
+    name = 'wl_cslbot',
+    packages = ['wl_cslbot'],
     install_requires = [
         'sheetDB==0.1.1',
         'wl_parsers==0.1.1',

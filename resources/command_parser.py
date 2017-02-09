@@ -6,17 +6,20 @@ from wl_parsers import ForumThreadParser
 
 # main class
 class CommandParser(ForumThreadParser):
+    ## class to parse commands
+    ### takes a threadID (int or string)
 
     ## parseCommandData
     ### parses a single chunk of text
     @staticmethod
     def parseCommandData(commandText):
-        quote, commandData, commandInfo, reserved = ("&quot;", commandText.split(), 
-                                                     list(), None)
+        quote, commandData = "&quot;", commandText.split()
+        commandInfo, reserved = list(), None
         for command in commandData:
             if reserved is None:
                 if (quote == command[:(len(quote))]): # at start of command
-                    if (quote != command and quote == command[-(len(quote)):]): # at start and end
+                    if (quote != command and quote == command[-(len(quote)):]): 
+                        # at start and end
                         command = command.replace(quote, "")
                         commandInfo.append(command)
                     else: # only at start
@@ -36,34 +39,33 @@ class CommandParser(ForumThreadParser):
         command = dict()
         if (len(commandInfo) < 2):
             return command
-        command["type"] = commandInfo[0]
-        command["orders"] = commandInfo[1:]
+        command['type'] = commandInfo[0]
+        command['orders'] = tuple(commandInfo[1:])
         return command
 
     ## parsePost
     ### parses an entire post
     def parsePost(self, post):
-        commands = list()
-        postText = post[3]
-        postAuthor = post[1][0]
-        cmdMarker = '<pre class="prettyprint">'
-        cmdEnd = '</pre>'
+        commands, postText = list(), post['message']
+        postAuthor = post['author']['ID']
+        cmdMarker, cmdEnd = '<pre class="prettyprint">', '</pre>'
         ignoreCommands = False
-        while (cmdEnd in postText and ignoreCommands == False):
+        while (cmdEnd in postText and ignoreCommands is False):
             commandText = self.getValueFromBetween(postText,
-                               cmdMarker, cmdEnd)
+                                cmdMarker, cmdEnd)
             if "<br>" in commandText:
                 replaceText = commandText.replace("<br>",
                               (cmdEnd + cmdMarker))
             commandData = self.parseCommandData(commandText)
-            if ('type' in commandData and commandData['type'] == "!BOT_IGNORE"):
+            if ('type' in commandData and 
+                commandData['type'] == "!BOT_IGNORE"):
                 ignoreCommands = True
                 break
             else:
-                command = list()
-                command.append(postAuthor)
-                command.append(commandData)
-                commands.append(tuple(command))
+                command = dict()
+                command['author'] = postAuthor
+                command['command'] = commandData
+                commands.append(command)
                 postText = postText[(postText.find(cmdEnd) +
                                     len(cmdEnd)):]
         return commands
