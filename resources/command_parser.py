@@ -37,9 +37,11 @@ class CommandParser(ForumThreadParser):
                     command = " " + command
                     reserved += command
         command = dict()
-        if (len(commandInfo) < 2):
+        if (len(commandInfo) <= 0): # nothing
             return command
         command['type'] = commandInfo[0]
+        if (len(commandInfo) <= 1): # just a command type
+            return command
         command['orders'] = tuple(commandInfo[1:])
         return command
 
