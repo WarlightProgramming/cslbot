@@ -45,37 +45,59 @@ class CommandParser(ForumThreadParser):
         command['orders'] = tuple(commandInfo[1:])
         return command
 
+    ## _getValueFromBetween
+    ### gets a value in a text field situated between
+    ### two known markers
+    ###
+    ### @PARAMS
+    ### 'text' (string): text to extract from
+    ### 'before' (string): known marker occurring before desired text
+    ### 'after' (string): known marker occurring after desired text
+    @staticmethod
+    def _getValueFromBetween(text, before, after):
+        if before is None: before = ""
+        if after is None: after = ""
+        beforeLoc = text.find(before) + len(before)
+        value = text[beforeLoc:]
+        if (after == ""): return value
+        afterLoc = value.find(after)
+        value = value[:afterLoc]
+        return value
+
     ## parsePost
     ### parses an entire post
+    ### returns a list of dictionaries representing commands
+    ### each dictionary contains an 'author', 'type', and
+    ### (if provided) 'orders' (tuple of command args)
     def parsePost(self, post):
         commands, postText = list(), post['message']
         postAuthor = post['author']['ID']
         cmdMarker, cmdEnd = '<pre class="prettyprint">', '</pre>'
         ignoreCommands = False
         while (cmdEnd in postText and ignoreCommands is False):
-            commandText = self.getValueFromBetween(postText,
-                                cmdMarker, cmdEnd)
+            commandText = self._getValueFromBetween(postText,
+                                           cmdMarker, cmdEnd)
             if "<br>" in commandText:
                 replaceText = commandText.replace("<br>",
                               (cmdEnd + cmdMarker))
+                postText = postText.replace(commandText,
+                                            replaceText)
+                commandText = commandText[:commandText.find("<br>")]
             commandData = self.parseCommandData(commandText)
             if ('type' in commandData and 
                 commandData['type'] == "!BOT_IGNORE"):
                 ignoreCommands = True
                 break
             else:
-                command = dict()
-                command['author'] = postAuthor
-                command['command'] = commandData
-                commands.append(command)
+                commandData['author'] = postAuthor
+                commands.append(commandData)
                 postText = postText[(postText.find(cmdEnd) +
                                     len(cmdEnd)):]
         return commands
 
-    ## commands
+    ## getCommands
     ### parses an entire thread (starts after minOffset)
-    @property
-    def commands(self, minOffset):
+    def getCommands(self, minOffset):
         posts = self.getPosts(minOffset=minOffset)
         commands = list()
         for post in posts:
