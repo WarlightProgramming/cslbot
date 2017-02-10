@@ -5,7 +5,6 @@
 
 # imports
 import skills
-from resources.command_parser import CommandParser
 
 # main League class
 class League(object):
@@ -20,21 +19,3 @@ class League(object):
         self.team_size = self.constants.get("TEAM_SIZE", 1)
         self.game_size = self.constants.get("GAME_SIZE", 2)
         self.rating_system = self.constants.get("SYSTEM", "ELO")
-        self.threadID = self._getThreadID(self.constants.get("THREAD"))
-        self.offset = int(self.constants.get("OFFSET"))
-
-    ## _getThreadID
-    ### retrieves thread ID from URL
-    @staticmethod
-    def _getThreadID(threadURL):
-        baseURL = "https://www.warlight.net/Forum/"
-        threadURL = threadURL.replace("?", "")
-        if baseURL not in threadURL:
-            return int(threadURL)
-        return int(threadURL[(threadURL.find(baseURL)+len(baseURL)):])
-
-    ## _getCommands
-    ### retrieves commands from thread
-    def _getCommands(self):
-        thread = CommandParser(self.threadID)
-        return thread._getCommands(self.offset)
