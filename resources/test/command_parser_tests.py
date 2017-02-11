@@ -75,11 +75,12 @@ def test_parsePost():
 
 @patch('resources.command_parser.CommandParser.parsePost')
 @patch('resources.command_parser.CommandParser.getPosts')
-def test_getCommnds(getPosts, parsePost):
+def test_getCommands(getPosts, parsePost):
     getPosts.return_value = [1,2,3,4,5]
+    parsePost.return_value = [6,]
     commands = parser.getCommands("minOffset")
     assert_equals(len(commands), 5)
-    assert_equals(commands[2], parsePost.return_value)
+    assert_equals(commands[2], 6)
     parsePost.assert_called_with(5)
     assert_equals(parsePost.call_count, 5)
     getPosts.assert_called_once_with(minOffset="minOffset")
