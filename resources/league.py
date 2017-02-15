@@ -11,11 +11,11 @@ class League(object):
 
     ## takes a games Table,
     ## a teams Table,
-    ## and a constants dictionary
-    def __init__(self, games, teams, constants):
+    ## and a commands dictionary
+    def __init__(self, games, teams, commands):
         self.games = games
         self.teams = teams
-        self.constants = constants
-        self.team_size = self.constants.get("TEAM_SIZE", 1)
-        self.game_size = self.constants.get("GAME_SIZE", 2)
-        self.rating_system = self.constants.get("SYSTEM", "ELO")
+        self.commands = commands
+        self.team_size = self.commands.get("TEAM_SIZE", 1)
+        self.game_size = self.commands.get("GAME_SIZE", 2)
+        self.rating_system = self.commands.get("SYSTEM", "ELO")
