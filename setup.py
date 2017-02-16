@@ -3,7 +3,7 @@ setup(
     name = 'wl_cslbot',
     packages = ['wl_cslbot'],
     install_requires = [
-        'sheetDB>=0.1.2',
+        'sheetDB>=0.1.3',
         'wl_parsers>=0.1.1',
         'wl_api>=0.1.4',
         'skills>=0.3.0',
