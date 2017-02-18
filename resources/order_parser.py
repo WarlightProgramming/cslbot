@@ -85,7 +85,7 @@ class OrderParser(ForumThreadParser):
                 orderText = orderText[:orderText.find("<br>")]
             orderData = self.parseOrderData(orderText)
             if ('type' in orderData and 
-                orderData['type'].lower() == "!BOT_IGNORE"):
+                orderData['type'].lower() == "!bot_ignore"):
                 ignoreOrders = True
                 break
             else:
