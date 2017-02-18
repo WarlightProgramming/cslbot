@@ -4,7 +4,6 @@
 #########################
 
 # imports
-import skills
 
 # main League class
 class League(object):

@@ -3,9 +3,6 @@
 
 # imports
 import string
-import random
-import copy
-import skills
 from munkres import Munkres
 
 # isInteger
@@ -46,12 +43,12 @@ def makeCostMatrix(teamList, teamsDict, conflictMul=10, selfMul=100,
     for team1 in teamList:
         result = list()
         for team2 in teamList:
-            if (team1 == team2): 
+            if (team1 == team2):
                 result.append('self')
-            elif (isConflict(teamsDict, team1, team2)): 
+            elif (isConflict(teamsDict, team1, team2)):
                 result.append('conflict')
-            else: 
-                cost = (abs(teamsDict[team1]['rating'] - 
+            else:
+                cost = (abs(teamsDict[team1]['rating'] -
                             teamsDict[team2]['rating']))
                 cost = cost ** costPow
                 result.append(cost)
@@ -67,15 +64,14 @@ def makeCostMatrix(teamList, teamsDict, conflictMul=10, selfMul=100,
     return results
 
 # pair
-## given a dictionary of team IDs, their ratings ('rating'), 
-## desired # of games ('count'), 
+## given a dictionary of team IDs, their ratings ('rating'),
+## desired # of games ('count'),
 ## and teams they can't match up against ('conflicts'),
 ## returns a list of tuples of resulting matchups (using team IDs)
 def pair(teams):
     pairs, teamList = list(), list()
     for team in teams:
-        for x in xrange(teams[team]['count']):
-            teamList.append(team)
+        teamList += [team,] * teams[team]['count']
     costMatrix = makeCostMatrix(teamList, teams)
     indices = Munkres().compute(costMatrix)
     for row, col in indices:

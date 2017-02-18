@@ -18,7 +18,7 @@ class OrderParser(ForumThreadParser):
         for order in orderData:
             if reserved is None:
                 if (quote == order[:(len(quote))]): # at start of order
-                    if (quote != order and quote == order[-(len(quote)):]): 
+                    if (quote != order and quote == order[-(len(quote)):]):
                         # at start and end
                         order = order.replace(quote, "")
                         orderInfo.append(order)
@@ -84,7 +84,7 @@ class OrderParser(ForumThreadParser):
                                             replaceText)
                 orderText = orderText[:orderText.find("<br>")]
             orderData = self.parseOrderData(orderText)
-            if ('type' in orderData and 
+            if ('type' in orderData and
                 orderData['type'].lower() == "!bot_ignore"):
                 ignoreOrders = True
                 break

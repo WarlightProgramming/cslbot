@@ -10,7 +10,6 @@ from errors import *
 from utility import *
 from order_parser import OrderParser
 from wl_parsers import ForumThreadParser
-from league import League
 
 # constants
 
@@ -40,9 +39,9 @@ class LeagueManager(object):
     ### takes a sheetDB Database object
     def __init__(self, database):
         self.database = database
-        self.commands = self.database.fetchTable(COMMANDS_TITLE, 
+        self.commands = self.database.fetchTable(COMMANDS_TITLE,
                                          header=COMMANDS_HEADER)
-        self.logSheet = self.database.fetchTable(LOG_TITLE, 
+        self.logSheet = self.database.fetchTable(LOG_TITLE,
                                 constraints=LOG_CONSTRAINTS)
         self.leagues = self.commands.findEntities({TITLE_CMD: CMD_MAKE})\
                        [0][TITLE_ARG].split(',')
@@ -78,7 +77,7 @@ class LeagueManager(object):
         commands = self.commands.getAllEntities(keyLabel=TITLE_CMD)
         results = dict()
         for command in commands:
-            if (commands[command][TITLE_LG] == league or 
+            if (commands[command][TITLE_LG] == league or
                 commands[command][TITLE_LG] == LG_ALL):
                 args = commands[command][TITLE_ARG]
                 if "," in args: args = args.split(",")
@@ -88,7 +87,8 @@ class LeagueManager(object):
     ## fetchThreadOrders
     ### given a thread ID/URL (string), fetches a list of
     ### orders since the last offset (int)
-    def fetchThreadOrders(self, thread, offset):
+    @staticmethod
+    def fetchThreadOrders(thread, offset):
         startMarker = 'Forum/'
         if startMarker in thread:
             thread = thread[thread.find(startMarker):]
@@ -105,14 +105,16 @@ class LeagueManager(object):
 
     ## _narrowOrders
     ### narrows a thread orders list to only orders that relate to a league
-    def _narrowOrders(self, orders, league):
-        return [order for order in orders if 
+    @staticmethod
+    def _narrowOrders(orders, league):
+        return [order for order in orders if
                 (order['orders'][0] == league or
                  order['orders'][0] == LG_ALL)]
 
     ## _getNonSpecificOrders
     ### retrieves only orders that don't specify a league
-    def _getNonSpecificOrders(self, orders, leagues):
+    @staticmethod
+    def _getNonSpecificOrders(orders, leagues):
         return [order for order in orders if
                 (order['orders'][0] not in leagues and
                  order['orders'][0] != LG_ALL)]
@@ -120,7 +122,7 @@ class LeagueManager(object):
     ## _setLeagueState
     ### changes the global league state
     def _setLeagueState(self, newState):
-        if newState not in ["RUNNING", "NO_GAMES", "NO_COMMANDS", 
+        if newState not in ["RUNNING", "NO_GAMES", "NO_COMMANDS",
                             "ENDING", "ENDED"]:
             raise OrderError("Invalid league state: %s" % (newState))
         self.commands.updateMatchingEntities({TITLE_CMD: CMD_STATE,
@@ -155,6 +157,5 @@ class LeagueManager(object):
             raise ThreadError("Improper thread link or offset!")
         thread, offset = thread[0][TITLE_ARG], offset[0][TITLE_ARG]
         orders = self.fetchThreadOrders(thread, offset)
-        self._runOrders(self._getNonSpecificOrders(orders))
-        for league in self.leagues:
-            pass
+        self._runOrders(self._getNonSpecificOrders(orders),
+                        self.leagues)

@@ -3,7 +3,7 @@
 
 # imports
 from nose.tools import *
-from mock import patch, MagicMock
+from mock import patch
 from resources.order_parser import *
 
 # main class tests
