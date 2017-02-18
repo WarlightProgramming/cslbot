@@ -157,5 +157,4 @@ class LeagueManager(object):
             raise ThreadError("Improper thread link or offset!")
         thread, offset = thread[0][TITLE_ARG], offset[0][TITLE_ARG]
         orders = self.fetchThreadOrders(thread, offset)
-        self._runOrders(self._getNonSpecificOrders(orders),
-                        self.leagues)
+        self._runOrders(self._getNonSpecificOrders(orders, self.leagues))
