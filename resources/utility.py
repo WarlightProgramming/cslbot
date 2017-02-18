@@ -6,6 +6,7 @@ import string
 import random
 import copy
 import skills
+from munkres import Munkres
 
 # isInteger
 ## checks whether a string can be converted to an int
@@ -15,32 +16,55 @@ def isInteger(num):
             return False
     return True
 
-# isOdd
-## given an integer, returns True if it's odd
-def isOdd(num):
-    return bool(num % 2) # 1 if odd -> True
-
-# declareConflict
-## adds a conflict to teams dict
-def declareConflict(teamsDict, team, conflict):
-    teamsDict[team]['conflicts'].append(conflict)
-    if team != conflict: # symmtery
-        teamsDict[conflict]['conflicts'].append(team)
-
 # isConflict
 ## determines whether a conflict exists
 def isConflict(teamsDict, team1, team2):
     return (team2 in teamsDict[team1]['conflicts'] or
             team1 in teamsDict[team2]['conflicts'])
 
-# getNeighbor
-## finds nearest non-conflict neighbor
-def getNeighbor(team, teamsList, teamsDict):
-    for neighbor in teamsList:
-        if (neighbor is not team and 
-            not isConflict(teamsDict, team, neighbor)):
-            return neighbor
-    return None
+# matrixReplace
+## replaces values in a matrix using a dictionary
+def matrixReplace(matrix, replaceDict):
+    results = list()
+    if not isinstance(matrix[0], list):
+        for val in matrix:
+            if val in replaceDict:
+                results.append(replaceDict[val])
+            else:
+                results.append(val)
+        return results
+    else:
+        for submatrix in matrix:
+            results.append(matrixReplace(submatrix, replaceDict))
+        return results
+
+# makeCostMatrix
+## given a team list, makes a cost matrix
+def makeCostMatrix(teamList, teamsDict, conflictMul=10, selfMul=100,
+                   costPow=1.0):
+    results = list()
+    for team1 in teamList:
+        result = list()
+        for team2 in teamList:
+            if (team1 == team2): 
+                result.append('self')
+            elif (isConflict(teamsDict, team1, team2)): 
+                result.append('conflict')
+            else: 
+                cost = (abs(teamsDict[team1]['rating'] - 
+                            teamsDict[team2]['rating']))
+                cost = cost ** costPow
+                result.append(cost)
+        results.append(result)
+    maxVal = None
+    for vals in results:
+        for val in vals:
+            if (isinstance(val, int) or isinstance(val, float) and
+                (maxVal is None or val > maxVal)):
+                maxVal = val
+    results = matrixReplace(results, {'conflict': conflictMul * maxVal,
+                                      'self': selfMul * maxVal})
+    return results
 
 # pair
 ## given a dictionary of team IDs, their ratings ('rating'), 
@@ -48,21 +72,15 @@ def getNeighbor(team, teamsList, teamsDict):
 ## and teams they can't match up against ('conflicts'),
 ## returns a list of tuples of resulting matchups (using team IDs)
 def pair(teams):
-    teams = copy.deepcopy(teams) # will be modified
     pairs, teamList = list(), list()
     for team in teams:
-        for x in xrange(teams[team]['count']): teamList.append(team)
-    teamList.sort(key = lambda team: teams[team]['count'], reverse=True)
-    if isOdd(len(teamList)):
-        teamList.remove(teamList[0]) # drop highest count team
-    teamList.sort(key = lambda team: teams[team]['rating'], reverse=True)
-    for i in xrange(len(teamList)): # exactly len(teamList) attempts
-        if len(teamList) == 0: break # exits loop
-        team = teamList[0]
-        neighbor = getNeighbor(team, teamList, teams)
-        if neighbor is not None:
-            declareConflict(teams, team, neighbor)
-            pairs.append((team, neighbor))
-            teamList.remove(neighbor)
-        teamList.remove(team)
+        for x in xrange(teams[team]['count']):
+            teamList.append(team)
+    costMatrix = makeCostMatrix(teamList, teams)
+    indices = Munkres().compute(costMatrix)
+    for row, col in indices:
+        team1 = teamList[row]
+        team2 = teamList[col]
+        if (team1 != team2 and (team2, team1) not in pairs):
+            pairs.append((team1, team2))
     return pairs
