@@ -84,6 +84,8 @@ def pair(teams):
         team1 = teamList[row]
         team2 = teamList[col]
         if (team1 == team2 or
+            (team1, team2) in pairs or
+            (team2, team1) in pairs or
             used[team1] >= teams[team1][count] or
             used[team2] >= teams[team2][count]):
             continue
