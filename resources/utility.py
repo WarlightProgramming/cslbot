@@ -37,7 +37,7 @@ def matrixReplace(matrix, replaceDict):
 
 # makeCostMatrix
 ## given a team list, makes a cost matrix
-def makeCostMatrix(teamList, teamsDict, conflictMul=10, selfMul=100,
+def makeCostMatrix(teamList, teamsDict, conflictMul=100, selfMul=100,
                    costPow=1.0):
     results = list()
     for team1 in teamList:
@@ -59,6 +59,9 @@ def makeCostMatrix(teamList, teamsDict, conflictMul=10, selfMul=100,
             if (isinstance(val, int) or isinstance(val, float) and
                 (maxVal is None or val > maxVal)):
                 maxVal = val
+    if maxVal is None:
+        # nothing but conflicts
+        return None
     results = matrixReplace(results, {'conflict': conflictMul * maxVal,
                                       'self': selfMul * maxVal})
     return results
@@ -73,10 +76,16 @@ def pair(teams):
     for team in teams:
         teamList += [team,] * teams[team]['count']
     costMatrix = makeCostMatrix(teamList, teams)
-    indices = Munkres().compute(costMatrix)
+    if costMatrix is None:
+        return pairs
+    indices, used = Munkres().compute(costMatrix), list()
     for row, col in indices:
         team1 = teamList[row]
         team2 = teamList[col]
-        if (team1 != team2 and (team2, team1) not in pairs):
-            pairs.append((team1, team2))
+        if (team1 == team2 or
+            team1 in used or
+            team2 in used):
+            continue
+        used += [team1, team2]
+        pairs.append((team1, team2))
     return pairs
