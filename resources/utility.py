@@ -2,6 +2,7 @@
 ## utility functions
 
 # imports
+import skills
 import string
 from munkres import Munkres
 
@@ -78,14 +79,15 @@ def pair(teams):
     costMatrix = makeCostMatrix(teamList, teams)
     if costMatrix is None:
         return pairs
-    indices, used = Munkres().compute(costMatrix), list()
+    indices, used = Munkres().compute(costMatrix), dict()
     for row, col in indices:
         team1 = teamList[row]
         team2 = teamList[col]
         if (team1 == team2 or
-            team1 in used or
-            team2 in used):
+            used[team1] >= teams[team1][count] or
+            used[team2] >= teams[team2][count]):
             continue
-        used += [team1, team2]
+        used[team1] = (1 if (team1 not in used) else (used[team1] + 1))
+        used[team2] = (1 if (team2 not in used) else (used[team2] + 1))
         pairs.append((team1, team2))
     return pairs
