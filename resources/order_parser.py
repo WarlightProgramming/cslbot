@@ -6,13 +6,15 @@ from wl_parsers import ForumThreadParser
 
 # main class
 class OrderParser(ForumThreadParser):
-    ## class to parse orders
-    ### takes a threadID (int or string)
+    """
+    class to parse orders;
+    takes a threadID (int or string)
+    """
 
     ## parseOrderData
-    ### parses a single chunk of text
     @staticmethod
     def parseOrderData(orderText):
+        """parses a single chunk of text"""
         quote, orderData = "&quot;", orderText.split()
         orderInfo, reserved = list(), None
         for order in orderData:
@@ -46,15 +48,17 @@ class OrderParser(ForumThreadParser):
         return order
 
     ## _getValueFromBetween
-    ### gets a value in a text field situated between
-    ### two known markers
-    ###
-    ### @PARAMS
-    ### 'text' (string): text to extract from
-    ### 'before' (string): known marker occurring before desired text
-    ### 'after' (string): known marker occurring after desired text
     @staticmethod
     def _getValueFromBetween(text, before, after):
+        """
+        gets a value in a text field situated between
+        two known markers
+    
+        @PARAMS
+        'text' (string): text to extract from
+        'before' (string): known marker occurring before desired text
+        'after' (string): known marker occurring after desired text
+        """
         if before is None: before = ""
         if after is None: after = ""
         beforeLoc = text.find(before) + len(before)
@@ -65,11 +69,13 @@ class OrderParser(ForumThreadParser):
         return value
 
     ## parsePost
-    ### parses an entire post
-    ### returns a list of dictionaries representing orders
-    ### each dictionary contains an 'author', 'type', and
-    ### (if provided) 'orders' (tuple of order args)
     def parsePost(self, post):
+        """
+        parses an entire post
+        returns a list of dictionaries representing orders
+        each dictionary contains an 'author', 'type', and
+        (if provided) 'orders' (tuple of order args)
+        """
         orders, postText = list(), post['message']
         postAuthor = post['author']['ID']
         cmdMarker, cmdEnd = '<pre class="prettyprint">', '</pre>'
@@ -96,8 +102,10 @@ class OrderParser(ForumThreadParser):
         return orders
 
     ## getorders
-    ### parses an entire thread (starts after minOffset)
     def getOrders(self, minOffset):
+        """
+        parses an entire thread (starts after minOffset)
+        """
         posts = self.getPosts(minOffset=minOffset)
         orders = list()
         for post in posts:

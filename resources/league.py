@@ -7,10 +7,12 @@
 
 # main League class
 class League(object):
+    """
+    takes a games Table,
+    a teams Table,
+    and a commands dictionary
+    """
 
-    ## takes a games Table,
-    ## a teams Table,
-    ## and a commands dictionary
     def __init__(self, games, teams, commands, orders):
         self.games = games
         self.teams = teams
