@@ -79,22 +79,16 @@ def pair(teams):
     for team in teams:
         teamList += [team,] * teams[team]['count']
     costMatrix = makeCostMatrix(teamList, teams)
-    print "made cost matrix"
     if costMatrix is None:
         return pairs
-    print "calling munkres"
-    indices, used = Munkres().compute(costMatrix), dict()
-    print "done with munkres"
+    indices, used = Munkres().compute(costMatrix), list()
     for row, col in indices:
         team1 = teamList[row]
         team2 = teamList[col]
         if (team1 == team2 or
-            (team1, team2) in pairs or
-            (team2, team1) in pairs or
-            used[team1] >= teams[team1][count] or
-            used[team2] >= teams[team2][count]):
+            row in used or
+            col in used):
             continue
-        used[team1] = (1 if (team1 not in used) else (used[team1] + 1))
-        used[team2] = (1 if (team2 not in used) else (used[team2] + 1))
+        used += [row, col]
         pairs.append((team1, team2))
     return pairs
