@@ -53,7 +53,7 @@ class OrderParser(ForumThreadParser):
         """
         gets a value in a text field situated between
         two known markers
-    
+
         @PARAMS
         'text' (string): text to extract from
         'before' (string): known marker occurring before desired text

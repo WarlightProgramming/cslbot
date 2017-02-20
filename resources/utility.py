@@ -2,7 +2,6 @@
 ## utility functions
 
 # imports
-import skills
 import string
 from munkres import Munkres
 
