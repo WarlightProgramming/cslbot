@@ -54,10 +54,9 @@ class OrderParser(ForumThreadParser):
         gets a value in a text field situated between
         two known markers
 
-        @PARAMS
-        'text' (string): text to extract from
-        'before' (string): known marker occurring before desired text
-        'after' (string): known marker occurring after desired text
+        :param text: text to extract from
+        :param before: known marker occurring before desired text
+        :param after:: known marker occurring after desired text
         """
         if before is None: before = ""
         if after is None: after = ""
