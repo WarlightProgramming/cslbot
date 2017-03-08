@@ -3,6 +3,19 @@
 # handles a single league
 #########################
 
+# imports
+import copy
+from wl_parsers import PlayerParser
+
+# errors
+class ImproperLeague(Exception):
+    """raised for improperly formatted leagues"""
+    pass
+
+class ImproperOrder(Exception):
+    """raised for improperly formatted orders"""
+    pass
+
 # main League class
 class League(object):
     """
@@ -10,10 +23,12 @@ class League(object):
     :param games: the league's games Table
     :param teams: the league's teams Table
     :param templates: the league's templates Table
-    :param commands: league-relevant commands (as a dict)
+    :param settings: league-relevant settings (as a dict)
     :param orders: thread orders relevant to the league
     :param admin: ID of league admin
     :param mods: set of IDs of league moderators
+    :param parent: parent LeagueManager object
+    :param name: name of this league
     """
 
     # orders
@@ -22,66 +37,268 @@ class League(object):
     ORD_SET_LIMIT = "set_limit"
     ORD_REMOVE_TEAM = "remove_team"
 
-    # commands
-    CMD_GAME_SIZE = "GAME_SIZE"
-    CMD_TEAM_SIZE = "TEAM_SIZE"
-    CMD_SYSTEM = "SYSTEM"
-    CMD_MAKE_TEAMS = "MAKE_TEAMS"
+    # settings
+    SET_GAME_SIZE = "GAME_SIZE"
+    SET_TEAM_SIZE = "TEAM_SIZE"
+    SET_SYSTEM = "SYSTEM"
+    SET_MAKE_TEAMS = "MAKE_TEAMS"
+    SET_BANNED_PLAYERS = "BANNED_PLAYERS"
+    SET_BANNED_CLANS = "BANNED_CLANS"
+    SET_ALLOWED_PLAYERS = "ALLOWED_PLAYERS"
+    SET_ALLOWED_CLANS = "ALLOWED_CLANS"
+    SET_MAX_LIMIT = "MAX_LIMIT"
+    SET_MIN_LIMIT = "MIN_LIMIT"
+    SET_AUTOFORMAT = "AUTOFORMAT"
+    SET_CONSTRAIN_LIMIT = "CONSTRAIN_LIMIT"
 
-    # values
-    ELO = "ELO"
-    GLICKO = "GLICKO"
-    TRUESKILL = "TRUESKILL"
+    # rating systems
+    RATE_ELO = "ELO"
+    RATE_GLICKO = "GLICKO"
+    RATE_TRUESKILL = "TRUESKILL"
 
-    def __init__(self, games, teams, templates, commands, orders, admin, mods):
+    # keywords
+    KW_ALL = "ALL"
+
+    def __init__(self, games, teams, templates, settings, orders,
+                 admin, mods, parent, name):
         self.games = games
         self.teams = teams
         self.templates = templates
-        self.commands = commands
+        self.settings = settings
         self.orders = orders
         self.admin = admin
-        self.mods = mods
+        self.mods = copy.deepcopy(mods)
+        self.mods.add(admin)
+        self.parent = parent
+        self.name = name
+        self.checkFormat()
 
-    @proprety
-    def make_teams(self):
+    @staticmethod
+    def checkSheet(table, header, constraints, reformat=True):
+        """
+        ensures a given table has the appropriate header/constraints
+        :param table: Table object to check
+        :param header: an iterable containing required header labels
+        :param constraints: a dictionary mapping labels to constraints
+        :param reformat: a boolean determing whether to add labels if
+                         they aren't present (raises error otherwise)
+        """
+        table_header = table.reverseHeader()
+        for label in header:
+            if label not in header:
+                if reformat:
+                    table.expandHeader(label)
+                else:
+                    error_str = ("Table %s missing %s in header" %
+                                 (table.sheet.title, label))
+                    raise ImproperLeague(error_str)
+            table.updateConstraint(label, constraints.get(label, ""),
+                                   erase=True)
+
+    def checkTeamSheet(self):
+        teamConstraints = {'ID': 'UNIQUE INT',
+                           'Name': 'UNIQUE ALPHANUMERIC',
+                           'Players': 'ARRAY',
+                           'Confirmations': 'ARRAY',
+                           'Limit': 'INT'}
+        self.checkSheet(self.teams, set(teamConstraints), teamConstraints,
+                        self.autoformat)
+
+    def checkGamesSheet(self):
+        gamesConstraints = {'ID': 'UNIQUE INT',
+                            'Teams': 'ARRAY',
+                            'Ratings': 'ARRAY',
+                            'Winner': 'INT',
+                            'Template': 'INT'}
+        self.checkSheet(self.games, set(gamesConstraints, gamesConstraints,
+                        self.autoformat)
+
+    def checkTemplatesSheet(self):
+        templatesConstraints = {'ID': 'UNIQUE INT',
+                                'Name': 'UNIQUE STRING',
+                                'Active': 'BOOL',
+                                'Games': 'INT'}
+        self.checkSheet(self.templates, set(templatesConstraints),
+                        templatesConstraints, self.autoformat)
+
+    def checkFormat(self):
+        self.checkTeamSheet()
+        self.checkGamesSheet()
+        self.checkTemplatesSheet()
+
+    def getBoolProperty(self, label, default=True):
+        return (self.commands.get(label, default).lower() == 'true')
+
+    @property
+    def autoformat(self):
+        """whether to automatically format sheets"""
+        return self.getBoolProperty(self.SET_AUTOFORMAT, True)
+
+    @property
+    def makeTeams(self):
         """whether to assemble teams"""
-        return (self.commands.get(self.CMD_MAKE_TEAMS, False).lower()
-                == "true")
+        return self.getBoolProperty(self.SET_MAKE_TEAMS, False)
 
     @property
-    def team_size(self):
+    def teamSize(self):
         """number of players per team"""
-        return self.commands.get(self.CMD_TEAM_SIZE, 1)
+        return self.commands.get(self.SET_TEAM_SIZE, 1)
 
     @property
-    def game_size(self):
+    def gameSize(self):
         """number of teams per game"""
-        return self.commands.get(self.CMD_GAME_SIZE, 2)
+        return self.commands.get(self.SET_GAME_SIZE, 2)
 
-    @proprety
-    def rating_system(self):
+    @property
+    def minLimit(self):
+        """minimum number of max ongoing games per team"""
+        return int(self.commands.get(self.SET_MIN_LIMIT, 0))
+
+    @property
+    def maxLimit(self):
+        """maximum number of max ongoing games per team"""
+        lim = self.commands.get(self.SET_MAX_LIMIT, None)
+        if lim is not None:
+            return int(lim)
+        return None
+
+    @property
+    def constrainLimit(self):
+        """whether to constrain out-of-range limits"""
+        return self.getBoolProperty(self.SET_CONSTRAIN_LIMIT, True)
+
+    def limitInRange(self, limit):
+        """returns True if a limit is in an acceptable range"""
+        return (limit >= self.minLimit and
+                (self.maxLimit is None or limit <= self.maxLimit))
+
+    @property
+    def ratingSystem(self):
         """rating system to use"""
-        return self.commands.get(self.CMD_SYSTEM, self.ELO)
+        return self.commands.get(self.SET_SYSTEM, self.RATE_ELO)
 
-    def add_team(self, team, limit, *members):
+    def getIDGroup(self, label):
+        groupList = self.commands.get(label, "").split(",")
+        return set([int(x) for x in groupList])
+
+    @property
+    def bannedPlayers(self):
+        """set containing IDs of banned players"""
+        return self.getIDGroup(self.SET_BANNED_PLAYERS)
+
+    @property
+    def bannedClans(self):
+        """set containing IDs of banned clans"""
+        return self.getIDGroup(self.SET_BANNED_CLANS)
+
+    @property
+    def allowedPlayers(self):
+        """set containing IDs of allowed players"""
+        return self.getIDGroup(self.SET_ALLOWED_PLAYERS)
+
+    @property
+    def allowedClans(self)
+        """set containing IDs of allowed clans"""
+        return self.getIDGroup(self.SET_ALLOWED_CLANS)
+
+    def allowed(self, playerID):
+        """returns True if a player is allowed to join the league"""
+        checkClans = (len(self.bannedClans) > 0)
+        if checkClans:
+            parser = PlayerParser(playerID)
+            clan = int(parser.clanID)
+            if (clan in self.bannedClans or
+                self.KW_ALL in self.bannedClans and
+                clan not in self.allowedClans):
+                return False
+        return (player in self.allowedPlayers or
+                player not in self.bannedPlayers and
+                self.KW_ALL not in self.bannedPlayers)
+
+    def banned(self, playerID):
+        """returns True if a player is banned from the league"""
+        return not(self.allowed(playerID))
+
+    def logFailedOrder(self, order):
+        desc = ("Failed to process %s order by %d for league %s" %
+                (order['type'], order['author'], order['orders'][0]))
+        self.parent.log(desc, league=self.name, error=True)
+
+    def checkTeamCreator(self, creator, members):
+        if (creator not in members and
+            creator not in self.mods):
+            raise ImproperOrder(str(creator) + " isn't able to" +
+                                " add a team that excludes them")
+
+    def checkTeam(self, members):
+        for member in members:
+            if self.banned(member):
+                raise ImproperOrder(str(member) +
+                                    " is banned from this league")
+
+    def checkLimit(self, limit):
+        if not self.limitInRange(limit):
+            if self.constrainLimit:
+                if limit < self.minLimit: return self.minLimit
+                return self.maxLimit
+            else: raise ImproperOrder()
+        return limit
+
+    def setCurrentID(self):
+        existingIDs = self.templates.findValue(dict(), 'ID')
+        if len(existingIDs) == 0:
+            self.currentID = 0
+        else:
+            self.currentID = max(existingIDs) + 1
+
+    def addTeam(self, order):
+        teamName = order['order'][1]
+        gameLimit = int(order['order'][2])
+        members = [int(member) for member in order['order'][3:]]
+        author = int(order['author'])
+        self.checkTeamCreator(author, members)
+        self.checkTeam(members)
+        gameLimit = self.checkLimit(gameLimit)
+        members.sort()
+        confirmations = [(m == author) for m in members]
+        members = ",".join([str(m) for m in members])
+        confirmations = ",".join([str(c) for c in confirmations])
+        self.templates.addEntity({'ID': self.currentID,
+                                  'Name': teamName,
+                                  'Limit': gameLimit,
+                                  'Players': members,
+                                  'Confirmations': confirmations})
+        self.currentID += 1
+
+    def confirmTeam(self, order):
         pass
 
-    def confirm_team(self, team, member):
+    def removeTeam(self, order):
         pass
 
-    def remove_team(self, team, member):
+    def setLimit(self, order):
         pass
 
-    def set_limit(self, team, limit, member):
+    def executeOrders(self):
+        self.setCurrentID()
+        for order in self.orders:
+            orderType = order['type']
+            try:
+                {self.ORD_ADD_TEAM: self.addTeam,
+                 self.ORD_CONFIRM_TEAM: self.confirmTeam,
+                 self.ORD_SET_LIMIT: self.setLimit,
+                 self.ORD_REMOVE_TEAM: self.removeTeam
+                }[orderType](order)
+            except Exception as e:
+                if len(str(e)) > 0:
+                    self.parent.log(str(e), error=True)
+                else:
+                    self.logFailedOrder(order)
+
+    def updateGames(self):
         pass
 
-    def execute_orders(self):
-        pass
-
-    def update_games(self):
-        pass
-
-    def create_games(self):
+    def createGames(self):
         pass
 
     def run(self):
@@ -91,6 +308,6 @@ class League(object):
         2. check on and update ongoing games
         3. create new games
         """
-        self.execute_orders()
-        self.update_games()
-        self.create_games()
+        self.executeOrders()
+        self.updateGames()
+        self.createGames()

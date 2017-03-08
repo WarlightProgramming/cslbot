@@ -27,6 +27,7 @@ CMD_STATE = 'LEAGUE_STATE'
 LOG_TITLE = "Log"
 TITLE_TIME = "Time"
 TITLE_STATUS = "Error"
+TITLE_LEAGUE = "League"
 TITLE_DESC = "Description"
 LOG_HEADER = [TITLE_TIME, TITLE_STATUS, TITLE_DESC]
 LOG_CONSTRAINTS = ["", "BOOL", ""]
@@ -63,10 +64,11 @@ class LeagueManager(object):
             return found[0][TITLE_ARG]
 
     ## log
-    def log(self, description, error=False):
+    def log(self, description, league="", error=False):
         """logs an entry onto the sheet"""
         time = datetime.datetime.now()
         self.logSheet.addEntity({TITLE_TIME: time,
+                                 TITLE_LEAGUE: league,
                                  TITLE_STATUS: error,
                                  TITLE_DESC: description})
 
