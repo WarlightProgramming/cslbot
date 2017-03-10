@@ -219,6 +219,10 @@ class League(object):
         """returns True if a player is banned from the league"""
         return not(self.allowed(playerID))
 
+    def hasTemplateAccess(self, playerID):
+        """returns True if a player can access all templates"""
+        return True
+
     def logFailedOrder(self, order):
         desc = ("Failed to process %s order by %d for league %s" %
                 (order['type'], order['author'], order['orders'][0]))
@@ -235,6 +239,9 @@ class League(object):
             if self.banned(member):
                 raise ImproperOrder(str(member) +
                                     " is banned from this league")
+            elif not self.hasTemplateAccess(member):
+                raise ImproperOrder(str(member) +
+                                    " cannot access all templates")
 
     def checkLimit(self, limit):
         if not self.limitInRange(limit):
@@ -251,6 +258,10 @@ class League(object):
         else:
             self.currentID = max(existingIDs) + 1
 
+    @property
+    def defaultRating(self):
+        return 0
+
     def addTeam(self, order):
         teamName = order['order'][1]
         gameLimit = int(order['order'][2])
@@ -260,24 +271,66 @@ class League(object):
         self.checkTeam(members)
         gameLimit = self.checkLimit(gameLimit)
         members.sort()
-        confirmations = [(m == author) for m in members]
+        confirms = [(m == author) for m in members]
         members = ",".join([str(m) for m in members])
-        confirmations = ",".join([str(c) for c in confirmations])
-        self.templates.addEntity({'ID': self.currentID,
-                                  'Name': teamName,
-                                  'Limit': gameLimit,
-                                  'Players': members,
-                                  'Confirmations': confirmations})
+        confirms = ",".join([str(c).upper() for c in confirms])
+        self.teams.addEntity({'ID': self.currentID,
+                              'Name': teamName,
+                              'Limit': gameLimit,
+                              'Players': members,
+                              'Confirmations': confirms,
+                              'Rating': self.defaultRating})
         self.currentID += 1
 
+    def fetchMatchingTeam(self, order, checkAuthor=True,
+                          allowMod=True):
+        name = order['order'][1]
+        author = int(order['author'])
+        matchingTeam = self.teams.findEntities({'Name': name})
+        if len(matchingTeam) < 1:
+            raise ImproperOrder("Nonexistent team: " + str(name))
+        matchingTeam = matchingTeam[0]
+        index = None
+        if (checkAuthor and (author not in self.mods or not allowMod)
+            and str(author) not in
+            matchingTeam['Players'].split(",")):
+            raise ImproperOrder(str(author) + " not in " +
+                                str(name))
+            try:
+                index = matchingTeam['Players'].split(",").index(author)
+            except ValueError: pass
+        return matchingTeam, index
+
     def confirmTeam(self, order):
-        pass
+        try:
+            matchingTeam, index = self.fetchMatchingTeam(order, True,
+                                                         False)
+        except:
+            raise ImproperOrder(str(order['author']) + " not in " +
+                                str(order['order'][1]))
+        confirms = matchingTeam['Confirmations'].split(",")
+        confirms[index] = "TRUE"
+        confirms = ",".join([str(c).upper() for c in confirms])
+        self.teams.updateMatchingEntities({'Name': teamName},
+                                          {'Confirmations': confirms})
 
     def removeTeam(self, order):
-        pass
+        matchingTeam = self.fetchMatchingTeam(order)[0]
+        self.teams.removeMatchingEntities({'ID':
+                                           matchingTeam['ID']})
 
     def setLimit(self, order):
-        pass
+        matchingTeam = self.fetchMatchingTeam(order, False)[0]
+        players = matchingTeam['Players'].split(",")
+        if (str(order['author']) not in players and
+            order['author'] not in self.mods):
+            raise ImproperOrder(str(order['author']) +
+                                " can't set the limit for team " +
+                                str(order['order'][1]))
+        self.teams.updateMatchingEntities({'ID':
+                                           matchingTeam['ID']},
+                                          {'Limit':
+                                           order['order'][2]})
 
     def executeOrders(self):
         self.setCurrentID()
