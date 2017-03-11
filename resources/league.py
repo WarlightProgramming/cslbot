@@ -6,6 +6,7 @@
 # imports
 import copy
 import json
+from datetime import datetime
 from wl_parsers import PlayerParser
 from wl_api import APIHandler
 from constants import API_CREDS
@@ -54,11 +55,15 @@ class League(object):
     SET_AUTOFORMAT = "AUTOFORMAT"
     SET_CONSTRAIN_LIMIT = "CONSTRAIN_LIMIT"
     SET_RTG_DEFAULT = "DEFAULT_RATING"
+    SET_EXP_THRESH = "EXPIRY_THRESHOLD"
 
     # rating systems
     RATE_ELO = "ELO"
     RATE_GLICKO = "GLICKO"
     RATE_TRUESKILL = "TRUESKILL"
+
+    # timeformat
+    TIMEFORMAT = "%Y-%m-%d %H:%M:%S"
 
     # keywords
     KW_ALL = "ALL"
@@ -80,7 +85,7 @@ class League(object):
 
     def _makeHandler(self):
         credsFile = open("../" + API_CREDS)
-        creds = open(credsFile).read()
+        creds = json.load(credsFile)
         email, token = creds['E-mail'], creds['APIToken']
         return APIHandler(email, token)
 
@@ -118,6 +123,7 @@ class League(object):
 
     def checkGamesSheet(self):
         gamesConstraints = {'ID': 'UNIQUE INT',
+                            'Created': 'STRING',
                             'Teams': 'STRING',
                             'Ratings': 'STRING',
                             'Winner': 'INT',
@@ -160,6 +166,11 @@ class League(object):
     def gameSize(self):
         """number of teams per game"""
         return self.commands.get(self.SET_GAME_SIZE, 2)
+
+    @property
+    def expiryThreshold(self):
+        """number of days until game is declared abandoned"""
+        return self.commands.get(self.SET_EXP_THRESH, 3)
 
     @property
     def minLimit(self):
@@ -309,7 +320,8 @@ class League(object):
                           allowMod=True):
         name = order['order'][1]
         author = int(order['author'])
-        matchingTeam = self.teams.findEntities({'Name': name})
+        matchingTeam = self.teams.findEntities({'Name': {'value': name,
+                                                         'type': 'positive'}})
         if len(matchingTeam) < 1:
             raise ImproperOrder("Nonexistent team: " + str(name))
         matchingTeam = matchingTeam[0]
@@ -351,7 +363,8 @@ class League(object):
                                 " can't set the limit for team " +
                                 str(order['order'][1]))
         self.teams.updateMatchingEntities({'ID':
-                                           matchingTeam['ID']},
+                                           {'value': matchingTeam['ID'],
+                                            'type': 'positive'}},
                                           {'Limit':
                                            order['order'][2]})
 
@@ -371,12 +384,91 @@ class League(object):
                 }[orderType](order)
             except Exception as e:
                 if len(str(e)) > 0:
-                    self.parent.log(str(e), error=True)
+                    self.parent.log(str(e), self.name, error=True)
                 else:
                     self.logFailedOrder(order)
 
-    def updateGames(self):
+    @property
+    def unfinishedGames(self):
+        return self.games.findEntities({'ID': {'value': '',
+                                               'type': 'negative'},
+                                        'Winner': {'value': '',
+                                                   'type': 'positive'}},
+                                       keyLabel='ID')
+
+    @staticmethod
+    def isAbandoned(players):
+        for player in players:
+            if player['state'] == 'VotedToEnd':
+                return True
+            elif player['state'] == 'Won':
+                return False
+        return False
+
+    @staticmethod
+    def findMatchingPlayers(players, *states):
+        matching = list()
+        for player in players:
+            if player['state'] in states:
+                matching.append(int(player['id']))
+        matching.sort()
+        return matching
+
+    def findWinners(self, players):
+        return self.findMatchingPlayers(players, 'Won')
+
+    def findDecliners(self, players):
+        return self.findMatchingPlayers(players, 'Declined')
+
+    def findWaiting(self, players):
+        return self.findMatchingPlayers(players, 'Waiting', 'Declined')
+
+    def handleFinished(self, gameData):
+        if self.isAbandoned(gameData['players']):
+            return 'ABANDONED', None
+        else:
+            return 'FINISHED', self.findWinners(gameData['players'])
+
+    def handleWaiting(self, gameData, created):
+        decliners = self.findDecliners(gameData['players'])
+        if len(decliners) > 0:
+            return 'DECLINED', decliners
+        waiting = self.findWaiting(gameData['players'])
+        if (len(waiting) == len(gameData['players']) and
+            (datetime.now() - created).days > self.expiryThreshold):
+            return 'ABANDONED'
+
+    def fetchGameStatus(self, gameID, created):
+        gameData = self.handler.queryGame(gameID)
+        if gameData['state'] == 'Finished':
+            return self.handleFinished(gameData)
+        elif gameData['state'] == 'WaitingForPlayers':
+            return self.handleWaiting(gameData, created)
+
+    def updateWinners(self, gameID, winners):
         pass
+
+    def updateDecline(self, gameID, decliners):
+        pass
+
+    def updateVeto(self, gameID):
+        pass
+
+    def updateGame(self, gameID, createdTime):
+        created = datetime.strptime(createdTime, self.TIMEFORMAT)
+        status = self.fetchGameStatus(gameID, created)
+        {'FINISHED': self.updateWinners(gameID, status[1]),
+         'DECLINED': self.updateDecline(gameID, status[1]),
+         'ABANDONED': self.updateVeto(gameID)}.get([status[0]])
+
+    def updateGames(self):
+        gamesToCheck = self.unfinishedGames
+        for game in gamesToCheck:
+            try:
+                self.updateGame(game, gamesToCheck[game]['Created'])
+            except:
+                self.parent.log("Failed to update game: " + str(game),
+                                league=self.name, error=True)
 
     def createGames(self):
         pass
