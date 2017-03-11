@@ -5,7 +5,10 @@
 
 # imports
 import copy
+import json
 from wl_parsers import PlayerParser
+from wl_api import APIHandler
+from constants import API_CREDS
 
 # errors
 class ImproperLeague(Exception):
@@ -50,6 +53,7 @@ class League(object):
     SET_MIN_LIMIT = "MIN_LIMIT"
     SET_AUTOFORMAT = "AUTOFORMAT"
     SET_CONSTRAIN_LIMIT = "CONSTRAIN_LIMIT"
+    SET_RTG_DEFAULT = "DEFAULT_RATING"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -71,7 +75,14 @@ class League(object):
         self.mods.add(admin)
         self.parent = parent
         self.name = name
+        self.handler = self._makeHandler()
         self.checkFormat()
+
+    def _makeHandler(self):
+        credsFile = open("../" + API_CREDS)
+        creds = open(credsFile).read()
+        email, token = creds['E-mail'], creds['APIToken']
+        return APIHandler(email, token)
 
     @staticmethod
     def checkSheet(table, header, constraints, reformat=True):
@@ -98,16 +109,17 @@ class League(object):
     def checkTeamSheet(self):
         teamConstraints = {'ID': 'UNIQUE INT',
                            'Name': 'UNIQUE ALPHANUMERIC',
-                           'Players': 'ARRAY',
-                           'Confirmations': 'ARRAY',
+                           'Players': 'STRING',
+                           'Confirmations': 'STRING',
+                           'Rating': 'STRING',
                            'Limit': 'INT'}
         self.checkSheet(self.teams, set(teamConstraints), teamConstraints,
                         self.autoformat)
 
     def checkGamesSheet(self):
         gamesConstraints = {'ID': 'UNIQUE INT',
-                            'Teams': 'ARRAY',
-                            'Ratings': 'ARRAY',
+                            'Teams': 'STRING',
+                            'Ratings': 'STRING',
                             'Winner': 'INT',
                             'Template': 'INT'}
         self.checkSheet(self.games, set(gamesConstraints, gamesConstraints,
@@ -219,10 +231,6 @@ class League(object):
         """returns True if a player is banned from the league"""
         return not(self.allowed(playerID))
 
-    def hasTemplateAccess(self, playerID):
-        """returns True if a player can access all templates"""
-        return True
-
     def logFailedOrder(self, order):
         desc = ("Failed to process %s order by %d for league %s" %
                 (order['type'], order['author'], order['orders'][0]))
@@ -233,6 +241,16 @@ class League(object):
             creator not in self.mods):
             raise ImproperOrder(str(creator) + " isn't able to" +
                                 " add a team that excludes them")
+
+    def hasTemplateAccess(self, playerID):
+        """returns True if a player can play on all templates"""
+        tempResults = self.handler.validateToken(int(playerID),
+                                                 *self.templateIDs)
+        for temp in self.templateIDs:
+            tempName = "template" + str(temp)
+            if tempResults[tempName]['result'] != 'CannotUseTemplate':
+                return False
+        return True
 
     def checkTeam(self, members):
         for member in members:
@@ -260,7 +278,12 @@ class League(object):
 
     @property
     def defaultRating(self):
-        return 0
+        defRtg = self.settings.get(self.SET_RTG_DEFAULT, None)
+        if defRtg is None:
+            return {self.RATE_ELO: "1500",
+                    self.RATE_GLICKO: "1500.350",
+                    self.RATE_TRUESKILL: "1500.500"}[self.ratingSystem]
+        else: return defRtg
 
     def addTeam(self, order):
         teamName = order['order'][1]
@@ -331,6 +354,10 @@ class League(object):
                                            matchingTeam['ID']},
                                           {'Limit':
                                            order['order'][2]})
+
+    @proprety
+    def templateIDs(self):
+        return self.templates.findValue(dict(), "ID")
 
     def executeOrders(self):
         self.setCurrentID()
