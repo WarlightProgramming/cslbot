@@ -20,6 +20,10 @@ class ImproperOrder(Exception):
     """raised for improperly formatted orders"""
     pass
 
+class NonexistentGame(Exception):
+    """raises for nonexistent games"""
+    pass
+
 # main League class
 class League(object):
     """
@@ -56,6 +60,7 @@ class League(object):
     SET_CONSTRAIN_LIMIT = "CONSTRAIN_LIMIT"
     SET_RTG_DEFAULT = "DEFAULT_RATING"
     SET_EXP_THRESH = "EXPIRY_THRESHOLD"
+    SET_VETO_LIMIT = "VETO_LIMIT"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -127,6 +132,8 @@ class League(object):
                             'Teams': 'STRING',
                             'Ratings': 'STRING',
                             'Winner': 'INT',
+                            'Vetos': 'INT',
+                            'Vetoed': 'STRING',
                             'Template': 'INT'}
         self.checkSheet(self.games, set(gamesConstraints, gamesConstraints,
                         self.autoformat)
@@ -158,19 +165,24 @@ class League(object):
         return self.getBoolProperty(self.SET_MAKE_TEAMS, False)
 
     @property
+    def vetoLimit(self):
+        """maximum number of vetos per game"""
+        return int(self.commands.get(self.SET_VETO_LIMIT, 1))
+
+    @property
     def teamSize(self):
         """number of players per team"""
-        return self.commands.get(self.SET_TEAM_SIZE, 1)
+        return int(self.commands.get(self.SET_TEAM_SIZE, 1))
 
     @property
     def gameSize(self):
         """number of teams per game"""
-        return self.commands.get(self.SET_GAME_SIZE, 2)
+        return int(self.commands.get(self.SET_GAME_SIZE, 2))
 
     @property
     def expiryThreshold(self):
         """number of days until game is declared abandoned"""
-        return self.commands.get(self.SET_EXP_THRESH, 3)
+        return int(self.commands.get(self.SET_EXP_THRESH, 3))
 
     @property
     def minLimit(self):
@@ -445,14 +457,39 @@ class League(object):
         elif gameData['state'] == 'WaitingForPlayers':
             return self.handleWaiting(gameData, created)
 
+    def fetchGameData(self, gameID):
+        gameData = self.games.findEntities({'ID': {'value': gameID,
+                                                   'type': 'positive'}})
+        if len(gameData) == 0: raise NonexistentGame()
+        return gameData[0]
+
     def updateWinners(self, gameID, winners):
         pass
 
     def updateDecline(self, gameID, decliners):
         pass
 
-    def updateVeto(self, gameID):
+    def deleteGame(self, gameID):
+        self.games.removeMatchingEntities({'ID': {'value': gameID,
+                                                  'type': 'positive'}})
+
+    def penalizeVeto(self, gameID):
         pass
+
+    def addVeto(self, gameID, templateID):
+        pass
+
+    def updateTemplate(self, gameID):
+        pass
+
+    def updateVeto(self, gameID):
+        gameData = self.fetchGameData(gameID)
+        if int(gameData['Vetoes']) > self.vetoLimit:
+            self.penalizeVeto(gameID)
+            self.deleteGame(gameID)
+        else:
+            self.addVeto(gameID, gameData['Template'])
+            self.updateTemplate(gameID)
 
     def updateGame(self, gameID, createdTime):
         created = datetime.strptime(createdTime, self.TIMEFORMAT)
