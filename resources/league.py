@@ -454,7 +454,7 @@ class League(object):
         waiting = self.findWaiting(gameData['players'])
         if (len(waiting) == len(gameData['players']) and
             (datetime.now() - created).days > self.expiryThreshold):
-            return 'ABANDONED'
+            return 'ABANDONED', None
 
     def fetchGameStatus(self, gameID, created):
         gameData = self.handler.queryGame(gameID)
@@ -468,6 +468,37 @@ class League(object):
                                                    'type': 'positive'}})
         if len(gameData) == 0: raise NonexistentGame()
         return gameData[0]
+
+    def findCorrespondingTeams(self, gameID, players):
+        players = set([str(player) for player in players])
+        results = set()
+        gameData = self.games.findEntities({'ID': {'value': gameID,
+                                                   'type': 'positive'}})
+        gameTeams = gameData[0]['Teams'].split(",")
+        for team in gameTeams:
+            teamData = self.teams.findEntities({'ID': {'value': team,
+                                                       'type': 'positive'}})
+            playerData = set(teamData['Players'].split(","))
+            if len(playerData.intersection(players)) > 0:
+                results.add(team)
+        return results
+
+    def getRatingsDict(teams):
+        ratings = dict()
+        teamData = self.teams.findEntities({'ID': {'values': teams,
+                                                   'type': 'positive'}})
+        for team in teamData:
+            ratings[team['ID']] = team['Rating']
+        return ratings
+
+    def updateResult(self, gameID, winners, losers):
+        winTeam = self.findCorrespondingTeams(winners)[0]
+        lossTeams = self.findCorrespondingTeams(losers)
+        self.games.updateMatchingEntities({'ID': {'value': gameID,
+                                                  'type': 'positive'}},
+                                          {'Winner': int(winTeam)})
+        winRates = self.getRatingsDict([winTeam,])
+        lossRates = self.getRatingsDict(lossTeams)
 
     def updateWinners(self, gameID, winners):
         pass
@@ -490,20 +521,26 @@ class League(object):
         for team in teams:
             self.adjustRating(team, -self.vetoPenalty)
 
-    def addVeto(self, gameID, templateID):
-        pass
+    def vetoCurrentTemplate(self, gameData):
+        vetos = gameData['Vetoed'] + "," + str(gameData['Template'])
+        if vetos[0] == ",": vetos = vetos[1:]
+        vetoCount = int(gameData['Vetos']) + 1
+        self.games.updateMatchingEntities({'ID': {'value': gameData['ID'],
+                                                  'type': 'positive'},
+                                          {'Vetoed': vetos,
+                                           'Vetos': vetoCount}})
 
-    def updateTemplate(self, gameID):
-        pass
+    def updateTemplate(self, gameData):
+        vetos = gameData['Vetoed'].split(",")
 
     def updateVeto(self, gameID):
         gameData = self.fetchGameData(gameID)
-        if int(gameData['Vetoes']) > self.vetoLimit:
+        if int(gameData['Vetoes']) >= self.vetoLimit:
             self.penalizeVeto(gameID)
             self.deleteGame(gameID)
         else:
-            self.addVeto(gameID, gameData['Template'])
-            self.updateTemplate(gameID)
+            self.vetoCurrentTemplate(gameData)
+            self.updateTemplate(gameData)
 
     def updateGame(self, gameID, createdTime):
         created = datetime.strptime(createdTime, self.TIMEFORMAT)
