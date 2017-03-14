@@ -61,6 +61,7 @@ class League(object):
     SET_RTG_DEFAULT = "DEFAULT_RATING"
     SET_EXP_THRESH = "EXPIRY_THRESHOLD"
     SET_VETO_LIMIT = "VETO_LIMIT"
+    SET_VETO_PENALTY = "VETO_PENALTY"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -168,6 +169,11 @@ class League(object):
     def vetoLimit(self):
         """maximum number of vetos per game"""
         return int(self.commands.get(self.SET_VETO_LIMIT, 1))
+
+    @property
+    def vetoPenalty(self):
+        """points deduction for excessive vetos"""
+        return int(self.commands.get(self.SET_VETO_PENALTY, 25))
 
     @property
     def teamSize(self):
@@ -473,8 +479,16 @@ class League(object):
         self.games.removeMatchingEntities({'ID': {'value': gameID,
                                                   'type': 'positive'}})
 
-    def penalizeVeto(self, gameID):
+    def getGameTeams(self, gameID):
         pass
+
+    def adjustRating(self, team, adjustment):
+        pass
+
+    def penalizeVeto(self, gameID):
+        teams = self.getGameTeams(gameID)
+        for team in teams:
+            self.adjustRating(team, -self.vetoPenalty)
 
     def addVeto(self, gameID, templateID):
         pass
