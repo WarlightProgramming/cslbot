@@ -6,6 +6,7 @@
 # imports
 import copy
 import json
+from elo import Rating, Elo
 from datetime import datetime
 from wl_parsers import PlayerParser
 from wl_api import APIHandler
@@ -62,6 +63,12 @@ class League(object):
     SET_EXP_THRESH = "EXPIRY_THRESHOLD"
     SET_VETO_LIMIT = "VETO_LIMIT"
     SET_VETO_PENALTY = "VETO_PENALTY"
+    SET_ELO_K = "ELO_K"
+    SET_ELO_DEFAULT = "ELO_DEFAULT"
+    SET_GLICKO_RD = "GLICKO_RD"
+    SET_GLICKO_DEFAULT = "GLICKO_DEFAULT"
+    SET_TRUESKILL_SIGMA = "TRUESKILL_SIGMA"
+    SET_TRUESKILL_DEFAULT = "TRUESKILL_MU"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -129,6 +136,7 @@ class League(object):
 
     def checkGamesSheet(self):
         gamesConstraints = {'ID': 'UNIQUE INT',
+                            'WarlightID': 'UNIQUE INT',
                             'Created': 'STRING',
                             'Teams': 'STRING',
                             'Ratings': 'STRING',
@@ -217,6 +225,34 @@ class League(object):
     def ratingSystem(self):
         """rating system to use"""
         return self.commands.get(self.SET_SYSTEM, self.RATE_ELO)
+
+    @property
+    def kFactor(self):
+        return self.commands.get(self.SET_ELO_K, 32)
+
+    @property
+    def defaultElo(self):
+        return self.commands.get(self.SET_ELO_DEFAULT, 1500)
+
+    @property
+    def eloEnv(self):
+        return Elo(initial=self.defaultElo, k_factor=self.kFactor)
+
+    @property
+    def glickoRd(self):
+        return self.commands.get(self.SET_GLICKO_RD, 350)
+
+    @property
+    def defaultGlicko(self):
+        return self.commands.get(self.SET_GLICKO_DEFAULT, 1500)
+
+    @property
+    def trueSkillSigma(self):
+        return self.commands.get(self.SET_TRUESKILL_SIGMA, 500)
+
+    @property
+    def defaultTrueSkill(self):
+        return self.commands.get(self.SET_TRUESKILL_DEFAULT, 1500)
 
     def getIDGroup(self, label):
         groupList = self.commands.get(label, "").split(",")
@@ -386,7 +422,7 @@ class League(object):
                                           {'Limit':
                                            order['order'][2]})
 
-    @proprety
+    @property
     def templateIDs(self):
         return self.templates.findValue(dict(), "ID")
 
@@ -412,7 +448,7 @@ class League(object):
                                                'type': 'negative'},
                                         'Winner': {'value': '',
                                                    'type': 'positive'}},
-                                       keyLabel='ID')
+                                       keyLabel='WarlightID')
 
     @staticmethod
     def isAbandoned(players):
@@ -542,9 +578,9 @@ class League(object):
             self.vetoCurrentTemplate(gameData)
             self.updateTemplate(gameData)
 
-    def updateGame(self, gameID, createdTime):
+    def updateGame(self, warlightID, gameID, createdTime):
         created = datetime.strptime(createdTime, self.TIMEFORMAT)
-        status = self.fetchGameStatus(gameID, created)
+        status = self.fetchGameStatus(warlightID, created)
         {'FINISHED': self.updateWinners(gameID, status[1]),
          'DECLINED': self.updateDecline(gameID, status[1]),
          'ABANDONED': self.updateVeto(gameID)}.get([status[0]])
@@ -553,7 +589,8 @@ class League(object):
         gamesToCheck = self.unfinishedGames
         for game in gamesToCheck:
             try:
-                self.updateGame(game, gamesToCheck[game]['Created'])
+                self.updateGame(game, gamesToCheck[game]['ID'],
+                                gamesToCheck[game]['Created'])
             except:
                 self.parent.log("Failed to update game: " + str(game),
                                 league=self.name, error=True)
