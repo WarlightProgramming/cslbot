@@ -59,7 +59,6 @@ class League(object):
     SET_MIN_LIMIT = "MIN_LIMIT"
     SET_AUTOFORMAT = "AUTOFORMAT"
     SET_CONSTRAIN_LIMIT = "CONSTRAIN_LIMIT"
-    SET_RTG_DEFAULT = "DEFAULT_RATING"
     SET_EXP_THRESH = "EXPIRY_THRESHOLD"
     SET_VETO_LIMIT = "VETO_LIMIT"
     SET_VETO_PENALTY = "VETO_PENALTY"
@@ -140,7 +139,7 @@ class League(object):
                             'Created': 'STRING',
                             'Teams': 'STRING',
                             'Ratings': 'STRING',
-                            'Winner': 'INT',
+                            'Winners': 'STRING',
                             'Vetos': 'INT',
                             'Vetoed': 'STRING',
                             'Template': 'INT'}
@@ -243,16 +242,24 @@ class League(object):
         return self.commands.get(self.SET_GLICKO_RD, 350)
 
     @property
-    def defaultGlicko(self):
+    def glickoRating(self):
         return self.commands.get(self.SET_GLICKO_DEFAULT, 1500)
+
+    @property
+    def defaultGlicko(self):
+        return str(self.glickoRating) + "." + str(self.glickoRd)
 
     @property
     def trueSkillSigma(self):
         return self.commands.get(self.SET_TRUESKILL_SIGMA, 500)
 
     @property
-    def defaultTrueSkill(self):
+    def trueSkillMu(self):
         return self.commands.get(self.SET_TRUESKILL_DEFAULT, 1500)
+
+    @property
+    def defaultTrueSkill(self):
+        return str(self.trueSkillMu) + "." + str(self.trueSkillSigma)
 
     def getIDGroup(self, label):
         groupList = self.commands.get(label, "").split(",")
@@ -343,12 +350,9 @@ class League(object):
 
     @property
     def defaultRating(self):
-        defRtg = self.settings.get(self.SET_RTG_DEFAULT, None)
-        if defRtg is None:
-            return {self.RATE_ELO: "1500",
-                    self.RATE_GLICKO: "1500.350",
-                    self.RATE_TRUESKILL: "1500.500"}[self.ratingSystem]
-        else: return defRtg
+        return {self.RATE_ELO: self.defaultElo,
+                self.RATE_GLICKO: self.defaultGlicko,
+                self.RATE_TRUESKILL, self.defaultTrueSkill}[self.ratingSystem]
 
     def addTeam(self, order):
         teamName = order['order'][1]
@@ -479,7 +483,7 @@ class League(object):
 
     def handleFinished(self, gameData):
         if self.isAbandoned(gameData['players']):
-            return 'ABANDONED', None
+            return 'ABANDONED', None, None
         else:
             return 'FINISHED', self.findWinners(gameData['players'])
 
@@ -519,7 +523,7 @@ class League(object):
                 results.add(team)
         return results
 
-    def getRatingsDict(teams):
+    def getRatingsDict(self, teams):
         ratings = dict()
         teamData = self.teams.findEntities({'ID': {'values': teams,
                                                    'type': 'positive'}})
@@ -527,30 +531,93 @@ class League(object):
             ratings[team['ID']] = team['Rating']
         return ratings
 
-    def updateResult(self, gameID, winners, losers):
-        winTeam = self.findCorrespondingTeams(winners)[0]
-        lossTeams = self.findCorrespondingTeams(losers)
+    def setWinners(self, gameID, winTeams):
+        winStr = ",".join(sorted(str(team) for team in winTeams))
         self.games.updateMatchingEntities({'ID': {'value': gameID,
                                                   'type': 'positive'}},
-                                          {'Winner': int(winTeam)})
-        winRates = self.getRatingsDict([winTeam,])
-        lossRates = self.getRatingsDict(lossTeams)
+                                          {'Winners': winStr})
+
+    def getEloRatingAfterEvent(self, rating, opponents, event):
+        oldRating = rating
+        for opp in opponents:
+            rating = self.eloEnv.Rate(oldRating, [(event, opp)])
+        diff = int(round((rating - oldRating) / len(opponents)))
+        return oldRating + diff
+
+    def getNewEloRatings(self, winnersDict, losersDict):
+        WIN, LOSS = 1, 0
+        results = dict()
+        winners = [winner for winner in winnersDict]
+        losers = [loser for loer in losersDict]
+        for winner in winners:
+            rating = winnersDict[winner]
+            results[winner] = self.getEloRatingAfterEvent(rating,
+                                                          losers, WIN)
+        for loser in losers:
+            rating = losersDict[loser]
+            results[loser] = self.getEloRatingAfterEvent(rating,
+                                                         winners, LOSS)
+        return results
+
+    def getNewGlickoRatings(self, winnersDict, losersDict):
+        pass
+
+    def getNewTrueSkillRatings(self, winnersDict, losersDict):
+        pass
+
+    def getNewRatings(self, winnersDict, losersDict):
+        return {self.RATE_ELO: self.getNewEloRatings,
+                self.RATE_GLICKO: self.getNewGlickoRatings,
+                self.RATE_TRUESKILL: self.getNewTrueskillRatings}[
+                self.ratingSystem](winnersDict, losersDict)
+
+    def updateTeamRating(self, teamID, rating):
+        self.teams.updateMatchingEntities({'ID': {'value': teamID,
+                                                  'type': 'positive'}},
+                                          {'Rating': rating})
+
+    def updateRatings(self, newRatings):
+        for team in newRatings:
+            self.updateTeamRating(team, newRatings[team])
+
+    def updateResults(self, winTeams, lossTeams):
+        winRatings = self.getRatingsDict(winTeams)
+        lossRatings = self.getRatingsDict(lossTeams)
+        newRatings = self.getNewRatings(self, winRatings, lossRatings)
+        self.updateRatings(newRatings)
 
     def updateWinners(self, gameID, winners):
-        pass
+        winTeams = self.findCorrespondingTeams(winners)
+        lossTeams = self.getGameTeams(teamID) - winTeams
+        self.setWinners(gameID, winTeams)
+        self.updateResults(winTeams, lossTeams)
 
     def updateDecline(self, gameID, decliners):
-        pass
+        lossTeams = self.findCorrespondingTeams(decliners)
+        winTeams = self.getGameTeams(teamID) - lossTeams
+        self.setWinners(gameID, winTeams)
+        self.updateRatings(winTeams, lossTeams)
 
     def deleteGame(self, gameID):
         self.games.removeMatchingEntities({'ID': {'value': gameID,
                                                   'type': 'positive'}})
 
     def getGameTeams(self, gameID):
-        pass
+        gameData = self.fetchGameData(gameID)
+        return self(gameData['Teams'].split(","))
+
+    def getTeamRating(self, team):
+        searchDict = {'ID': {'value': team, 'type': 'positive'}}
+        return self.teams.findEntities(searchDict)[0]['Rating']
 
     def adjustRating(self, team, adjustment):
-        pass
+        oldRating = self.getTeamRating(team)
+        newRating = oldRating.split(".")
+        newRating[0] = str(int(newRating[0]) + adjustment)
+        newRating = ".".join(newRating)
+        self.teams.updateMatchingEntities({'ID': {'value': team,
+                                                  'type': 'positive'}},
+                                          {'Rating': newRating})
 
     def penalizeVeto(self, gameID):
         teams = self.getGameTeams(gameID)
