@@ -7,6 +7,7 @@
 import copy
 import json
 from elo import Rating, Elo
+from glicko2.glicko2 import Player
 from datetime import datetime
 from wl_parsers import PlayerParser
 from wl_api import APIHandler
@@ -591,8 +592,41 @@ class League(object):
     def getSplitRtg(dataDict, key):
         return [int(v) for v in dataDict[key].split(".")]
 
+    @staticmethod
+    def unsplitRtg(rating):
+        return ".".join([str(val) for val in rating])
+
     def getNewGlickoRatings(self, winnersDict, losersDict):
-        pass
+        WIN, LOSS = 1, 0
+        winners = [winner for winner in winnersDict]
+        losers = [loser for loser in losersDict]
+        winRating = sum([self.getSplitRtg(winnersDict, winner)[0] for
+                         winner in winnersDict])
+        winRd = sum([self.getSplitRtg(winnersDict, winner)[1] for
+                     winner in winnersDict])
+        lossRating = sum([self.getSplitRtg(losersDict, loser)[0] for
+                          loser in losersDict])
+        lossRd = sum([self.getSplitRtg(losersDict, loser)[1] for
+                      loser in losersDict])
+        winPlayer = Player(rating=winRating, rd=winRd)
+        lossPlayer = Player(rating=lossRating, rd=lossRd)
+        winPlayer.update_rating([lossRating], [lossRd], [WIN])
+        lossPlayer.update_rating([winRating], [winRd], [LOSS])
+        winRtg, winDev = winPlayer.getRating(), winPlayer.getRd()
+        lossRtg, lossDev = lossPlayer.getRating(), lossPlayer.getRd()
+        winDiff = int(round((winRtg - winRating) / len(winners)))
+        wDevDiff = int(round((winDev - winRd) / len(winners)))
+        lossDiff = int(round((lossRtg - lossRating) / len(losers)))
+        lDevDiff = int(round((lossDev - lossRd) / len(losers)))
+        for winner in winners:
+            rat, dev = self.getSplitRtg(winnersDict, winner)
+            newRat, newDev = rat + winDiff, dev + wDevDiff
+            results[winner] = self.unsplitRtg([newRat, newDev])
+        for loser in losers:
+            rat, dev = self.getSplitRtg(losersDict, loser)
+            newRat, newDev = rat + lossDiff, dev + lDevDiff
+            results[loser] = self.unsplitRtg([newRat, newDev])
+        return results
 
     def getNewTrueSkillRatings(self, winnersDict, losersDict):
         pass
