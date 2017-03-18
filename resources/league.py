@@ -21,7 +21,7 @@ class ImproperOrder(Exception):
     """raised for improperly formatted orders"""
     pass
 
-class NonexistentGame(Exception):
+class NonexistentItem(Exception):
     """raises for nonexistent games"""
     pass
 
@@ -129,7 +129,8 @@ class League(object):
                            'Players': 'STRING',
                            'Confirmations': 'STRING',
                            'Rating': 'STRING',
-                           'Limit': 'INT'}
+                           'Limit': 'INT',
+                           'Count': 'INT'}
         self.checkSheet(self.teams, set(teamConstraints), teamConstraints,
                         self.autoformat)
 
@@ -371,6 +372,7 @@ class League(object):
                               'Limit': gameLimit,
                               'Players': members,
                               'Confirmations': confirms,
+                              'Count': 0,
                               'Rating': self.defaultRating})
         self.currentID += 1
 
@@ -381,7 +383,7 @@ class League(object):
         matchingTeam = self.teams.findEntities({'Name': {'value': name,
                                                          'type': 'positive'}})
         if len(matchingTeam) < 1:
-            raise ImproperOrder("Nonexistent team: " + str(name))
+            raise NonexistentItem("Nonexistent team: " + str(name))
         matchingTeam = matchingTeam[0]
         index = None
         if (checkAuthor and (author not in self.mods or not allowMod)
@@ -503,11 +505,23 @@ class League(object):
         elif gameData['state'] == 'WaitingForPlayers':
             return self.handleWaiting(gameData, created)
 
+    def fetchDataByID(self, table, ID, nonexStr=""):
+        data = table.findEntities({'ID': {'value': ID,
+                                          'type': 'positive'}})
+        if len(data) == 0: raise NonexistentItem(nonexStr)
+        return data[0]
+
     def fetchGameData(self, gameID):
-        gameData = self.games.findEntities({'ID': {'value': gameID,
-                                                   'type': 'positive'}})
-        if len(gameData) == 0: raise NonexistentGame()
-        return gameData[0]
+        nonexStr = "Nonexistent game: %s" % (str(gameID))
+        return self.fetchDataByID(self.games, gameID, nonexStr)
+
+    def fetchTeamData(self, teamID):
+        nonexStr = "Nonexistent team: %s" % (str(teamID))
+        return self.fetchDataByID(self.teams, teamID, nonexStr)
+
+    def fetchTemplateData(self, templateID):
+        nonexStr = "Nonexistent template: %s" % (str(templateID))
+        return self.fetchDataByID(self.templates, templateID, nonexStr)
 
     def findCorrespondingTeams(self, gameID, players):
         players = set([str(player) for player in players])
@@ -537,6 +551,18 @@ class League(object):
                                                   'type': 'positive'}},
                                           {'Winners': winStr})
 
+    def adjustTeamGameCount(self, teamID, adj):
+        oldCount = int(self.fetchTeamData(teamID)['Count'])
+        self.teams.updateMatchingEntities({'ID': {'value': teamID,
+                                                  'type': 'positive'}},
+                                          {'Count': str(oldCount + adj)})
+
+    def adjustTemplateGameCount(self, templateID, adj):
+        oldCount = int(self.fetchTemplateData(templateID)['Games'])
+        self.templates.updateMatchingEntities({'ID': {'value': templateID,
+                                                      'type': 'positive'}},
+                                              {'Count': str(oldCount + adj)})
+
     def getEloRatingAfterEvent(self, rating, opponents, event):
         oldRating = rating
         for opp in opponents:
@@ -548,16 +574,22 @@ class League(object):
         WIN, LOSS = 1, 0
         results = dict()
         winners = [winner for winner in winnersDict]
-        losers = [loser for loer in losersDict]
+        losers = [loser for loser in losersDict]
+        winRating = sum([int(winnersDict[winner]) for winner in winnersDict])
+        lossRating = sum([int(losersDict[loser]) for loser in losersDict])
+        winRtg = self.getEloRatingAfterEvent(winRating, [lossRating,], WIN)
+        lossRtg = self.getEloRatingAfterEvent(lossRating, [winRating,], LOSS)
+        winDiff = int(round((winRtg - winRating) / len(winners)))
+        lossDiff = int(round((lossRtg - lossRating) / len(losers)))
         for winner in winners:
-            rating = winnersDict[winner]
-            results[winner] = self.getEloRatingAfterEvent(rating,
-                                                          losers, WIN)
+            results[winner] = str(int(winnersDict[winner]) + winDiff)
         for loser in losers:
-            rating = losersDict[loser]
-            results[loser] = self.getEloRatingAfterEvent(rating,
-                                                         winners, LOSS)
+            results[loser] = str(int(losersDict[loser]) + lossDiff)
         return results
+
+    @staticmethod
+    def getSplitRtg(dataDict, key):
+        return [int(v) for v in dataDict[key].split(".")]
 
     def getNewGlickoRatings(self, winnersDict, losersDict):
         pass
@@ -585,6 +617,8 @@ class League(object):
         lossRatings = self.getRatingsDict(lossTeams)
         newRatings = self.getNewRatings(self, winRatings, lossRatings)
         self.updateRatings(newRatings)
+        for team in winTeams+lossTeams:
+            self.adjustTeamGameCount(team, -1)
 
     def updateWinners(self, gameID, winners):
         winTeams = self.findCorrespondingTeams(winners)
@@ -596,7 +630,7 @@ class League(object):
         lossTeams = self.findCorrespondingTeams(decliners)
         winTeams = self.getGameTeams(teamID) - lossTeams
         self.setWinners(gameID, winTeams)
-        self.updateRatings(winTeams, lossTeams)
+        self.updateResults(winTeams, lossTeams)
 
     def deleteGame(self, gameID):
         self.games.removeMatchingEntities({'ID': {'value': gameID,
@@ -632,6 +666,7 @@ class League(object):
                                                   'type': 'positive'},
                                           {'Vetoed': vetos,
                                            'Vetos': vetoCount}})
+        self.adjustTemplateGameCount(gameData['Template'], -1)
 
     def updateTemplate(self, gameData):
         vetos = gameData['Vetoed'].split(",")
