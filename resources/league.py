@@ -6,8 +6,10 @@
 # imports
 import copy
 import json
+import mpmath
 from elo import Rating, Elo
 from glicko2.glicko2 import Player
+from trueskill import TrueSkill
 from datetime import datetime
 from wl_parsers import PlayerParser
 from wl_api import APIHandler
@@ -50,6 +52,7 @@ class League(object):
     # settings
     SET_GAME_SIZE = "GAME_SIZE"
     SET_TEAM_SIZE = "TEAM_SIZE"
+    SET_TEAMS_PER_SIDE = "TEAMS_PER_SIDE"
     SET_SYSTEM = "SYSTEM"
     SET_MAKE_TEAMS = "MAKE_TEAMS"
     SET_BANNED_PLAYERS = "BANNED_PLAYERS"
@@ -191,8 +194,13 @@ class League(object):
 
     @property
     def gameSize(self):
-        """number of teams per game"""
+        """number of sides per game"""
         return int(self.commands.get(self.SET_GAME_SIZE, 2))
+
+    @property
+    def teamsPerSide(self):
+        """number of teams per side"""
+        return int(self.commands.get(self.SET_TEAMS_PER_SIDE, 1))
 
     @property
     def expiryThreshold(self):
@@ -229,7 +237,7 @@ class League(object):
 
     @property
     def kFactor(self):
-        return self.commands.get(self.SET_ELO_K, 32)
+        return int(self.commands.get(self.SET_ELO_K, 32)) * self.teamsPerSide
 
     @property
     def defaultElo(self):
@@ -258,6 +266,23 @@ class League(object):
     @property
     def trueSkillMu(self):
         return self.commands.get(self.SET_TRUESKILL_DEFAULT, 1500)
+
+    @property
+    def trueSkillBeta(self):
+        return self.trueSkillSigma / 2.0
+
+    @property
+    def trueSkillTau(self):
+        return self.trueSkillSigma / 100.0
+
+    @property
+    def trueSkillEnv(self):
+        return TrueSkill(mu = self.trueSkillMu,
+                         sigma = self.trueSkillSigma,
+                         beta = self.trueSkillBeta,
+                         tau = self.trueSkillTau,
+                         draw_probability = 0.0,
+                         backend = 'mpmath')
 
     @property
     def defaultTrueSkill(self):
@@ -432,6 +457,14 @@ class League(object):
     @property
     def templateIDs(self):
         return self.templates.findValue(dict(), "ID")
+
+    @property
+    def templateRanks(self):
+        tempData = self.templates.findEntities({'ID': {'value': '',
+                                                       'type': 'negative'}})
+        tempInfo = [(int(tempData[temp]['ID']), int(tempData[temp]['Games']))
+                    for temp in tempData]
+        tempInfo.sort(key = lambda x: x[1])
 
     def executeOrders(self):
         self.setCurrentID()
@@ -628,8 +661,31 @@ class League(object):
             results[loser] = self.unsplitRtg([newRat, newDev])
         return results
 
+    def getRatingGroup(self, dataDict):
+        teams = dict()
+        for team in dataDict:
+            mu, sigma = self.getSplitRtg(dataDict, team)
+            rating = self.trueSkillEnv.create_rating(mu, sigma)
+            teams[team] = rating
+        return teams
+
+    def parseTrueSkillUpdate(self, dataDict, updatedRtgs, results=dict()):
+        for team in dataDict:
+            mu, sigma = updatedRtgs[team].mu, updatedRtgs[team].sigma
+            mu, sigma = int(round(mu)), int(round(sigma))
+            results[team] = self.unsplitRtg([mu, sigma])
+
     def getNewTrueSkillRatings(self, winnersDict, losersDict):
-        pass
+        results = dict()
+        WIN, LOSS = 0, 1
+        winningTeams = self.getRatingGroup(winnersDict)
+        losingTeams = self.getRatingGroup(losersDict)
+        rating_groups = [tuple(winningTeams), tuple(losingTeams)]
+        updated = self.trueSkillEnv.rate(rating_groups, ranks=[WIN, LOSS])
+        updatedWin, updatedLoss = updated[0], updated[1]
+        self.parseTrueSkillUpdate(winnersDict, updatedWin, results)
+        self.parseTrueSkillUpdate(losersDict, updatedLoss, results)
+        return results
 
     def getNewRatings(self, winnersDict, losersDict):
         return {self.RATE_ELO: self.getNewEloRatings,
@@ -702,8 +758,24 @@ class League(object):
                                            'Vetos': vetoCount}})
         self.adjustTemplateGameCount(gameData['Template'], -1)
 
-    def updateTemplate(self, gameData):
-        vetos = gameData['Vetoed'].split(",")
+    def setGameTemplate(self, gameID, tempID):
+        self.games.updateMatchingEntities({'ID': {'value': gameID,
+                                                  'type': 'positive'}},
+                                          {'Template': tempID})
+
+    def makeGame(self, gameID):
+        pass
+
+    def updateTemplate(self, gameID, gameData):
+        vetos = set([int(v) for v in gameData['Vetoed'].split(",")])
+        ranks, i = self.templateRanks, 0
+        while (i < len(ranks) and ranks[i][0] in vetos): i += 1
+        if i < len(ranks):
+            newTemp = ranks[i][0]
+            self.setGameTemplate(gameID, newTemp)
+            self.makeGame(gameID)
+        else:
+            self.deleteGame(gameID)
 
     def updateVeto(self, gameID):
         gameData = self.fetchGameData(gameID)
@@ -712,7 +784,7 @@ class League(object):
             self.deleteGame(gameID)
         else:
             self.vetoCurrentTemplate(gameData)
-            self.updateTemplate(gameData)
+            self.updateTemplate(gameID, gameData)
 
     def updateGame(self, warlightID, gameID, createdTime):
         created = datetime.strptime(createdTime, self.TIMEFORMAT)
