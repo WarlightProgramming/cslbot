@@ -369,7 +369,7 @@ class League(object):
         return limit
 
     def setCurrentID(self):
-        existingIDs = self.templates.findValue(dict(), 'ID')
+        existingIDs = self.teams.findValue(dict(), 'ID')
         if len(existingIDs) == 0:
             self.currentID = 0
         else:
@@ -423,6 +423,9 @@ class League(object):
         return matchingTeam, index
 
     def confirmTeam(self, order):
+        author = int(order['author'])
+        if (author in self.mods and len(order['order']) > 2):
+            self.confirmAsMod(self, order)
         try:
             matchingTeam, index = self.fetchMatchingTeam(order, True,
                                                          False)
@@ -434,6 +437,14 @@ class League(object):
         confirms = ",".join([str(c).upper() for c in confirms])
         self.teams.updateMatchingEntities({'Name': teamName},
                                           {'Confirmations': confirms})
+
+    def confirmAsMod(self, order):
+        players = order['order'][2:]
+        for player in players:
+            newOrder = dict()
+            newOrder['author'] = player
+            newOrder['order'] = order['order'][:2]
+            self.confirmTeam(newOrder)
 
     def removeTeam(self, order):
         matchingTeam = self.fetchMatchingTeam(order)[0]
