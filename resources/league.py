@@ -54,7 +54,6 @@ class League(object):
     SET_TEAM_SIZE = "TEAM_SIZE"
     SET_TEAMS_PER_SIDE = "TEAMS_PER_SIDE"
     SET_SYSTEM = "SYSTEM"
-    SET_MAKE_TEAMS = "MAKE_TEAMS"
     SET_BANNED_PLAYERS = "BANNED_PLAYERS"
     SET_BANNED_CLANS = "BANNED_CLANS"
     SET_ALLOWED_PLAYERS = "ALLOWED_PLAYERS"
@@ -83,6 +82,15 @@ class League(object):
 
     # keywords
     KW_ALL = "ALL"
+
+    # separators
+    SEP_CMD = ","
+    SEP_PLYR = ","
+    SEP_CONF = ","
+    SEP_TEAMS = ","
+    SEP_SIDES = "/"
+    SEP_RTG = "."
+    SEP_TEMP = ","
 
     def __init__(self, games, teams, templates, settings, orders,
                  admin, mods, parent, name):
@@ -142,7 +150,7 @@ class League(object):
         gamesConstraints = {'ID': 'UNIQUE INT',
                             'WarlightID': 'UNIQUE INT',
                             'Created': 'STRING',
-                            'Teams': 'STRING',
+                            'Sides': 'STRING',
                             'Ratings': 'STRING',
                             'Winners': 'STRING',
                             'Vetos': 'INT',
@@ -154,6 +162,7 @@ class League(object):
     def checkTemplatesSheet(self):
         templatesConstraints = {'ID': 'UNIQUE INT',
                                 'Name': 'UNIQUE STRING',
+                                'WarlightID': 'INT',
                                 'Active': 'BOOL',
                                 'Games': 'INT'}
         self.checkSheet(self.templates, set(templatesConstraints),
@@ -171,11 +180,6 @@ class League(object):
     def autoformat(self):
         """whether to automatically format sheets"""
         return self.getBoolProperty(self.SET_AUTOFORMAT, True)
-
-    @property
-    def makeTeams(self):
-        """whether to assemble teams"""
-        return self.getBoolProperty(self.SET_MAKE_TEAMS, False)
 
     @property
     def vetoLimit(self):
@@ -289,7 +293,7 @@ class League(object):
         return str(self.trueSkillMu) + "." + str(self.trueSkillSigma)
 
     def getIDGroup(self, label):
-        groupList = self.commands.get(label, "").split(",")
+        groupList = self.commands.get(label, "").split(self.SEP_CMD)
         return set([int(x) for x in groupList])
 
     @property
@@ -414,11 +418,13 @@ class League(object):
         index = None
         if (checkAuthor and (author not in self.mods or not allowMod)
             and str(author) not in
-            matchingTeam['Players'].split(",")):
+            matchingTeam['Players'].split(self.SEP_PLYR)):
             raise ImproperOrder(str(author) + " not in " +
                                 str(name))
             try:
-                index = matchingTeam['Players'].split(",").index(author)
+                index = (matchingTeam['Players'].
+                         split(self.SEP_PLYR).
+                         index(author))
             except ValueError: pass
         return matchingTeam, index
 
@@ -432,7 +438,7 @@ class League(object):
         except:
             raise ImproperOrder(str(order['author']) + " not in " +
                                 str(order['order'][1]))
-        confirms = matchingTeam['Confirmations'].split(",")
+        confirms = matchingTeam['Confirmations'].split(self.SEP_CONF)
         confirms[index] = "TRUE"
         confirms = ",".join([str(c).upper() for c in confirms])
         self.teams.updateMatchingEntities({'Name': teamName},
@@ -453,7 +459,7 @@ class League(object):
 
     def setLimit(self, order):
         matchingTeam = self.fetchMatchingTeam(order, False)[0]
-        players = matchingTeam['Players'].split(",")
+        players = matchingTeam['Players'].split(self.SEP_PLYR)
         if (str(order['author']) not in players and
             order['author'] not in self.mods):
             raise ImproperOrder(str(order['author']) +
@@ -467,12 +473,18 @@ class League(object):
 
     @property
     def templateIDs(self):
-        return self.templates.findValue(dict(), "ID")
+        return self.templates.findValue({'ID': {'value': '',
+                                                'type': 'negative'},
+                                         'Active': {'value': ['TRUE', True],
+                                                    'type': 'positive'}}, "ID")
 
     @property
     def templateRanks(self):
         tempData = self.templates.findEntities({'ID': {'value': '',
-                                                       'type': 'negative'}})
+                                                       'type': 'negative'},
+                                                'Active': {'values':
+                                                           ['TRUE', True],
+                                                       'type': 'positive'}})
         tempInfo = [(int(tempData[temp]['ID']), int(tempData[temp]['Games']))
                     for temp in tempData]
         tempInfo.sort(key = lambda x: x[1])
@@ -573,11 +585,11 @@ class League(object):
         results = set()
         gameData = self.games.findEntities({'ID': {'value': gameID,
                                                    'type': 'positive'}})
-        gameTeams = gameData[0]['Teams'].split(",")
+        gameTeams = gameData[0]['Teams'].split(self.SEP_TEAMS)
         for team in gameTeams:
             teamData = self.teams.findEntities({'ID': {'value': team,
                                                        'type': 'positive'}})
-            playerData = set(teamData['Players'].split(","))
+            playerData = set(teamData['Players'].split(self.SEP_PLYR))
             if len(playerData.intersection(players)) > 0:
                 results.add(team)
         return results
@@ -616,7 +628,7 @@ class League(object):
         return oldRating + diff
 
     def getNewEloRatings(self, winnersDict, losersDict):
-        WIN, LOSS = 1, 0
+        WIN, LOSS, DRAW = 1, 0, 0.5
         results = dict()
         winners = [winner for winner in winnersDict]
         losers = [loser for loser in losersDict]
@@ -634,14 +646,14 @@ class League(object):
 
     @staticmethod
     def getSplitRtg(dataDict, key):
-        return [int(v) for v in dataDict[key].split(".")]
+        return [int(v) for v in dataDict[key].split(self.SEP_RTG)]
 
     @staticmethod
     def unsplitRtg(rating):
-        return ".".join([str(val) for val in rating])
+        return (self.SEP_RTG).join([str(val) for val in rating])
 
     def getNewGlickoRatings(self, winnersDict, losersDict):
-        WIN, LOSS = 1, 0
+        WIN, LOSS, DRAW = 1, 0, 0.5
         winners = [winner for winner in winnersDict]
         losers = [loser for loser in losersDict]
         winRating = sum([self.getSplitRtg(winnersDict, winner)[0] for
@@ -672,37 +684,31 @@ class League(object):
             results[loser] = self.unsplitRtg([newRat, newDev])
         return results
 
-    def getRatingGroup(self, dataDict):
-        teams = dict()
-        for team in dataDict:
-            mu, sigma = self.getSplitRtg(dataDict, team)
-            rating = self.trueSkillEnv.create_rating(mu, sigma)
-            teams[team] = rating
-        return teams
+    def getTrueSkillRating(self, teamID):
+        mu, sigma = self.getTeamRating(teamID).split(self.SEP_RTG)
+        return self.trueSkillEnv.create_rating(mu, sigma)
 
-    def parseTrueSkillUpdate(self, dataDict, updatedRtgs, results=dict()):
-        for team in dataDict:
-            mu, sigma = updatedRtgs[team].mu, updatedRtgs[team].sigma
-            mu, sigma = int(round(mu)), int(round(sigma))
-            results[team] = self.unsplitRtg([mu, sigma])
-
-    def getNewTrueSkillRatings(self, winnersDict, losersDict):
-        results = dict()
-        WIN, LOSS = 0, 1
-        winningTeams = self.getRatingGroup(winnersDict)
-        losingTeams = self.getRatingGroup(losersDict)
-        rating_groups = [tuple(winningTeams), tuple(losingTeams)]
+    def getNewTrueSkillRatings(self, sides, winningSide):
+        results, WIN, LOSS = dict(), 0, 1
+        rating_groups = list()
+        for side in sides:
+            rating_group = dict()
+            for team in side:
+                rating_group[team] = self.getTrueSkillRating(team)
+            rating_groups.append(rating_group)
+        ranks = [LOSS,] * len(sides)
+        ranks[winningSide] = WIN
         updated = self.trueSkillEnv.rate(rating_groups, ranks=[WIN, LOSS])
-        updatedWin, updatedLoss = updated[0], updated[1]
-        self.parseTrueSkillUpdate(winnersDict, updatedWin, results)
-        self.parseTrueSkillUpdate(losersDict, updatedLoss, results)
+        for side in updated:
+            for team in side:
+                results[team] = side[team]
         return results
 
-    def getNewRatings(self, winnersDict, losersDict):
+    def getNewRatings(self, sides, winningSide):
         return {self.RATE_ELO: self.getNewEloRatings,
                 self.RATE_GLICKO: self.getNewGlickoRatings,
                 self.RATE_TRUESKILL: self.getNewTrueskillRatings}[
-                self.ratingSystem](winnersDict, losersDict)
+                self.ratingSystem](sides, winningSide)
 
     def updateTeamRating(self, teamID, rating):
         self.teams.updateMatchingEntities({'ID': {'value': teamID,
@@ -739,15 +745,17 @@ class League(object):
 
     def getGameTeams(self, gameID):
         gameData = self.fetchGameData(gameID)
-        return self(gameData['Teams'].split(","))
+        return self(gameData['Teams'].split(self.SEP_TEAMS)
 
     def getTeamRating(self, team):
         searchDict = {'ID': {'value': team, 'type': 'positive'}}
+        if len(searchDict) < 1:
+            raise NonexistentItem("Nonexistent team: %s" % (str(team)))
         return self.teams.findEntities(searchDict)[0]['Rating']
 
     def adjustRating(self, team, adjustment):
         oldRating = self.getTeamRating(team)
-        newRating = oldRating.split(".")
+        newRating = oldRating.split(self.SEP_RTG)
         newRating[0] = str(int(newRating[0]) + adjustment)
         newRating = ".".join(newRating)
         self.teams.updateMatchingEntities({'ID': {'value': team,
@@ -778,7 +786,7 @@ class League(object):
         pass
 
     def updateTemplate(self, gameID, gameData):
-        vetos = set([int(v) for v in gameData['Vetoed'].split(",")])
+        vetos = set([int(v) for v in gameData['Vetoed'].split(self.SEP_TEMP)])
         ranks, i = self.templateRanks, 0
         while (i < len(ranks) and ranks[i][0] in vetos): i += 1
         if i < len(ranks):
