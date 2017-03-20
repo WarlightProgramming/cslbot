@@ -41,6 +41,7 @@ class League(object):
     :param mods: set of IDs of league moderators
     :param parent: parent LeagueManager object
     :param name: name of this league
+    :param thread: league thread
     """
 
     # orders
@@ -50,27 +51,31 @@ class League(object):
     ORD_REMOVE_TEAM = "remove_team"
 
     # settings
-    SET_GAME_SIZE = "GAME_SIZE"
-    SET_TEAM_SIZE = "TEAM_SIZE"
-    SET_TEAMS_PER_SIDE = "TEAMS_PER_SIDE"
+    SET_GAME_SIZE = "GAME SIZE"
+    SET_TEAM_SIZE = "TEAM SIZE"
+    SET_TEAMS_PER_SIDE = "TEAMS PER SIDE"
     SET_SYSTEM = "SYSTEM"
-    SET_BANNED_PLAYERS = "BANNED_PLAYERS"
-    SET_BANNED_CLANS = "BANNED_CLANS"
-    SET_ALLOWED_PLAYERS = "ALLOWED_PLAYERS"
-    SET_ALLOWED_CLANS = "ALLOWED_CLANS"
-    SET_MAX_LIMIT = "MAX_LIMIT"
-    SET_MIN_LIMIT = "MIN_LIMIT"
+    SET_BANNED_PLAYERS = "BANNED PLAYERS"
+    SET_BANNED_CLANS = "BANNED CLANS"
+    SET_ALLOWED_PLAYERS = "ALLOWED PLAYERS"
+    SET_ALLOWED_CLANS = "ALLOWED CLANS"
+    SET_MAX_LIMIT = "MAX LIMIT"
+    SET_MIN_LIMIT = "MIN LIMIT"
     SET_AUTOFORMAT = "AUTOFORMAT"
-    SET_CONSTRAIN_LIMIT = "CONSTRAIN_LIMIT"
-    SET_EXP_THRESH = "EXPIRY_THRESHOLD"
-    SET_VETO_LIMIT = "VETO_LIMIT"
-    SET_VETO_PENALTY = "VETO_PENALTY"
-    SET_ELO_K = "ELO_K"
-    SET_ELO_DEFAULT = "ELO_DEFAULT"
-    SET_GLICKO_RD = "GLICKO_RD"
-    SET_GLICKO_DEFAULT = "GLICKO_DEFAULT"
-    SET_TRUESKILL_SIGMA = "TRUESKILL_SIGMA"
-    SET_TRUESKILL_DEFAULT = "TRUESKILL_MU"
+    SET_CONSTRAIN_LIMIT = "CONSTRAIN LIMIT"
+    SET_EXP_THRESH = "EXPIRY THRESHOLD"
+    SET_VETO_LIMIT = "VETO LIMIT"
+    SET_VETO_PENALTY = "VETO PENALTY"
+    SET_ELO_K = "ELO K"
+    SET_ELO_DEFAULT = "ELO DEFAULT"
+    SET_GLICKO_RD = "GLICKO RD"
+    SET_GLICKO_DEFAULT = "GLICKO DEFAULT"
+    SET_TRUESKILL_SIGMA = "TRUESKILL SIGMA"
+    SET_TRUESKILL_DEFAULT = "TRUESKILL MU"
+    SET_LEAGUE_MESSAGE = "MESSAGE"
+    SET_SUPER_NAME = "CLUSTER NAME"
+    SET_LEAGUE_ACRONYM = "ACRONYM"
+    SET_URL = "URL"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -79,6 +84,26 @@ class League(object):
 
     # timeformat
     TIMEFORMAT = "%Y-%m-%d %H:%M:%S"
+
+    # default message
+    DEFAULT_MSG = """This is a game for the {{%s}} league, part of {{%s}}.
+
+                     To view information about the league, head to {{%s}}.
+                     To change your limit, add/confirm a team, etc.,
+                     head to the league thread at {{%s}}.
+
+                     {{%s}}
+
+                     This league is run using the CSL framework,
+                     an open-source project maintained by knyte.
+
+                     To view the source code, head to:
+                         https://github.com/knyte/cslbot
+
+                     If you never signed up for this game or suspect abuse,
+                     message knyte - tinyurl.com/mail-knyte
+                     """ % ("_LEAGUE_NAME", SET_SUPER_NAME, SET_URL,
+                            "_LEAGUE_THREAD", "_GAME_SIDES")
 
     # keywords
     KW_ALL = "ALL"
@@ -94,7 +119,7 @@ class League(object):
     SEP_WIN = ","
 
     def __init__(self, games, teams, templates, settings, orders,
-                 admin, mods, parent, name):
+                 admin, mods, parent, name, thread):
         self.games = games
         self.teams = teams
         self.templates = templates
@@ -105,6 +130,7 @@ class League(object):
         self.mods.add(admin)
         self.parent = parent
         self.name = name
+        self.thread = thread
         self.handler = self._makeHandler()
         self.checkFormat()
 
@@ -142,6 +168,7 @@ class League(object):
                            'Players': 'STRING',
                            'Confirmations': 'STRING',
                            'Rating': 'STRING',
+                           'Rank': 'INT',
                            'Limit': 'INT',
                            'Count': 'INT'}
         self.checkSheet(self.teams, set(teamConstraints), teamConstraints,
@@ -181,6 +208,28 @@ class League(object):
     def autoformat(self):
         """whether to automatically format sheets"""
         return self.getBoolProperty(self.SET_AUTOFORMAT, True)
+
+    @property
+    def leagueAcronym(self):
+        return self.commands.get(self.SET_LEAGUE_ACRONYM, self.clusterName)
+
+    @property
+    def clusterName(self):
+        return self.commands.get(self.SET_SUPER_NAME, self.name)
+
+    @property
+    def leagueMessage(self):
+        return self.commands.get(self.SET_LEAGUE_MESSAGE, self.DEFAULT_MSG)
+
+    @property
+    def leagueUrl(self):
+        return self.commands.get(self.SET_URL, self.defaultUrl)
+
+    @property
+    def defaultUrl(self):
+        sheetName = self.games.parent.sheet.ID
+        return ("https://docs.google.com/spreadsheets/d/" +
+                str(sheetName))
 
     @property
     def vetoLimit(self):
@@ -818,8 +867,112 @@ class League(object):
                                                   'type': 'positive'}},
                                           {'Template': tempID})
 
+    def getTeamsPlayers(self, team):
+        teamData = self.fetchTeamData(team)
+        return [int(p) for p in teamData.split(self.SEP_PLYR)]
+
+    def getSidePlayers(self, side):
+        players = list()
+        for team in side:
+            players += self.getTeamPlayers(team)
+        return players
+
+    def assembleTeams(self, gameData):
+        teams = list()
+        sides = gameData['Sides'].split(self.SEP_SIDES)
+        for side in sides:
+            teams.append(tuple(self.getSidePlayers(side)))
+        return teams
+
+    def getTeamName(self, teamID):
+        teamData = self.fetchTeamData(teamID)
+        return teamData['Name']
+
+    def getGameName(self, gameData):
+        MAX_NAME_LEN, MAX_DISPLAY_LEN = 10, 50
+        start = self.leagueAcronym + " | "
+        nameData = list()
+        for side in gameData['Sides'].split(self.SEP_SIDES):
+            nameData.append(" vs ")
+            nameInfo = list()
+            for team in side.split(self.SEP_TEAMS):
+                nameInfo.append(" and ")
+                teamName = self.getTeamName(team)
+                if len(teamName) > MAX_NAME_LEN:
+                    teamName = teamName[:(MAX_NAME_LEN - 3)]
+                    teamName = teamName + "..."
+                nameInfo.append(teamName)
+            nameData += nameInfo[1:]
+        name = start + "".join(nameData[1:])
+        if len(name) > MAX_DISPLAY_LEN:
+            name = name[:MAX_DISPLAY_LEN]
+            if name[-3:] != "...":
+                name = name[:-3] + "..."
+        return name
+
+    def getPrettyEloRating(self, rating):
+        return rating
+
+    def getPrettyGlickoRating(self, rating):
+        return rating.split(self.SEP_RTG)[0]
+
+    def getPrettyTrueSkillRating(self, rating):
+        mu, sigma = [int(i) for i in rating.split(self.SEP_RTG)]
+        return str(mu - 3 * sigma)
+
+    def getPrettyRating(self, team):
+        teamRating = self.getTeamRating(team)
+        return {self.RATE_ELO: self.getPrettyEloRating,
+                self.RATE_GLICKO, self.getPrettyGlickoRating,
+                self.RATE_TRUESKILL, self.getPrettyTrueSkillRating}[
+                self.ratingSystem](teamRating)
+
+    def getOfficialRating(self, team):
+        return int(self.getPrettyRating(team))
+
+    def getTeamRank(self, team):
+        teamData = self.fetchTeamData(team)
+        return int(teamData['Rank'])
+
+    def sideInfo(self, gameData):
+        infoData = list()
+        sides = gameData['Sides']
+        for side in sides.split(self.SEP_SIDES):
+            for team in side.split(self.SEP_TEAMS):
+                infoData.append('\n')
+                teamRating = self.getPrettyRating(team)
+                teamData = self.fetchTeamData(team)
+                teamRank = teamData['Rank']
+                teamName = teamData['Name']
+                teamStr = "%s, with rank %d and rating %s" % (teamName,
+                                                              teamRank,
+                                                              teamRating)
+                infoData.append(teamStr)
+        infoStr = "".join(infoData[1:])
+        return infoStr
+
+    def processMessage(self, message, gameData):
+        replaceDict = {'_LEAGUE_NAME': self.name,
+                       self.SET_SUPER_NAME: self.clusterName,
+                       self.SET_URL: self.leagueUrl,
+                       '_LEAGUE_THREAD': self.thread,
+                       '_GAME_SIDES': self.sideInfo(gameData)}
+        for val in replaceDict:
+            checkStr = "{{%s}}" % val
+            if checkStr in message:
+                message = message.replace(checkStr, replaceDict[val])
+        return message
+
+    def getGameMessage(self, gameData):
+        return self.processMessage(self.leagueMessage, gameData)
+
     def makeGame(self, gameID):
-        pass
+        gameData = self.fetchGameData(gameID)
+        temp = int(gameData['Template'])
+        teams = assembleTeams(gameData)
+        self.handler.createGame(temp, self.getGameName(gameData), teams,
+                                self.getGameMessage(gameData))
+        self.adjustTemplateGameCount(temp, 1)
 
     def updateTemplate(self, gameID, gameData):
         vetos = set([int(v) for v in gameData['Vetoed'].split(self.SEP_TEMP)])
@@ -848,6 +1001,27 @@ class League(object):
          'DECLINED': self.updateDecline(gameID, status[1]),
          'ABANDONED': self.updateVeto(gameID)}.get([status[0]])
 
+    def updateRanks(self):
+        allTeams = self.teams.findEntities({'ID': {'value': '',
+                                                   'type': 'negative'}})
+        teamRatings = list()
+        for team in allTeams:
+            teamRatings.append((team['ID'],
+                                self.getOfficialRating(team['ID'])))
+        teamRatings.sort(key = lambda x: x[1])
+        teamRatings.reverse()
+        rank, previous, offset = 0, None, 0
+        for team in teamRatings:
+            teamID, teamRtg = team
+            if teamRtg != previous:
+                previous = teamRtg
+                rank += offset + 1
+            else:
+                offset += 1
+            self.teams.updateMatchingEntities({'ID': {'value': teamID,
+                                                      'type': 'positive'}},
+                                              {'Rank': rank})
+
     def updateGames(self):
         gamesToCheck = self.unfinishedGames
         for game in gamesToCheck:
@@ -857,6 +1031,7 @@ class League(object):
             except:
                 self.parent.log("Failed to update game: " + str(game),
                                 league=self.name, error=True)
+        self.updateRanks()
 
     def createGames(self):
         pass
