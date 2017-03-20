@@ -91,6 +91,7 @@ class League(object):
     SEP_SIDES = "/"
     SEP_RTG = "."
     SEP_TEMP = ","
+    SEP_WIN = ","
 
     def __init__(self, games, teams, templates, settings, orders,
                  admin, mods, parent, name):
@@ -395,8 +396,8 @@ class League(object):
         gameLimit = self.checkLimit(gameLimit)
         members.sort()
         confirms = [(m == author) for m in members]
-        members = ",".join([str(m) for m in members])
-        confirms = ",".join([str(c).upper() for c in confirms])
+        members = (self.SEP_PLYR).join([str(m) for m in members])
+        confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
         self.teams.addEntity({'ID': self.currentID,
                               'Name': teamName,
                               'Limit': gameLimit,
@@ -440,7 +441,7 @@ class League(object):
                                 str(order['order'][1]))
         confirms = matchingTeam['Confirmations'].split(self.SEP_CONF)
         confirms[index] = "TRUE"
-        confirms = ",".join([str(c).upper() for c in confirms])
+        confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
         self.teams.updateMatchingEntities({'Name': teamName},
                                           {'Confirmations': confirms})
 
@@ -594,16 +595,9 @@ class League(object):
                 results.add(team)
         return results
 
-    def getRatingsDict(self, teams):
-        ratings = dict()
-        teamData = self.teams.findEntities({'ID': {'values': teams,
-                                                   'type': 'positive'}})
-        for team in teamData:
-            ratings[team['ID']] = team['Rating']
-        return ratings
-
-    def setWinners(self, gameID, winTeams):
-        winStr = ",".join(sorted(str(team) for team in winTeams))
+    def setWinners(self, gameID, winningSide):
+        sortedWinners = sorted(team for team in winningSide)
+        winStr = (self.SEP_WIN).join(str(team) for team in sortedWinners)
         self.games.updateMatchingEntities({'ID': {'value': gameID,
                                                   'type': 'positive'}},
                                           {'Winners': winStr})
@@ -620,28 +614,41 @@ class League(object):
                                                       'type': 'positive'}},
                                               {'Count': str(oldCount + adj)})
 
-    def getEloRatingAfterEvent(self, rating, opponents, event):
+    def getEloDiff(self, rating, events):
         oldRating = rating
-        for opp in opponents:
-            rating = self.eloEnv.Rate(oldRating, [(event, opp)])
-        diff = int(round((rating - oldRating) / len(opponents)))
-        return oldRating + diff
+        rating = self.eloEnv.Rate(oldRating, events)
+        diff = int(round((rating - oldRating) / len(events)))
+        return diff
 
-    def getNewEloRatings(self, winnersDict, losersDict):
-        WIN, LOSS, DRAW = 1, 0, 0.5
-        results = dict()
-        winners = [winner for winner in winnersDict]
-        losers = [loser for loser in losersDict]
-        winRating = sum([int(winnersDict[winner]) for winner in winnersDict])
-        lossRating = sum([int(losersDict[loser]) for loser in losersDict])
-        winRtg = self.getEloRatingAfterEvent(winRating, [lossRating,], WIN)
-        lossRtg = self.getEloRatingAfterEvent(lossRating, [winRating,], LOSS)
-        winDiff = int(round((winRtg - winRating) / len(winners)))
-        lossDiff = int(round((lossRtg - lossRating) / len(losers)))
-        for winner in winners:
-            results[winner] = str(int(winnersDict[winner]) + winDiff)
-        for loser in losers:
-            results[loser] = str(int(losersDict[loser]) + lossDiff)
+    def getEloRating(self, teamID):
+        return float(self.getTeamRating(teamID))
+
+    def getSideEloRating(self, side):
+        rating = 0
+        for team in side:
+            rating += self.getEloRating(team)
+        return rating
+
+    def getNewEloRatings(self, sides, winningSide):
+        results, diffs = dict(), dict()
+        for i in xrange(len(sides)):
+            side = sides[i]
+            sideRtg = self.getSideEloRating(side)
+            opps = list()
+            for j in xrange(len(sides)):
+                if i == j: continue
+                other = sides[j]
+                otherRtg = self.getSideEloRating(other)
+                event = self.getEvent(i, j, winningSide)
+                opps.append((event, otherRtg))
+            diff = self.getEloDiff(sideRtg, opps)
+            for team in side:
+                if team not in diffs: diffs[team] = 0
+                diffs[team] += diff
+        for side in sides:
+            for team in side:
+                results[team] = str(self.getEloRating(team) +
+                                    int(round(diffs[team])))
         return results
 
     @staticmethod
@@ -652,36 +659,48 @@ class League(object):
     def unsplitRtg(rating):
         return (self.SEP_RTG).join([str(val) for val in rating])
 
-    def getNewGlickoRatings(self, winnersDict, losersDict):
-        WIN, LOSS, DRAW = 1, 0, 0.5
-        winners = [winner for winner in winnersDict]
-        losers = [loser for loser in losersDict]
-        winRating = sum([self.getSplitRtg(winnersDict, winner)[0] for
-                         winner in winnersDict])
-        winRd = sum([self.getSplitRtg(winnersDict, winner)[1] for
-                     winner in winnersDict])
-        lossRating = sum([self.getSplitRtg(losersDict, loser)[0] for
-                          loser in losersDict])
-        lossRd = sum([self.getSplitRtg(losersDict, loser)[1] for
-                      loser in losersDict])
-        winPlayer = Player(rating=winRating, rd=winRd)
-        lossPlayer = Player(rating=lossRating, rd=lossRd)
-        winPlayer.update_rating([lossRating], [lossRd], [WIN])
-        lossPlayer.update_rating([winRating], [winRd], [LOSS])
-        winRtg, winDev = winPlayer.getRating(), winPlayer.getRd()
-        lossRtg, lossDev = lossPlayer.getRating(), lossPlayer.getRd()
-        winDiff = int(round((winRtg - winRating) / len(winners)))
-        wDevDiff = int(round((winDev - winRd) / len(winners)))
-        lossDiff = int(round((lossRtg - lossRating) / len(losers)))
-        lDevDiff = int(round((lossDev - lossRd) / len(losers)))
-        for winner in winners:
-            rat, dev = self.getSplitRtg(winnersDict, winner)
-            newRat, newDev = rat + winDiff, dev + wDevDiff
-            results[winner] = self.unsplitRtg([newRat, newDev])
-        for loser in losers:
-            rat, dev = self.getSplitRtg(losersDict, loser)
-            newRat, newDev = rat + lossDiff, dev + lDevDiff
-            results[loser] = self.unsplitRtg([newRat, newDev])
+    def getGlickoRating(self, teamID):
+        return tuple([int(x) for x in
+                     self.getTeamReating(teamID).split(self.SEP_RTG)])
+
+    def getSideGlickoRating(self, side):
+        rating, dev = 0, 0
+        for team in side:
+            glicko = self.getGlickoRating(team)
+            rating, dev = (rating + glicko[0], dev + glicko[1])
+        return rating, dev
+
+    def getEvent(self, i, j, winner, WIN=1, LOSS=0, DRAW=0.5):
+        if i == winner: return WIN
+        elif j == winner: return LOSS
+        else: return DRAW
+
+    def updateGlickoMatchup(self, players, i, j, winner):
+        side1, side2 = players[i], players[j]
+        side1.update_player([side2.rating], [side2.rd],
+                            [self.getEvent(i, j, winner)])
+        side2.update_player([side1.rating], [side1.rd],
+                            [self.getEvent(j, i, winner)])
+
+    def getNewGlickoRatings(self, sides, winningSide):
+        results, players = dict(), list()
+        for side in sides:
+            sideRtg, sideRd = self.getSideGlickoRating(side)
+            sidePlayer = Player(rating=sideRtg, rd=sideRd)
+            player.append(sidePlayer)
+        for i in xrange(len(sides)):
+            for j in xrange(len(sides[(i+1):])):
+                self.updateGlickoMatchup(players, i, j, winningSide)
+        for i in xrange(len(sides)):
+            newRtg, newRd = players[i].rating, players[i].rd
+            oldRtg, oldRd = self.getSideGlickoRating(side)
+            rtgDiff, rdDiff = float(newRtg - oldRtg), float(newRd - oldRd)
+            rtgDiff = (rtgDiff / ((len(sides) - 1) * self.teamsPerSide))
+            rdDiff /= (rdDiff / ((len(sides) - 1) * self.teamsPerSide))
+            for team in sides[i]:
+                origRtg, origRd = self.getGlickoRating(team)
+                rtg, rd = origRtg + int(round(rtgDiff)), int(round(rdDiff))
+                results[team] = (self.SEP_RTG).join([str(rtg), str(rd)])
         return results
 
     def getTrueSkillRating(self, teamID):
@@ -701,10 +720,15 @@ class League(object):
         updated = self.trueSkillEnv.rate(rating_groups, ranks=[WIN, LOSS])
         for side in updated:
             for team in side:
-                results[team] = side[team]
+                results[team] = self.unsplitRtg(side[team].mu,
+                                                side[team].sigma)
         return results
 
     def getNewRatings(self, sides, winningSide):
+        """
+        :param sides: list[set[string]]
+        :param winningSide: int (index of winning side)
+        """
         return {self.RATE_ELO: self.getNewEloRatings,
                 self.RATE_GLICKO: self.getNewGlickoRatings,
                 self.RATE_TRUESKILL: self.getNewTrueskillRatings}[
@@ -719,33 +743,45 @@ class League(object):
         for team in newRatings:
             self.updateTeamRating(team, newRatings[team])
 
-    def updateResults(self, winTeams, lossTeams):
-        winRatings = self.getRatingsDict(winTeams)
-        lossRatings = self.getRatingsDict(lossTeams)
-        newRatings = self.getNewRatings(self, winRatings, lossRatings)
+    def updateResults(self, gameID, sides, winningSide):
+        self.setWinners(gameID, sides[winningSide])
+        newRatings = self.getNewRatings(self, sides, winningSide)
         self.updateRatings(newRatings)
-        for team in winTeams+lossTeams:
-            self.adjustTeamGameCount(team, -1)
+        for side in sides:
+            for team in side:
+                self.adjustTeamGameCount(team, -1)
 
     def updateWinners(self, gameID, winners):
-        winTeams = self.findCorrespondingTeams(winners)
-        lossTeams = self.getGameTeams(teamID) - winTeams
-        self.setWinners(gameID, winTeams)
-        self.updateResults(winTeams, lossTeams)
+        sides = self.getGameSides(gameID)
+        winningTeams = self.findCorrespondingTeams(gameID, winners)
+        for i in xrange(len(sides)):
+            side = sides[i]
+            if len(side & winningTeams) > 0:
+                winningSide = i
+                break
+        self.updateResults(gameID, sides, winningSide)
 
     def updateDecline(self, gameID, decliners):
-        lossTeams = self.findCorrespondingTeams(decliners)
-        winTeams = self.getGameTeams(teamID) - lossTeams
-        self.setWinners(gameID, winTeams)
-        self.updateResults(winTeams, lossTeams)
+        sides = self.getGameSides(gameID)
+        losingTeams = self.findCorrespondingTeams(gameID, decliners)
+        for i in xrange(len(sides)):
+            side = sides[i]
+            if len(side - losingTeams) > 0:
+                winningSide = i
+                break
+        self.updateResults(gameID, sides, winningSide)
 
     def deleteGame(self, gameID):
         self.games.removeMatchingEntities({'ID': {'value': gameID,
                                                   'type': 'positive'}})
 
-    def getGameTeams(self, gameID):
+    def getGameSides(self, gameID):
         gameData = self.fetchGameData(gameID)
-        return self(gameData['Teams'].split(self.SEP_TEAMS)
+        results = list()
+        sides = gameData['Sides'].split(self.SEP_SIDES)
+        for side in sides:
+            results.append(set(sides.split(self.SEP_TEAMS)))
+        return results
 
     def getTeamRating(self, team):
         searchDict = {'ID': {'value': team, 'type': 'positive'}}
@@ -757,7 +793,7 @@ class League(object):
         oldRating = self.getTeamRating(team)
         newRating = oldRating.split(self.SEP_RTG)
         newRating[0] = str(int(newRating[0]) + adjustment)
-        newRating = ".".join(newRating)
+        newRating = (self.SEP_RTG).join(newRating)
         self.teams.updateMatchingEntities({'ID': {'value': team,
                                                   'type': 'positive'}},
                                           {'Rating': newRating})
