@@ -157,7 +157,7 @@ class League(object):
                             'Vetos': 'INT',
                             'Vetoed': 'STRING',
                             'Template': 'INT'}
-        self.checkSheet(self.games, set(gamesConstraints, gamesConstraints,
+        self.checkSheet(self.games, set(gamesConstraints), gamesConstraints,
                         self.autoformat)
 
     def checkTemplatesSheet(self):
