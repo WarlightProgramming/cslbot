@@ -7,6 +7,7 @@
 import copy
 import json
 import mpmath
+from pair import group_teams, group_players, assign_templates
 from elo import Rating, Elo
 from glicko2.glicko2 import Player
 from trueskill import TrueSkill
@@ -93,6 +94,8 @@ class League(object):
                      To change your limit, add/confirm a team, etc.,
                      head to the league thread at {{%s}}.
 
+                     Vetos so far: {{%s}}; Max: {{%s}}
+
                      {{%s}}
 
                      This league is run using the CSL framework,
@@ -104,7 +107,8 @@ class League(object):
                      If you never signed up for this game or suspect abuse,
                      message knyte - tinyurl.com/mail-knyte
                      """ % ("_LEAGUE_NAME", SET_SUPER_NAME, SET_URL,
-                            "_LEAGUE_THREAD", "_GAME_SIDES")
+                            "_LEAGUE_THREAD", "_VETOS",
+                            SET_VETO_LIMIT, "_GAME_SIDES")
 
     # keywords
     KW_ALL = "ALL"
@@ -118,6 +122,8 @@ class League(object):
     SEP_RTG = "."
     SEP_TEMP = ","
     SEP_WIN = ","
+    SEP_VETOCT = "."
+    SEP_VETOS = "/"
 
     def __init__(self, games, teams, templates, settings, orders,
                  admin, mods, parent, name, thread):
@@ -135,7 +141,8 @@ class League(object):
         self.handler = self._makeHandler()
         self.checkFormat()
 
-    def _makeHandler(self):
+    @staticmethod
+    def _makeHandler():
         credsFile = open("../" + API_CREDS)
         creds = json.load(credsFile)
         email, token = creds['E-mail'], creds['APIToken']
@@ -169,6 +176,7 @@ class League(object):
                            'Players': 'STRING',
                            'Confirmations': 'STRING',
                            'Rating': 'STRING',
+                           'Vetos': 'STRING',
                            'Rank': 'INT',
                            'Limit': 'INT',
                            'Count': 'INT'}
@@ -460,6 +468,7 @@ class League(object):
                               'Limit': gameLimit,
                               'Players': members,
                               'Confirmations': confirms,
+                              'Vetos': "",
                               'Count': 0,
                               'Rating': self.defaultRating})
         self.currentID += 1
@@ -708,9 +717,9 @@ class League(object):
     def getSplitRtg(dataDict, key):
         return [int(v) for v in dataDict[key].split(self.SEP_RTG)]
 
-    @staticmethod
-    def unsplitRtg(rating):
-        return (self.SEP_RTG).join([str(val) for val in rating])
+    @classmethod
+    def unsplitRtg(cls, rating):
+        return (cls.SEP_RTG).join([str(val) for val in rating])
 
     def getGlickoRating(self, teamID):
         return tuple([int(x) for x in
@@ -723,7 +732,8 @@ class League(object):
             rating, dev = (rating + glicko[0], dev + glicko[1])
         return rating, dev
 
-    def getEvent(self, i, j, winner, WIN=1, LOSS=0, DRAW=0.5):
+    @staticmethod
+    def getEvent(i, j, winner, WIN=1, LOSS=0, DRAW=0.5):
         if i == winner: return WIN
         elif j == winner: return LOSS
         else: return DRAW
@@ -784,7 +794,7 @@ class League(object):
         """
         return {self.RATE_ELO: self.getNewEloRatings,
                 self.RATE_GLICKO: self.getNewGlickoRatings,
-                self.RATE_TRUESKILL: self.getNewTrueskillRatings}[
+                self.RATE_TRUESKILL: self.getNewTrueSkillRatings}[
                 self.ratingSystem](sides, winningSide)
 
     def updateTeamRating(self, teamID, rating):
@@ -817,6 +827,8 @@ class League(object):
     def updateDecline(self, gameID, decliners):
         sides = self.getGameSides(gameID)
         losingTeams = self.findCorrespondingTeams(gameID, decliners)
+        template = str(self.fetchGameData(gameID)['Template'])
+        self.updateGameVetos(losingTeams, template)
         for i in xrange(len(sides)):
             side = sides[i]
             if len(side - losingTeams) > 0:
@@ -824,9 +836,12 @@ class League(object):
                 break
         self.updateResults(gameID, sides, winningSide)
 
-    def deleteGame(self, gameID):
+    def deleteGame(self, gameID, gameData):
         self.games.removeMatchingEntities({'ID': {'value': gameID,
                                                   'type': 'positive'}})
+        for side in gameData['Sides'].split(self.SEP_SIDES):
+            for team in side.split(self.SEP_TEAMS):
+                self.adjustTeamGameCount(team, -1)
 
     def getGameSides(self, gameID):
         gameData = self.fetchGameData(gameID)
@@ -872,7 +887,7 @@ class League(object):
                                                   'type': 'positive'}},
                                           {'Template': tempID})
 
-    def getTeamsPlayers(self, team):
+    def getTeamPlayers(self, team):
         teamData = self.fetchTeamData(team)
         return [int(p) for p in teamData.split(self.SEP_PLYR)]
 
@@ -960,12 +975,14 @@ class League(object):
         replaceDict = {'_LEAGUE_NAME': self.name,
                        self.SET_SUPER_NAME: self.clusterName,
                        self.SET_URL: self.leagueUrl,
+                       self.SET_VETO_LIMIT: self.vetoLimit,
+                       '_VETOS': gameData['Vetos'],
                        '_LEAGUE_THREAD': self.thread,
                        '_GAME_SIDES': self.sideInfo(gameData)}
         for val in replaceDict:
             checkStr = "{{%s}}" % val
             if checkStr in message:
-                message = message.replace(checkStr, replaceDict[val])
+                message = message.replace(checkStr, str(replaceDict[val]))
         return message
 
     def getGameMessage(self, gameData):
@@ -993,13 +1010,64 @@ class League(object):
         else:
             self.deleteGame(gameID)
 
+    def getVetoDict(self, vetos):
+        results = dict()
+        for temp in vetos.split(self.SEP_VETOS):
+            tempID, vetoCt = temp.split(self.SEP_VETOCT)
+            results[tempID] = int(vetoCt)
+        return results
+
+    def getTeamVetoDict(self, teamID):
+        teamData = self.fetchTeamData(teamID)
+        return self.getVetoDict(teamData['Vetos'])
+
+    def packageVetoDict(self, vetoDict):
+        tempData = [(str(temp) + self.SEP_VETOCT + str(vetoDict[temp]))
+                    for temp in vetoDict]
+        return (self.SEP_VETOS).join(tempData)
+
+    def updateVetoCt(self, oldVetos, template, adj):
+        vetoDict = self.getVetoDict(oldVetos)
+        vetoDict[str(template)] += int(adj)
+        return self.packageVetoDict(vetoDict)
+
+    def updateTeamVetos(self, team, template, adj):
+        teamData = self.fetchTeamData(team)
+        oldVetos = teamData['Vetos']
+        if str(template) not in oldVetos:
+            newVetos = (oldVetos + self.SEP_VETOS + str(template) +
+                        self.SEP_VETOCT + str(adj))
+            if len(oldVetos) == 0:
+                newVetos = newVetos[1:]
+        else:
+            newVetos = self.updateVetoCt(oldVetos, template, adj)
+        self.teams.updateMatchingEntities({'ID': {'value': team,
+                                                  'type': 'positive'}},
+                                          {'Vetos': newVetos})
+
+    def updateGameVetos(self, teams, template):
+        for team in teams:
+            self.updateTeamVetos(team, template, 1)
+
+    @classmethod
+    def getTeams(cls, gameData):
+        results = set()
+        sides = gameData['Sides'].split(cls.SEP_SIDES)
+        for side in sides:
+            teams = side.split(cls.SEP_TEAMS)
+            for team in teams:
+                results.add(int(team))
+        return results
+
     def updateVeto(self, gameID):
         gameData = self.fetchGameData(gameID)
         if int(gameData['Vetoes']) >= self.vetoLimit:
             self.penalizeVeto(gameID)
-            self.deleteGame(gameID)
+            self.deleteGame(gameID, gameData)
         else:
+            template = gameData['Template']
             self.vetoCurrentTemplate(gameData)
+            self.updateGameVetos(self.getTeams(gameData), template)
             self.updateTemplate(gameID, gameData)
 
     def updateGame(self, warlightID, gameID, createdTime):
@@ -1086,6 +1154,41 @@ class League(object):
             dropped = self.validatePlayers(playerCounts, players)
             if not dropped:
                 self.updatePlayerCounts(playerCounts, players)
+
+    @classmethod
+    def addRatings(cls, ratings):
+        sums = list()
+        for rating in ratings:
+            splitRtg = [int(x) for x in rating.split(cls.SEP_RTG)]
+            for i in xrange(len(splitRtg)):
+                if i >= len(sums):
+                    sums.append(splitRtg[i])
+                else:
+                    sums[i] += splitRtg[i]
+        return (cls.SEP_RTG).join(str(x) for x in sums)
+
+    def getEloParity(self, ratings):
+        rtgs = [int(rating) for rating in ratings]
+        pass
+
+    def getGlickoParity(self, ratings):
+        pass
+
+    def getTrueSkillParity(self, ratings):
+        rtgs = [rating.split(self.SEP_RTG) for rating in ratings]
+        players = [tuple(self.trueSkillEnv.create_rating(int(rtg[0]),
+                   int(rtg[1])),) for rtg in rtgs]
+        return self.trueSkillEnv.quality(players)
+
+    def getParityScore(self, ratings):
+        """
+        given two ratings, returns a score from 0.0 to 1.0
+        representing the preferability of the pairing
+        """
+        return {self.RATE_ELO: self.getEloParity,
+                self.RATE_GLICKO: self.getGlickoParity,
+                self.RATE_TRUESKILL: self.getTrueSkillParity}[
+                self.ratingSystem](ratings)
 
     def createGames(self):
         self.validatePlayers()
