@@ -76,6 +76,7 @@ class League(object):
     SET_SUPER_NAME = "CLUSTER NAME"
     SET_LEAGUE_ACRONYM = "ACRONYM"
     SET_URL = "URL"
+    SET_MAX_TEAMS = "TEAM LIMIT"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -232,6 +233,12 @@ class League(object):
                 str(sheetName))
 
     @property
+    def teamLimit(self):
+        maxTeams = self.commands.get(self.SET_MAX_TEAMS, None)
+        if maxTeams is not None: maxTeams = int(maxTeams)
+        return maxTeams
+
+    @property
     def vetoLimit(self):
         """maximum number of vetos per game"""
         return int(self.commands.get(self.SET_VETO_LIMIT, 1))
@@ -369,6 +376,7 @@ class League(object):
     def allowed(self, playerID):
         """returns True if a player is allowed to join the league"""
         checkClans = (len(self.bannedClans) > 0)
+        player = int(playerID)
         if checkClans:
             parser = PlayerParser(playerID)
             clan = int(parser.clanID)
@@ -515,11 +523,7 @@ class League(object):
             raise ImproperOrder(str(order['author']) +
                                 " can't set the limit for team " +
                                 str(order['order'][1]))
-        self.teams.updateMatchingEntities({'ID':
-                                           {'value': matchingTeam['ID'],
-                                            'type': 'positive'}},
-                                          {'Limit':
-                                           order['order'][2]})
+        self.changeLimit(matchingTeam['ID'], order['order'][2])
 
     @property
     def templateIDs(self):
@@ -859,7 +863,8 @@ class League(object):
         self.games.updateMatchingEntities({'ID': {'value': gameData['ID'],
                                                   'type': 'positive'},
                                           {'Vetoed': vetos,
-                                           'Vetos': vetoCount}})
+                                           'Vetos': vetoCount,
+                                           'Template': ''}})
         self.adjustTemplateGameCount(gameData['Template'], -1)
 
     def setGameTemplate(self, gameID, tempID):
@@ -970,9 +975,12 @@ class League(object):
         gameData = self.fetchGameData(gameID)
         temp = int(gameData['Template'])
         teams = assembleTeams(gameData)
-        self.handler.createGame(temp, self.getGameName(gameData), teams,
-                                self.getGameMessage(gameData))
+        wlID = self.handler.createGame(temp, self.getGameName(gameData), teams,
+                                       self.getGameMessage(gameData))
         self.adjustTemplateGameCount(temp, 1)
+        self.games.updateMatchingEntities({'ID': {'value': gameID,
+                                                  'type': 'positive'}},
+                                          {'WarlightID': wlID})
 
     def updateTemplate(self, gameID, gameData):
         vetos = set([int(v) for v in gameData['Vetoed'].split(self.SEP_TEMP)])
@@ -1033,7 +1041,54 @@ class League(object):
                                 league=self.name, error=True)
         self.updateRanks()
 
+    def checkExcess(self, playerCount):
+        if self.teamLimit is None: return False
+        return (playerCount > teamLimit)
+
+    def changeLimit(self, teamID, limit):
+        self.teams.updateMatchingEntities({'ID': {'value': teamID,
+                                                  'type': 'positive'}},
+                                          {'Limit': limit})
+
+    def updatePlayerCounts(self, playerCounts, players):
+        for player in players:
+            if player not in playerCounts:
+                playerCounts[player] = 0
+            playerCounts[player] += 1
+
+    def validateTeam(self, teamID, players):
+        try:
+            self.checkTeam(players)
+            return False
+        except ImproperOrder:
+            self.changeLimit(teamID, 0)
+            return True
+
+    def validatePlayer(self, playerCounts, players):
+        for player in players:
+            if player not in playerCounts: continue
+            if playerCounts[player] >= self.teamLimit:
+                self.changeLimit(team['ID'], 0)
+                return True
+        return False
+
+    def validatePlayers(self):
+        allTeams = self.teams.findEntities({'ID': {'value': '',
+                                                   'type': 'negative'}})
+        playerCounts = dict()
+        for i in xrange(len(allTeams)):
+            team, dropped = allTeams[i], False
+            confirmations = team['Confirmations']
+            limit = int(team['Limit'])
+            if ('FALSE' in confirmations or limit < 1): continue
+            players = allTeams[team]['Players'].split(self.SEP_PLYR)
+            dropped = self.validateTeam(team['ID'], players)
+            dropped = self.validatePlayers(playerCounts, players)
+            if not dropped:
+                self.updatePlayerCounts(playerCounts, players)
+
     def createGames(self):
+        self.validatePlayers()
         pass
 
     def run(self):
