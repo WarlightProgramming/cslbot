@@ -7,6 +7,7 @@
 import copy
 import json
 import mpmath
+import math
 from pair import group_teams, group_players, assign_templates
 from elo import Rating, Elo
 from glicko2.glicko2 import Player
@@ -78,6 +79,8 @@ class League(object):
     SET_LEAGUE_ACRONYM = "ACRONYM"
     SET_URL = "URL"
     SET_MAX_TEAMS = "TEAM LIMIT"
+    SET_REMOVE_DECLINES = "REMOVE DECLINES"
+    SELF_VETO_DECLINES = "COUNT DECLINES AS VETOS"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -250,6 +253,14 @@ class League(object):
     def vetoLimit(self):
         """maximum number of vetos per game"""
         return int(self.commands.get(self.SET_VETO_LIMIT, 1))
+
+    @property
+    def removeDeclines(self):
+        return self.getBoolProperty(self.SET_REMOVE_DECLINES, True)
+
+    @property
+    def countDeclinesAsVetos(self):
+        return self.getBoolProperty(self.SET_VETO_DECLINES, False)
 
     @property
     def vetoPenalty(self):
@@ -828,7 +839,11 @@ class League(object):
         sides = self.getGameSides(gameID)
         losingTeams = self.findCorrespondingTeams(gameID, decliners)
         template = str(self.fetchGameData(gameID)['Template'])
-        self.updateGameVetos(losingTeams, template)
+        if self.countDeclinesAsVetos:
+            self.updateGameVetos(losingTeams, template)
+        if self.removeDeclines:
+            for team in losingTeams:
+                self.changeLimit(team, 0)
         for i in xrange(len(sides)):
             side = sides[i]
             if len(side - losingTeams) > 0:
@@ -1167,12 +1182,39 @@ class League(object):
                     sums[i] += splitRtg[i]
         return (cls.SEP_RTG).join(str(x) for x in sums)
 
+    def getEloPairingParity(self, rtg1, rtg2):
+        return self.eloEnv.quality_1vs1(rtg1, rtg2)
+
     def getEloParity(self, ratings):
         rtgs = [int(rating) for rating in ratings]
-        pass
+        return self.getAverageParity(rtgs, self.getEloPairingParity)
+
+    def getAverageParity(self, ratings, parityFn):
+        matchups = len(ratings) * float(len(ratings) - 1)
+        paritySum = 0.0
+        for i in xrange(len(ratings)):
+            rtg1 = ratings[i]
+            for j in xrange(len(ratings[(i+1):])):
+                rtg2 = ratings[j]
+                paritySum += parityFn(rtg1, rtg2)
+        return min((paritySum / matchups), 1.0)
+
+    def getGlickoPairingParity(self, rtg1, rtg2):
+        rating1, rd1 = rtg1
+        rating2, rd2 = rtg2
+        LN10 = math.log(10, math.e)
+        glickoP = ((3 * (LN10 ** 2)) / ((math.pi ** 2) * (400 ** 2)))
+        glickoF = lambda rd: 1.0 / math.sqrt(1 + glickoP * rd ** 2)
+        glickoE = lambda r1, s1, r2, s2: (1.0 / (1.0 + 10 ** (-(r1 - r2) *
+                  glickoF(math.sqrt(s1 ** 2 + s2 ** 2)) / 400)))
+        odds = glickoE(rating1, rd1, rating2, rd2)
+        shortfall = abs(0.5 - odds)
+        return (1.0 - (shortfall * 2))
 
     def getGlickoParity(self, ratings):
-        pass
+        rtgs = [tuple(int(r) for r in rating.split(self.SEP_RTG))
+                for rating in ratings]
+        return self.getAverageParity(rtgs, self.getGlickoPairingParity)
 
     def getTrueSkillParity(self, ratings):
         rtgs = [rating.split(self.SEP_RTG) for rating in ratings]
