@@ -15,6 +15,8 @@ from trueskill import TrueSkill
 from datetime import datetime
 from wl_parsers import PlayerParser
 from wl_api import APIHandler
+from wl_api.wl_api import APIError
+from sheetDB.errors import *
 from constants import API_CREDS
 
 # errors
@@ -191,7 +193,6 @@ class League(object):
                             'WarlightID': 'UNIQUE INT',
                             'Created': 'STRING',
                             'Sides': 'STRING',
-                            'Ratings': 'STRING',
                             'Winners': 'STRING',
                             'Vetos': 'INT',
                             'Vetoed': 'STRING',
@@ -245,7 +246,8 @@ class League(object):
 
     @property
     def teamLimit(self):
-        maxTeams = self.commands.get(self.SET_MAX_TEAMS, None)
+        defaultMax = None if self.teamSize > 1 else 1
+        maxTeams = self.commands.get(self.SET_MAX_TEAMS, defaultMax)
         if maxTeams is not None: maxTeams = int(maxTeams)
         return maxTeams
 
@@ -551,6 +553,11 @@ class League(object):
                                                 'type': 'negative'},
                                          'Active': {'value': ['TRUE', True],
                                                     'type': 'positive'}}, "ID")
+
+    @property
+    def gameIDs(self):
+        return self.games.findValue({'ID': {'value': '',
+                                            'type': 'negative'}}, 'ID')
 
     @property
     def templateRanks(self):
@@ -1010,9 +1017,14 @@ class League(object):
         wlID = self.handler.createGame(temp, self.getGameName(gameData), teams,
                                        self.getGameMessage(gameData))
         self.adjustTemplateGameCount(temp, 1)
+        for side in gameData['Sides'].split(self.SEP_SIDES):
+            for team in side.split(self.SEP_TEAMS):
+                self.adjustTeamGameCount(team, 1)
+        createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
         self.games.updateMatchingEntities({'ID': {'value': gameID,
                                                   'type': 'positive'}},
-                                          {'WarlightID': wlID})
+                                          {'WarlightID': wlID,
+                                           'Created': createdStr })
 
     def updateTemplate(self, gameID, gameData):
         vetos = set([int(v) for v in gameData['Vetoed'].split(self.SEP_TEMP)])
@@ -1232,9 +1244,84 @@ class League(object):
                 self.RATE_TRUESKILL: self.getTrueSkillParity}[
                 self.ratingSystem](ratings)
 
+    @classmethod
+    def getPlayers(cls, team):
+        players = team['Players'].split(cls.SEP_PLYR)
+        players = [int(p) for p in players]
+        return players
+
+    def makePlayersDict(self, teams):
+        result = dict()
+        for team in teams:
+            players = self.getPlayers(team)
+            ID = int(team['ID'])
+            for player in players:
+                if player not in result:
+                    result[player] = set()
+                result[player].add(ID)
+        return result
+
+    @property
+    def teamsDict(self):
+        result = dict()
+        allTeams = self.teams.findEntities({'ID': {'value': '',
+                                                  'type': 'negative'},
+                                            'Limit': {'value': 0,
+                                                      'type': 'positive'}})
+        playersDict = self.makePlayersDict(allTeams)
+        for team in allTeams:
+            teamDict = {'rating': team['Rating'],
+                        'count': max(0,
+                                 (int(team['Limit']) - int(team['Count'])))}
+            conflicts = set()
+            ID = int(team['ID'])
+            players = self.getPlayers(team)
+            for player in players:
+                conflicts = conflicts.union(playersDict[player]
+            teamDict['conflicts'] = conflicts
+            result[ID] = teamDict
+        return result
+
+    def makeSides(self, teamsDict):
+        score_fn = lambda *args: self.getParityScore(args)
+        pass
+
+    def makeSidesDict(self, sides, teamsDict):
+        pass
+
+    def makeMatchings(self, sidesDict):
+        pass
+
+    def makeBatch(self, batch):
+        currentID = max(int(ID) for ID in self.gameIDs) + 1
+        for game in batch:
+            try:
+                self.games.addEntity({'ID': currentID, 'WarlightID': '',
+                                      'Created': '', 'Winners': ''
+                                      'Sides': game['Sides'], 'Vetos': 0,
+                                      'Vetoed': '',
+                                      'Template': game['Template']})
+            except (DataError, SheetError) as e:
+                self.parent.log(("Failed to add game to sheet due to %s" %
+                                 str(e)), self.name, error=True)
+            try:
+                self.makeGame(currentID)
+                currentID += 1
+            except APIError as e:
+                self.parent.log(("Failed to create game with ID %d" %
+                                 (currentID)), self.name, error=True)
+
     def createGames(self):
         self.validatePlayers()
-        pass
+        teamsDict = self.teamsDict
+        if self.teamsPerSide > 1:
+            sides = self.makeSides(teamsDict)
+        else:
+            sides = teamsDict
+        sidesDict = self.makeSidesDict(sides, teamsDict)
+        matchings = self.makeMatchings(sidesDict)
+        batch = self.makeBatch(matchings)
+        self.createBatch(batch)
 
     def run(self):
         """
