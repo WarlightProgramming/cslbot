@@ -144,6 +144,12 @@ class LeagueManager(object):
                                      TITLE_ARG: newState})
         self.log("Set global league state to %s" % (newState))
 
+    def quitAllLeagues(self, author):
+        pass
+
+    def ban(self, author, commands):
+        pass
+
     ## _runOrders
     def _runOrders(self, orders):
         """runs orders that are not specific to any league"""
@@ -152,7 +158,8 @@ class LeagueManager(object):
             orderCmds = order['orders']
             orderAuthor = order['author']
             try:
-                return {}[orderType]
+                {'quit_leagues': self.quitAllLeagues(orderAuthor),
+                 'ban': self.ban(orderAuthor, orderCmds)}[orderType]
             except KeyError:
                 self.log("Unrecognized order: %s" % (order['type']))
             except OrderError as err:

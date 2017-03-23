@@ -6,10 +6,9 @@
 # imports
 import copy
 import json
-import mpmath
 import math
 from pair import group_teams, assign_templates
-from elo import Rating, Elo
+from elo import Elo
 from glicko2.glicko2 import Player
 from trueskill import TrueSkill
 from datetime import datetime
@@ -166,7 +165,7 @@ class League(object):
                          they aren't present (raises error otherwise)
         """
         table_header = table.reverseHeader()
-        for label in header:
+        for label in table_header:
             if label not in header:
                 if reformat:
                     table.expandHeader(label)
@@ -474,9 +473,9 @@ class League(object):
                 self.RATE_TRUESKILL: self.defaultTrueSkill}[self.ratingSystem]
 
     def addTeam(self, order):
-        teamName = order['order'][1]
-        gameLimit = int(order['order'][2])
-        members = [int(member) for member in order['order'][3:]]
+        teamName = order['orders'][1]
+        gameLimit = int(order['orders'][2])
+        members = [int(member) for member in order['orders'][3:]]
         author = int(order['author'])
         self.checkTeamCreator(author, members)
         self.checkTeam(members)
@@ -497,7 +496,7 @@ class League(object):
 
     def fetchMatchingTeam(self, order, checkAuthor=True,
                           allowMod=True):
-        name = order['order'][1]
+        name = order['orders'][1]
         author = int(order['author'])
         matchingTeam = self.teams.findEntities({'Name': {'value': name,
                                                          'type': 'positive'}})
@@ -510,23 +509,23 @@ class League(object):
             matchingTeam['Players'].split(self.SEP_PLYR)):
             raise ImproperOrder(str(author) + " not in " +
                                 str(name))
-            try:
-                index = (matchingTeam['Players'].
-                         split(self.SEP_PLYR).
-                         index(author))
-            except ValueError: pass
+        try:
+            index = (matchingTeam['Players'].
+                     split(self.SEP_PLYR).
+                     index(author))
+        except ValueError: pass
         return matchingTeam, index
 
     def confirmTeam(self, order):
         author = int(order['author'])
-        if (author in self.mods and len(order['order']) > 2):
-            self.confirmAsMod(self, order)
+        if (author in self.mods and len(order['orders']) > 2):
+            self.confirmAsMod(order)
         try:
             matchingTeam, index = self.fetchMatchingTeam(order, True,
                                                          False)
         except:
             raise ImproperOrder(str(order['author']) + " not in " +
-                                str(order['order'][1]))
+                                str(order['orders'][1]))
         confirms = matchingTeam['Confirmations'].split(self.SEP_CONF)
         confirms[index] = "TRUE"
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
@@ -534,11 +533,11 @@ class League(object):
                                           {'Confirmations': confirms})
 
     def confirmAsMod(self, order):
-        players = order['order'][2:]
+        players = order['orders'][2:]
         for player in players:
             newOrder = dict()
             newOrder['author'] = player
-            newOrder['order'] = order['order'][:2]
+            newOrder['orders'] = order['orders'][:2]
             self.confirmTeam(newOrder)
 
     def removeTeam(self, order):
@@ -553,8 +552,8 @@ class League(object):
             order['author'] not in self.mods):
             raise ImproperOrder(str(order['author']) +
                                 " can't set the limit for team " +
-                                str(order['order'][1]))
-        self.changeLimit(matchingTeam['ID'], order['order'][2])
+                                str(order['orders'][1]))
+        self.changeLimit(matchingTeam['ID'], order['orders'][2])
 
     @property
     def templateIDs(self):
@@ -652,7 +651,8 @@ class League(object):
         elif gameData['state'] == 'WaitingForPlayers':
             return self.handleWaiting(gameData, created)
 
-    def fetchDataByID(self, table, ID, nonexStr=""):
+    @staticmethod
+    def fetchDataByID(table, ID, nonexStr=""):
         data = table.findEntities({'ID': {'value': ID,
                                           'type': 'positive'}})
         if len(data) == 0: raise NonexistentItem(nonexStr)
@@ -789,7 +789,8 @@ class League(object):
             rdDiff /= (rdDiff / ((len(sides) - 1) * self.sideSize))
             for team in sides[i]:
                 origRtg, origRd = self.getGlickoRating(team)
-                rtg, rd = origRtg + int(round(rtgDiff)), int(round(rdDiff))
+                rtg = origRtg + int(round(rtgDiff))
+                rd = origRd + int(round(rdDiff))
                 results[team] = (self.SEP_RTG).join([str(rtg), str(rd)])
         return results
 
@@ -810,8 +811,8 @@ class League(object):
         updated = self.trueSkillEnv.rate(rating_groups, ranks=[WIN, LOSS])
         for side in updated:
             for team in side:
-                results[team] = self.unsplitRtg(side[team].mu,
-                                                side[team].sigma)
+                results[team] = self.unsplitRtg([side[team].mu,
+                                                 side[team].sigma])
         return results
 
     def getNewRatings(self, sides, winningSide):
@@ -835,7 +836,7 @@ class League(object):
 
     def updateResults(self, gameID, sides, winningSide):
         self.setWinners(gameID, sides[winningSide])
-        newRatings = self.getNewRatings(self, sides, winningSide)
+        newRatings = self.getNewRatings(sides, winningSide)
         self.updateRatings(newRatings)
         for side in sides:
             for team in side:
@@ -879,7 +880,7 @@ class League(object):
         results = list()
         sides = gameData['Sides'].split(self.SEP_SIDES)
         for side in sides:
-            results.append(set(sides.split(self.SEP_TEAMS)))
+            results.append(set(side.split(self.SEP_TEAMS)))
         return results
 
     def getTeamRating(self, team):
@@ -961,7 +962,8 @@ class League(object):
                 name = name[:-3] + "..."
         return name
 
-    def getPrettyEloRating(self, rating):
+    @staticmethod
+    def getPrettyEloRating(rating):
         return rating
 
     def getPrettyGlickoRating(self, rating):
@@ -1044,7 +1046,7 @@ class League(object):
             self.setGameTemplate(gameID, newTemp)
             self.makeGame(gameID)
         else:
-            self.deleteGame(gameID)
+            self.deleteGame(gameID, gameData)
 
     def getVetoDict(self, vetos):
         results = dict()
@@ -1140,7 +1142,7 @@ class League(object):
             try:
                 self.updateGame(game, gamesToCheck[game]['ID'],
                                 gamesToCheck[game]['Created'])
-            except:
+            except (SheetError, DataError):
                 self.parent.log("Failed to update game: " + str(game),
                                 league=self.name, error=True)
         self.updateRanks()
@@ -1187,7 +1189,7 @@ class League(object):
             if ('FALSE' in confirmations or limit < 1): continue
             players = allTeams[team]['Players'].split(self.SEP_PLYR)
             dropped = self.validateTeam(team['ID'], players)
-            dropped = self.validatePlayers(playerCounts, players)
+            dropped = self.validatePlayer(playerCounts, players)
             if not dropped:
                 self.updatePlayerCounts(playerCounts, players)
 
@@ -1210,7 +1212,8 @@ class League(object):
         rtgs = [int(rating) for rating in ratings]
         return self.getAverageParity(rtgs, self.getEloPairingParity)
 
-    def getAverageParity(self, ratings, parityFn):
+    @staticmethod
+    def getAverageParity(ratings, parityFn):
         matchups = len(ratings) * float(len(ratings) - 1)
         paritySum = 0.0
         for i in xrange(len(ratings)):
@@ -1220,7 +1223,8 @@ class League(object):
                 paritySum += parityFn(rtg1, rtg2)
         return min((paritySum / matchups), 1.0)
 
-    def getGlickoPairingParity(self, rtg1, rtg2):
+    @staticmethod
+    def getGlickoPairingParity(rtg1, rtg2):
         rating1, rd1 = rtg1
         rating2, rd2 = rtg2
         LN10 = math.log(10, math.e)
@@ -1339,7 +1343,8 @@ class League(object):
     def makeMatchings(self, sidesDict):
         return self.makeGrouping(sidesDict, self.gameSize, self.SEP_SIDES)
 
-    def makeTemplatesDict(self, gameCount, skipTemps=set()):
+    def makeTemplatesDict(self, gameCount, skipTemps=None):
+        if skipTemps is None: skipTemps = set()
         templateIDs = self.templateIDs
         times, mod = gameCount / len(templateIDs), gameCount % len(templateIDs)
         result = dict()
@@ -1383,7 +1388,8 @@ class League(object):
             result[matching] = matchDict
         return result
 
-    def getUniversalConflicts(self, matchingsDict):
+    @staticmethod
+    def getUniversalConflicts(matchingsDict):
         conflicts = None
         for matching in matchingsDict:
             tempConf = matchingsDict[matching]['conflicts']
