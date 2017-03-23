@@ -83,6 +83,28 @@ class League(object):
     SET_REMOVE_DECLINES = "REMOVE DECLINES"
     SET_VETO_DECLINES = "COUNT DECLINES AS VETOS"
     SET_DROP_LIMIT = "TEMPLATE AVOIDANCE LIMIT"
+    SET_MAX_BOOT = "MAX BOOT RATE"
+    SET_MIN_LEVEL = "MIN LEVEL"
+    SET_MEMBERS_ONLY = "MEMBERS ONLY"
+    SET_MIN_POINTS = "MIN POINTS"
+    SET_MIN_AGE = "MIN AGE"
+    SET_MIN_MEMBER_AGE = "MIN MEMBER AGE"
+    SET_MAX_RT_SPEED = "MAX RT SPEED"
+    SET_MAX_MD_SPEED = "MAX MD SPEED"
+    SET_MIN_RATING = "MIN RATING"
+    SET_GRACE_PERIOD = "GRACE PERIOD"
+    SET_ALLOW_REMOVAL = "ALLOW REMOVAL"
+    SET_MIN_CURRENT_GAMES = "MIN ONGOING GAMES"
+    SET_MAX_ONGOING_GAMES = "MAX ONGOING GAMES"
+    SET_MIN_RT_PERCENT = "MIN RT PERCENT"
+    SET_MAX_RT_PERCENT = "MAX RT PERCENT"
+    SET_MAX_LAST_SEEN = "MAX LAST SEEN"
+    SET_MIN_1v1_PCT = "MIN 1v1 PERCENT"
+    SET_MIN_2v2_PCT = "MIN 2v2 PERCENT"
+    SET_MIN_3v3_PCT = "MIN 3v3 PERCENT"
+    SET_MIN_RANKED = "MIN RANKED GAMES"
+    SET_MIN_GAMES = "MIN GAMES"
+    SET_MIN_ACHIEVEMENT_RATE = "MIN ACHIEVEMENT RATE"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -402,16 +424,23 @@ class League(object):
         """set containing IDs of allowed clans"""
         return self.getIDGroup(self.SET_ALLOWED_CLANS)
 
+    def clanAllowed(self, player):
+        clan = int(player.clanID)
+        return ((clan in self.allowedClans or
+                 (self.KW_ALL in self.allowedClans and
+                  clan is not None)) or (clan not in self.bannedClans
+                and self.KW_ALL not in self.bannedClans))
+
+    def checkPrereqs(self, player):
+        return self.clanAllowed(player)
+
     def allowed(self, playerID):
         """returns True if a player is allowed to join the league"""
-        checkClans = (len(self.bannedClans) > 0)
+        check = (len(self.bannedClans) > 0)
         player = int(playerID)
-        if checkClans:
+        if check:
             parser = PlayerParser(playerID)
-            clan = int(parser.clanID)
-            if (clan in self.bannedClans or
-                self.KW_ALL in self.bannedClans and
-                clan not in self.allowedClans):
+            if not self.checkPrereqs(parser):
                 return False
         return (player in self.allowedPlayers or
                 player not in self.bannedPlayers and
