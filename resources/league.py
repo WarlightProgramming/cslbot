@@ -8,7 +8,7 @@ import copy
 import json
 import mpmath
 import math
-from pair import group_teams, group_players, assign_templates
+from pair import group_teams, assign_templates
 from elo import Rating, Elo
 from glicko2.glicko2 import Player
 from trueskill import TrueSkill
@@ -82,7 +82,8 @@ class League(object):
     SET_URL = "URL"
     SET_MAX_TEAMS = "TEAM LIMIT"
     SET_REMOVE_DECLINES = "REMOVE DECLINES"
-    SELF_VETO_DECLINES = "COUNT DECLINES AS VETOS"
+    SET_VETO_DECLINES = "COUNT DECLINES AS VETOS"
+    SET_DROP_LIMIT = "TEMPLATE AVOIDANCE LIMIT"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -129,6 +130,7 @@ class League(object):
     SEP_WIN = ","
     SEP_VETOCT = "."
     SEP_VETOS = "/"
+    SEP_DROPS = "/"
 
     def __init__(self, games, teams, templates, settings, orders,
                  admin, mods, parent, name, thread):
@@ -182,6 +184,7 @@ class League(object):
                            'Confirmations': 'STRING',
                            'Rating': 'STRING',
                            'Vetos': 'STRING',
+                           'Drops': 'STRING',
                            'Rank': 'INT',
                            'Limit': 'INT',
                            'Count': 'INT'}
@@ -257,6 +260,12 @@ class League(object):
         return int(self.commands.get(self.SET_VETO_LIMIT, 1))
 
     @property
+    def dropLimit(self):
+        """maximum number of templates a player can drop"""
+        limit = int(self.commands.get(self.SET_DROP_LIMIT, 0))
+        return min(limit, len(self.templateIDs) - 1)
+
+    @property
     def removeDeclines(self):
         return self.getBoolProperty(self.SET_REMOVE_DECLINES, True)
 
@@ -280,7 +289,7 @@ class League(object):
         return int(self.commands.get(self.SET_GAME_SIZE, 2))
 
     @property
-    def teamsPerSide(self):
+    def sideSize(self):
         """number of teams per side"""
         return int(self.commands.get(self.SET_TEAMS_PER_SIDE, 1))
 
@@ -319,7 +328,7 @@ class League(object):
 
     @property
     def kFactor(self):
-        return int(self.commands.get(self.SET_ELO_K, 32)) * self.teamsPerSide
+        return int(self.commands.get(self.SET_ELO_K, 32)) * self.sideSize
 
     @property
     def defaultElo(self):
@@ -390,7 +399,7 @@ class League(object):
         return self.getIDGroup(self.SET_ALLOWED_PLAYERS)
 
     @property
-    def allowedClans(self)
+    def allowedClans(self):
         """set containing IDs of allowed clans"""
         return self.getIDGroup(self.SET_ALLOWED_CLANS)
 
@@ -462,7 +471,7 @@ class League(object):
     def defaultRating(self):
         return {self.RATE_ELO: self.defaultElo,
                 self.RATE_GLICKO: self.defaultGlicko,
-                self.RATE_TRUESKILL, self.defaultTrueSkill}[self.ratingSystem]
+                self.RATE_TRUESKILL: self.defaultTrueSkill}[self.ratingSystem]
 
     def addTeam(self, order):
         teamName = order['order'][1]
@@ -481,7 +490,7 @@ class League(object):
                               'Limit': gameLimit,
                               'Players': members,
                               'Confirmations': confirms,
-                              'Vetos': "",
+                              'Vetos': "", 'Drops': "",
                               'Count': 0,
                               'Rating': self.defaultRating})
         self.currentID += 1
@@ -692,7 +701,7 @@ class League(object):
         oldCount = int(self.fetchTemplateData(templateID)['Games'])
         self.templates.updateMatchingEntities({'ID': {'value': templateID,
                                                       'type': 'positive'}},
-                                              {'Count': str(oldCount + adj)})
+                                              {'Games': str(oldCount + adj)})
 
     def getEloDiff(self, rating, events):
         oldRating = rating
@@ -776,8 +785,8 @@ class League(object):
             newRtg, newRd = players[i].rating, players[i].rd
             oldRtg, oldRd = self.getSideGlickoRating(side)
             rtgDiff, rdDiff = float(newRtg - oldRtg), float(newRd - oldRd)
-            rtgDiff = (rtgDiff / ((len(sides) - 1) * self.teamsPerSide))
-            rdDiff /= (rdDiff / ((len(sides) - 1) * self.teamsPerSide))
+            rtgDiff = (rtgDiff / ((len(sides) - 1) * self.sideSize))
+            rdDiff /= (rdDiff / ((len(sides) - 1) * self.sideSize))
             for team in sides[i]:
                 origRtg, origRd = self.getGlickoRating(team)
                 rtg, rd = origRtg + int(round(rtgDiff)), int(round(rdDiff))
@@ -898,10 +907,10 @@ class League(object):
         if vetos[0] == ",": vetos = vetos[1:]
         vetoCount = int(gameData['Vetos']) + 1
         self.games.updateMatchingEntities({'ID': {'value': gameData['ID'],
-                                                  'type': 'positive'},
+                                                  'type': 'positive'}},
                                           {'Vetoed': vetos,
                                            'Vetos': vetoCount,
-                                           'Template': ''}})
+                                           'Template': ''})
         self.adjustTemplateGameCount(gameData['Template'], -1)
 
     def setGameTemplate(self, gameID, tempID):
@@ -965,8 +974,8 @@ class League(object):
     def getPrettyRating(self, team):
         teamRating = self.getTeamRating(team)
         return {self.RATE_ELO: self.getPrettyEloRating,
-                self.RATE_GLICKO, self.getPrettyGlickoRating,
-                self.RATE_TRUESKILL, self.getPrettyTrueSkillRating}[
+                self.RATE_GLICKO: self.getPrettyGlickoRating,
+                self.RATE_TRUESKILL: self.getPrettyTrueSkillRating}[
                 self.ratingSystem](teamRating)
 
     def getOfficialRating(self, team):
@@ -1277,27 +1286,134 @@ class League(object):
             ID = int(team['ID'])
             players = self.getPlayers(team)
             for player in players:
-                conflicts = conflicts.union(playersDict[player]
+                conflicts = conflicts.union(playersDict[player])
             teamDict['conflicts'] = conflicts
             result[ID] = teamDict
         return result
 
-    def makeSides(self, teamsDict):
+    def makeGrouping(self, groupingDict, groupSize, groupSep):
         score_fn = lambda *args: self.getParityScore(args)
-        pass
+        groups = group_teams(groupingDict, score_fn=score_fn,
+                             game_size=self.groupSize)
+        return {groupSep.join([str(x) for x in group])
+                for group in groups}
+
+    def makeSides(self, teamsDict):
+        return self.makeGrouping(teamsDict, self.sideSize, self.SEP_TEAMS)
+
+    def getSideRating(self, side, teamsDict):
+        teams = side.split(self.SEP_TEAMS)
+        ratings = [teamsDict[int(team)]['rating']
+                   for team in teams.split(self.SEP_TEAMS)]
+        return self.addRatings(ratings)
+
+    def makeTeamsToSides(self, sides):
+        result = dict()
+        for side in sides:
+            teams = side.split(self.SEP_TEAMS)
+            for team in teams:
+                if team not in result: result[team] = set()
+                result[team].add(side)
+        return result
+
+    def getSideConflicts(self, side, teamsDict, teamsToSides):
+        teams = side.split(self.SEP_TEAMS)
+        conflicts = set()
+        for team in teams:
+            teamConflicts = teamsDict[team][conflicts].union({int(team),})
+            for conflict in teamConflicts:
+                for conflictingSide in teamsToSides.get(conflict, set()):
+                    conflicts.add(conflictingSide)
+        return conflicts
 
     def makeSidesDict(self, sides, teamsDict):
-        pass
+        result, teamsToSides = dict(), self.makeTeamsToSides(sides)
+        for side in sides:
+            sideDict = {'rating': self.getSideRating(side, teamsDict),
+                        'conflicts': self.getSideConflicts(side, teamsDict,
+                                                           teamsToSides),
+                        'count': 1}
+            result[side] = sideDict
+        return result
 
     def makeMatchings(self, sidesDict):
-        pass
+        return self.makeGrouping(sidesDict, self.gameSize, self.SEP_SIDES)
 
-    def makeBatch(self, batch):
+    def makeTemplatesDict(self, gameCount, skipTemps=set()):
+        templateIDs = self.templateIDs
+        times, mod = gameCount / len(templateIDs), gameCount % len(templateIDs)
+        result = dict()
+        templatesList = [temp for temp in templateIDs if temp not in skipTemps]
+        templatesList.sort(key = lambda x: templateIDs[x]['Games'])
+        templatesList *= times
+        templatesList += templatesList[:mod]
+        for temp in templatesList:
+            if temp not in result:
+                result[temp] = {'count': 1}
+            else:
+                result[temp]['count'] += 1
+        return result
+
+    def getScoresAndConflicts(self, matching):
+        scores, conflicts = dict(), set()
+        sides = matching.split(self.SEP_SIDES)
+        for side in sides:
+            teams = side.split(self.SEP_TEAMS)
+            for team in teams:
+                teamData = self.fetchTeamData(team)
+                drops = teamData['Drops'].split(self.SEP_DROPS)
+                vetos = teamData['Vetos'].split(self.SEP_VETOS)
+                for drop in drops:
+                    conflicts.add(drop)
+                for veto in vetos:
+                    if veto not in scores:
+                        scores[veto] = 1
+                    else:
+                        scores[veto] += 1
+        return scores, conflicts
+
+    def makeMatchingsDict(self, matchings):
+        result, numTemps = dict(), len(self.templateIDs)
+        for matching in matchings:
+            matchDict = {'count': 1}
+            scores, conflicts = self.getScoresAndConflicts(matching)
+            if (len(conflicts) == numTemps): continue
+            matchDict['scores'] = scores
+            matchDict['conflicts'] = conflicts
+            result[matching] = matchDict
+        return result
+
+    def getUniversalConflicts(self, matchingsDict):
+        conflicts = None
+        for matching in matchingsDict:
+            tempConf = matchingsDict[matching]['conflicts']
+            if conflicts is None:
+                conflicts = tempConf
+            else:
+                conflicts = conflicts.intersection(tempConf)
+        return conflicts
+
+    def makeBatch(self, matchings):
+        gamesToCreate = len(matchings)
+        matchingsDict = self.makeMatchingsDict(matchings)
+        allConflicts = self.getUniversalConflicts(matchingsDict)
+        templatesDict = self.makeTemplatesDict(gamesToCreate, allConflicts)
+        unhandled, batch = copy.copy(matchings), list()
+        while (len(unhandled) > 0):
+            newMatchings = assign_templates(matchingsDict, templatesDict)
+            for match in newMatchings:
+                sides, temp = match
+                if temp not in matchingsDict[sides]['conflicts']:
+                    batch.append({'Sides': sides, 'Template': temp})
+                    unhandled.remove(sides)
+        return batch
+
+    def createBatch(self, batch):
         currentID = max(int(ID) for ID in self.gameIDs) + 1
         for game in batch:
             try:
                 self.games.addEntity({'ID': currentID, 'WarlightID': '',
-                                      'Created': '', 'Winners': ''
+                                      'Created': '', 'Winners': '',
                                       'Sides': game['Sides'], 'Vetos': 0,
                                       'Vetoed': '',
                                       'Template': game['Template']})
@@ -1314,7 +1430,7 @@ class League(object):
     def createGames(self):
         self.validatePlayers()
         teamsDict = self.teamsDict
-        if self.teamsPerSide > 1:
+        if self.sideSize > 1:
             sides = self.makeSides(teamsDict)
         else:
             sides = teamsDict
