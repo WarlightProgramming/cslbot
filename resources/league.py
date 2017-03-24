@@ -7,6 +7,7 @@
 import copy
 import json
 import math
+from decimal import Decimal
 from pair import group_teams, assign_templates
 from elo import Elo
 from glicko2.glicko2 import Player
@@ -52,6 +53,10 @@ class League(object):
     ORD_CONFIRM_TEAM = "confirm_team"
     ORD_SET_LIMIT = "set_limit"
     ORD_REMOVE_TEAM = "remove_team"
+    ORD_DROP_TEMPLATE = "drop_template"
+    ORD_UNDROP_TEMPLATE = "undrop_template"
+    ORD_ACTIVATE_TEMPLATE = "activate_template"
+    ORD_DEACTIVATE_TEMPLATE = "deactivate_template"
 
     # settings
     SET_GAME_SIZE = "GAME SIZE"
@@ -60,8 +65,10 @@ class League(object):
     SET_SYSTEM = "SYSTEM"
     SET_BANNED_PLAYERS = "BANNED PLAYERS"
     SET_BANNED_CLANS = "BANNED CLANS"
+    SET_BANNED_LOCATIONS = "BANNED LOCATIONS"
     SET_ALLOWED_PLAYERS = "ALLOWED PLAYERS"
     SET_ALLOWED_CLANS = "ALLOWED CLANS"
+    SET_ALLOWED_LOCATIONS = "ALLOWED LOCATIONS"
     SET_MAX_LIMIT = "MAX LIMIT"
     SET_MIN_LIMIT = "MIN LIMIT"
     SET_AUTOFORMAT = "AUTOFORMAT"
@@ -87,24 +94,27 @@ class League(object):
     SET_MIN_LEVEL = "MIN LEVEL"
     SET_MEMBERS_ONLY = "MEMBERS ONLY"
     SET_MIN_POINTS = "MIN POINTS"
-    SET_MIN_AGE = "MIN AGE"
-    SET_MIN_MEMBER_AGE = "MIN MEMBER AGE"
-    SET_MAX_RT_SPEED = "MAX RT SPEED"
-    SET_MAX_MD_SPEED = "MAX MD SPEED"
+    SET_MIN_AGE = "MIN DAYS SINCE JOINING"
+    SET_MIN_MEMBER_AGE = "MIN DAYS SINCE MEMBERSHIP"
+    SET_MAX_RT_SPEED = "MAX RT SPEED (MINUTES)"
+    SET_MAX_MD_SPEED = "MAX MD SPEED (HOURS)"
     SET_MIN_RATING = "MIN RATING"
-    SET_GRACE_PERIOD = "GRACE PERIOD"
+    SET_GRACE_PERIOD = "GRACE PERIOD (DAYS)"
+    SET_ALLOW_JOINS = "ALLOW JOINING"
+    SET_JOIN_PERIOD_START = "JOIN PERIOD START"
+    SET_JOIN_PERIOD_END = "JOIN PERIOD END"
     SET_ALLOW_REMOVAL = "ALLOW REMOVAL"
-    SET_MIN_CURRENT_GAMES = "MIN ONGOING GAMES"
+    SET_MIN_ONGOING_GAMES = "MIN ONGOING GAMES"
     SET_MAX_ONGOING_GAMES = "MAX ONGOING GAMES"
     SET_MIN_RT_PERCENT = "MIN RT PERCENT"
     SET_MAX_RT_PERCENT = "MAX RT PERCENT"
-    SET_MAX_LAST_SEEN = "MAX LAST SEEN"
+    SET_MAX_LAST_SEEN = "MAX LAST SEEN (DAYS)"
     SET_MIN_1v1_PCT = "MIN 1v1 PERCENT"
     SET_MIN_2v2_PCT = "MIN 2v2 PERCENT"
     SET_MIN_3v3_PCT = "MIN 3v3 PERCENT"
     SET_MIN_RANKED = "MIN RANKED GAMES"
-    SET_MIN_GAMES = "MIN GAMES"
-    SET_MIN_ACHIEVEMENT_RATE = "MIN ACHIEVEMENT RATE"
+    SET_MIN_GAMES = "MIN PLAYED GAMES"
+    SET_MIN_ACH = "MIN ACHIEVEMENT RATE"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -209,6 +219,8 @@ class League(object):
                            'Rank': 'INT',
                            'Limit': 'INT',
                            'Count': 'INT'}
+        if self.minRating is not None:
+            teamConstraints['Probation Start'] = 'STRING'
         self.checkSheet(self.teams, set(teamConstraints), teamConstraints,
                         self.autoformat)
 
@@ -334,7 +346,10 @@ class League(object):
 
     @property
     def constrainLimit(self):
-        """whether to constrain out-of-range limits"""
+        """
+        whether to constrain out-of-range limits
+        limits outside range are set to the min or max limit
+        """
         return self.getBoolProperty(self.SET_CONSTRAIN_LIMIT, True)
 
     def limitInRange(self, limit):
@@ -400,6 +415,156 @@ class League(object):
     def defaultTrueSkill(self):
         return str(self.trueSkillMu) + "." + str(self.trueSkillSigma)
 
+    @property
+    def maxBoot(self):
+        return float(self.commands.get(self.SET_MAX_BOOT, 100.0))
+
+    @property
+    def minLevel(self):
+        return int(self.commands.get(self.SET_MIN_LEVEL, 0))
+
+    @property
+    def membersOnly(self):
+        exp = self.getBoolProperty(self.SET_MEMBERS_ONLY, False)
+        return (exp or (self.minMemberAge > 0))
+
+    def meetsMembership(self, player):
+        return (not self.membersOnly or player.isMember)
+
+    @property
+    def minPoints(self):
+        return int(self.commands.get(self.SET_MIN_POINTS, 0))
+
+    @property
+    def minAge(self):
+        return int(self.commands.get(self.SET_MIN_AGE, 0))
+
+    @property
+    def minMemberAge(self):
+        return int(self.commands.get(self.SET_MIN_MEMBER_AGE, 0))
+
+    @property
+    def maxRTSpeed(self):
+        cmd = self.commands.get(self.SET_MAX_RT_SPEED, None)
+        if cmd is None: return None
+        return float(Decimal(cmd) / Decimal(60.0))
+
+    @property
+    def maxMDSpeed(self):
+        cmd = self.commands.get(self.SET_MAX_MD_SPEED, None)
+        if cmd is None: return None
+        return float(cmd)
+
+    @property
+    def minRating(self):
+        cmd = self.commands.get(self.SET_MIN_RATING, None)
+        if cmd is None: return None
+        return int(cmd)
+
+    @property
+    def gracePeriod(self):
+        return int(self.commands.get(self.SET_GRACE_PERIOD, 0))
+
+    @property
+    def allowJoins(self):
+        return self.getBoolProperty(self.SET_ALLOW_JOINS, True)
+
+    def getDateTimeProperty(self, label, default=None):
+        cmd = self.commands.get(label, default)
+        if cmd is None: return None
+        if isinstance(cmd, datetime): return cmd
+        return datetime.strptime(cmd, self.TIMEFORMAT)
+
+    @property
+    def joinPeriodStart(self):
+        return self.getDateTimeProperty(self.SET_JOIN_PERIOD_START)
+
+    @property
+    def joinPeriodEnd(self):
+        return self.getDateTimeProperty(self.SET_JOIN_PERIOD_END)
+
+    @property
+    def joinsAllowed(self):
+        now = datetime.now()
+        start, end = self.joinPeriodStart, self.joinPeriodEnd
+        if (start is not None and
+            now < start): return False
+        if (end is not None and
+            now > end): return False
+        return self.allowJoins
+
+    @property
+    def allowRemoval(self):
+        return self.getBoolProperty(self.SET_ALLOW_REMOVAL, True)
+
+    @property
+    def minOngoingGames(self):
+        return int(self.commands.get(self.SET_MIN_ONGOING_GAMES, 0))
+
+    @property
+    def maxOngoingGames(self):
+        cmd = self.commands.get(self.SET_MAX_ONGOING_GAMES, None)
+        if cmd is not None: cmd = int(cmd)
+        return cmd
+
+    def gameCountInRange(self, player):
+        ongoing = player.currentGames
+        return (ongoing >= self.minOngoingGames and
+                ((self.maxOngoingGames is None) or
+                  ongoing <= self.maxOngoingGames))
+
+    @property
+    def minRTPercent(self):
+        return float(self.commands.get(self.SET_MIN_RT_PERCENT, 0.0))
+
+    @property
+    def maxRTPercent(self):
+        return float(self.commands.get(self.SET_MAX_RT_PERCENT, 100.0))
+
+    def RTPercentInRange(self, player):
+        pct = player.percentRT
+        return (pct >= self.minRTPercent and pct <= self.maxRTPercent)
+
+    @property
+    def maxLastSeen(self):
+        cmd = self.commands.get(self.SET_MAX_LAST_SEEN, None)
+        if cmd is not None: cmd = float(cmd)
+        return cmd
+
+    @property
+    def min1v1Pct(self):
+        return float(self.commands.get(self.SET_MIN_1v1_PCT, 0.0))
+
+    @property
+    def min2v2Pct(self):
+        return float(self.commands.get(self.SET_MIN_2v2_PCT, 0.0))
+
+    @property
+    def min3v3Pct(self):
+        return float(self.commands.get(self.SET_MIN_3v3_PCT, 0.0))
+
+    @property
+    def minRanked(self):
+        return int(self.commands.get(self.SET_MIN_RANKED, 0))
+
+    def meetsMinRanked(self, player):
+        data = player.rankedGames
+        pcts = data.get('data', dict())
+        p1v1, p2v2, p3v3 = (pcts.get('1v1', 0), pcts.get('2v2', 0),
+                            pcts.get('3v3', 0))
+        return (p1v1 >= self.min1v1Pct and
+                p2v2 >= self.min2v2Pct and
+                p3v3 >= self.min3v3Pct and
+                data.get('games', 0) >= self.minRanked)
+
+    @property
+    def minGames(self):
+        return int(self.commands.get(self.SET_MIN_GAMES, 0))
+
+    @property
+    def minAchievementRate(self):
+        return float(self.commands.get(self.SET_MIN_ACH, 0))
+
     def getIDGroup(self, label):
         groupList = self.commands.get(label, "").split(self.SEP_CMD)
         return set([int(x) for x in groupList])
@@ -415,6 +580,11 @@ class League(object):
         return self.getIDGroup(self.SET_BANNED_CLANS)
 
     @property
+    def bannedLocations(self):
+        return set(self.commands.get(self.SET_BANNED_LOCATIONS,
+                                     "").split(self.SEP_CMD))
+
+    @property
     def allowedPlayers(self):
         """set containing IDs of allowed players"""
         return self.getIDGroup(self.SET_ALLOWED_PLAYERS)
@@ -424,6 +594,11 @@ class League(object):
         """set containing IDs of allowed clans"""
         return self.getIDGroup(self.SET_ALLOWED_CLANS)
 
+    @property
+    def allowedLocations(self):
+        return set(self.commands.get(self.SET_ALLOWED_LOCATIONS,
+                                     "").split(self.SEP_CMD))
+
     def clanAllowed(self, player):
         clan = int(player.clanID)
         return ((clan in self.allowedClans or
@@ -431,19 +606,67 @@ class League(object):
                   clan is not None)) or (clan not in self.bannedClans
                 and self.KW_ALL not in self.bannedClans))
 
+    @staticmethod
+    def processLoc(location):
+        tempLoc = location.split()
+        return ' '.join(tempLoc)
+
+    def checkLocation(self, location):
+        location = self.processLoc(location)
+        return ((location in self.allowedLocations or
+                 self.KW_ALL in self.allowedLocations) or
+                (location not in self.bannedLocations
+                 and self.KW_ALL not in self.bannedLocations))
+
+    def locationAllowed(self, player):
+        location = player.location.split(":")
+        for loc in location:
+            if self.checkLocation(loc): return True
+        return False
+
+    def meetsAge(self, player):
+        now = datetime.now()
+        joinDate = player.joinDate
+        return ((now - joinDate).days >= self.minAge)
+
+    def meetsSpeed(self, player):
+        speeds = player.playSpeed
+        rtSpeed = speeds.get('Real-Time Games', None)
+        mdSpeed = speeds.get('Multi-Day Games', None)
+        return ((self.maxRTSpeed is None or
+                 rtSpeed <= self.maxRTSpeed) and
+                (self.maxMDSpeed is None or
+                 mdSpeed <= self.maxMDSpeed))
+
+    def meetsLastSeen(self, player):
+        lastSeen = player.lastSeen
+        return (self.maxLastSeen is None or
+                lastSeen <= self.maxLastSeen)
+
     def checkPrereqs(self, player):
-        return self.clanAllowed(player)
+        return (self.clanAllowed(player) and
+                self.locationAllowed(player) and
+                player.bootRate <= self.maxBoot and
+                player.level >= self.minLevel and
+                self.meetsMembership(player) and
+                player.points >= self.minPoints and
+                self.meetsAge(player) and
+                self.meetsSpeed(player) and
+                self.gameCountInRange(player) and
+                self.RTPercentInRange(player) and
+                self.meetsLastSeen(player) and
+                self.meetsMinRanked(player) and
+                player.playedGames >= self.minGames and
+                player.achievementRate >= self.minAchievementRate)
 
     def allowed(self, playerID):
         """returns True if a player is allowed to join the league"""
-        check = (len(self.bannedClans) > 0)
+        if player in self.allowedPlayers: return True
         player = int(playerID)
-        if check:
-            parser = PlayerParser(playerID)
-            if not self.checkPrereqs(parser):
-                return False
-        return (player in self.allowedPlayers or
-                player not in self.bannedPlayers and
+        parser = PlayerParser(playerID)
+        if not self.checkPrereqs(parser):
+            return False
+        return (player not in self.bannedPlayers and
                 self.KW_ALL not in self.bannedPlayers)
 
     def banned(self, playerID):
@@ -501,7 +724,14 @@ class League(object):
                 self.RATE_GLICKO: self.defaultGlicko,
                 self.RATE_TRUESKILL: self.defaultTrueSkill}[self.ratingSystem]
 
+    @property
+    def teamPlayers(self):
+        return self.teams.findValue({'ID': {'value': '',
+                                            'type': 'negative'}}, 'Players')
+
     def addTeam(self, order):
+        if not self.joinsAllowed:
+            raise ImproperOrder("This league is not open to new teams")
         teamName = order['orders'][1]
         gameLimit = int(order['orders'][2])
         members = [int(member) for member in order['orders'][3:]]
@@ -513,6 +743,9 @@ class League(object):
         confirms = [(m == author) for m in members]
         members = (self.SEP_PLYR).join([str(m) for m in members])
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
+        if members in self.teamPlayers:
+            raise ImproperOrder("Team %s is a duplicate of an existing team." %
+                                (teamName))
         self.teams.addEntity({'ID': self.currentID,
                               'Name': teamName,
                               'Limit': gameLimit,
@@ -570,6 +803,8 @@ class League(object):
             self.confirmTeam(newOrder)
 
     def removeTeam(self, order):
+        if not self.allowRemoval:
+            raise ImproperOrder("Team removal has been disabled.")
         matchingTeam = self.fetchMatchingTeam(order)[0]
         self.teams.removeMatchingEntities({'ID':
                                            matchingTeam['ID']})
@@ -607,6 +842,62 @@ class League(object):
                     for temp in tempData]
         tempInfo.sort(key = lambda x: x[1])
 
+    def findMatchingTemplate(self, templateName):
+        IDs = self.templates.findValue({'ID': {'value': '',
+                                               'type': 'negative'},
+                                        'Name': {'value': templateName,
+                                                 'type': 'positive'}},
+                                       'ID')
+        if len(IDs) == 0: return None
+        return IDs[0]
+
+    def getExistingDrops(self, order):
+        author = int(order['author'])
+        teamData = self.fetchMatchingTeam(order)
+        existingDrops = teamData['Drops']
+        existingDrops = existingDrops.split(self.SEP_DROPS)
+        return teamData, existingDrops
+
+    def dropTemplate(self, order):
+        templateName = order['orders'][2]
+        temp = self.findMatchingTemplate(templateName)
+        if temp is None: return
+        teamData, existingDrops = self.getExistingDrops(order)
+        if len(existingDrops) >= self.dropLimit:
+            raise ImproperOrder("Team %s already reached its drop limit" %
+                                (teamName))
+        existingDrops.append(temp)
+        dropStr = (self.SEP_DROPS).join(existingDrops)
+        self.teams.updateMatchingEntities({'ID': {'value': teamData['ID'],
+                                                  'type': 'positive'}},
+                                          {'Drops': dropStr})
+
+    def undropTemplate(self, order):
+        templateName = order['orders'][2]
+        temp = self.findMatchingTemplate(templateName)
+        if temp is None: return
+        teamData, existingDrops = self.getExistingDrops(order)
+        existingDrops.remove(temp)
+        dropStr = (self.SEP_DROPS).join(existingDrops)
+        self.teams.updateMatchingEntities({'ID': {'value': teamData['ID'],
+                                                  'type': 'positive'}},
+                                          {'Drops': dropStr})
+
+    def toggleActivity(self, order, setTo):
+        author = int(order['author'])
+        if author not in self.mods:
+            raise ImproperOrder("Only mods can toggle template active status")
+        tempName = order['orders'][1]
+        self.templates.updateMatchingEntities({'Name': {'value': tempName,
+                                                        'type': 'positive'}},
+                                              {'Active': setTo})
+
+    def activateTemplate(self, order):
+        self.toggleActivity(order, 'TRUE')
+
+    def deactivateTemplate(self, order):
+        self.toggleActivity(order, 'FALSE')
+
     def executeOrders(self):
         self.setCurrentID()
         for order in self.orders:
@@ -615,7 +906,11 @@ class League(object):
                 {self.ORD_ADD_TEAM: self.addTeam,
                  self.ORD_CONFIRM_TEAM: self.confirmTeam,
                  self.ORD_SET_LIMIT: self.setLimit,
-                 self.ORD_REMOVE_TEAM: self.removeTeam
+                 self.ORD_REMOVE_TEAM: self.removeTeam,
+                 self.ORD_DROP_TEMPLATE: self.dropTemplate,
+                 self.ORD_UNDROP_TEMPLATE: self.undropTemplate,
+                 self.ORD_ACTIVATE_TEMPLATE: self.activateTemplate,
+                 self.ORD_DEACTIVATE_TEMPLATE: self.deactivateTemplate
                 }[orderType](order)
             except Exception as e:
                 if len(str(e)) > 0:
@@ -1191,8 +1486,28 @@ class League(object):
                 playerCounts[player] = 0
             playerCounts[player] += 1
 
+    def checkTeamRating(self, teamID):
+        teamRating = self.getOfficialRating(teamID)
+        start = self.fetchTeamData(teamID)['Probation Start']
+        if teamRating >= self.minRating:
+            if len(start) > 0:
+                self.teams.updateMatchingEntities({'ID': {'value': teamID,
+                                                          'type': 'positive'}},
+                                                  {'Probation Start': ''})
+        if len(start) == 0:
+            start = datetime.now()
+            nowStr = datetime.strftime(start, self.TIMEFORMAT)
+            self.teams.updateMatchingEntities({'ID': {'value': teamID,
+                                                      'type': 'positive'}},
+                                              {'Probation Start': nowStr})
+        else:
+            start = datetime.strptime(start, self.TIMEFORMAT)
+        if (datetime.now() - start).days >= self.gracePeriod:
+            raise ImproperOrder("Team %s rating is too low" % (str(teamID)))
+
     def validateTeam(self, teamID, players):
         try:
+            self.checkTeamRating(teamID)
             self.checkTeam(players)
             return False
         except ImproperOrder:
