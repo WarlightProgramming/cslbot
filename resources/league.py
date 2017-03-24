@@ -223,7 +223,7 @@ class League(object):
 
     def checkTeamSheet(self):
         teamConstraints = {'ID': 'UNIQUE INT',
-                           'Name': 'UNIQUE ALPHANUMERIC',
+                           'Name': 'UNIQUE STRING',
                            'Players': 'STRING',
                            'Confirmations': 'STRING',
                            'Rating': 'STRING',
