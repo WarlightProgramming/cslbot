@@ -9,12 +9,13 @@ import datetime
 from errors import *
 from utility import *
 from order_parser import OrderParser
-from wl_parsers import ForumThreadParser
+from wl_parsers import ForumThreadParser, PlayerParser
+from league import League
 
 # constants
 
-## commands
-COMMANDS_TITLE = "Commands"
+## settings
+COMMANDS_TITLE = "Settings"
 TITLE_LG = "League"
 TITLE_CMD = "Command"
 TITLE_ARG = "Args"
@@ -32,11 +33,27 @@ TITLE_DESC = "Description"
 LOG_HEADER = [TITLE_TIME, TITLE_STATUS, TITLE_DESC]
 LOG_CONSTRAINTS = ["", "BOOL", ""]
 
+## sheets
+SHEET_GAMES = "Game Data"
+SHEET_TEMPLATES = "Template Data"
+SHEET_TEAMS = "Team Data"
+
+# errors
+class ThreadError(Exception):
+    """error for improper thread"""
+    pass
+
+class OrderError(Exception):
+    """error for high-level order issues"""
+    pass
+
+class LeagueError(Exception):
+    """catch-all"""
+    pass
 
 # main LeagueManager class
 class LeagueManager(object):
 
-    ## constructor
     def __init__(self, database):
         """takes a sheetDB Database object"""
         self.database = database
@@ -46,24 +63,42 @@ class LeagueManager(object):
                                 constraints=LOG_CONSTRAINTS)
         self.leagues = self.commands.findEntities({TITLE_CMD: CMD_MAKE})\
                        [0][TITLE_ARG].split(',')
-        self.admin = self._getAdmin()
+        self.admin = self_validateAdmin(self._getAdmin())
 
-    ## _getAdmin
+    def _validateAdmin(self, adminID):
+        adminID = int(adminID)
+        parser = PlayerParser(adminID)
+        if not parser.isMember:
+            self.log("League admin is not a member. Quitting.", error=True)
+            raise LeagueError("League admin is not a Member")
+        return adminID
+
+    @property
+    def validationStr(self):
+        name = self.database.sheet.ID
+        return "!validate_league " + str(name)
+
+    def _validateThread(self, thread):
+        firstPost = parser.getPosts()[0]['message']
+        if self.validationStr not in firstPost:
+            raise ThreadError("Thread does not confirm league. Quitting.",
+                              error=True)
+
     def _getAdmin(self):
         """fetches the league admin's ID"""
         found = self.commands.findEntities({TITLE_CMD: 'ADMIN'})
+        thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
+        parser = ForumThreadParser(int(thread))
+        self._validateThread(parser)
         if (len(found) == 0 or not isInteger(found[0][TITLE_ARG])):
-            thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
-            parser = ForumThreadParser(int(thread))
             try:
                 return parser.getPosts()[0]['author']['ID']
             except:
-                self.log("Unable to find admin. Quitting.", True)
+                self.log("Unable to find admin. Quitting.", error=True)
                 raise ThreadError("Unable to parse thread: %s" % (thread))
         else:
             return found[0][TITLE_ARG]
 
-    ## log
     def log(self, description, league="", error=False):
         """logs an entry onto the sheet"""
         time = datetime.datetime.now()
@@ -72,23 +107,23 @@ class LeagueManager(object):
                                  TITLE_STATUS: error,
                                  TITLE_DESC: description})
 
-    ## fetchLeagueCommands
     def fetchLeagueCommands(self, league):
         """
         given a league (string), fetches a dictionary
         containing all commands for that league
+        league-specific commands override commands given to all leagues
         """
         commands = self.commands.getAllEntities(keyLabel=TITLE_CMD)
-        results = dict()
+        if league is not LG_ALL:
+            results = self.fetchLeagueCommands(LG_ALL)
+        else: results = dict()
         for command in commands:
-            if (commands[command][TITLE_LG] == league or
-                commands[command][TITLE_LG] == LG_ALL):
+            if (commands[command][TITLE_LG] == league):
                 args = commands[command][TITLE_ARG]
                 if "," in args: args = args.split(",")
                 results[command] = args
         return results
 
-    ## fetchThreadOrders
     @staticmethod
     def fetchThreadOrders(thread, offset):
         """
@@ -109,7 +144,6 @@ class LeagueManager(object):
             raise ThreadError("Unable to parse thread: %s; with offset: %s"
                               % (thread, offset))
 
-    ## _narrowOrders
     @staticmethod
     def _narrowOrders(orders, league):
         """
@@ -119,7 +153,6 @@ class LeagueManager(object):
                 (order['orders'][0] == league or
                  order['orders'][0] == LG_ALL)]
 
-    ## _getNonSpecificOrders
     @staticmethod
     def _getNonSpecificOrders(orders, leagues):
         """
@@ -129,7 +162,6 @@ class LeagueManager(object):
                 (order['orders'][0] not in leagues and
                  order['orders'][0] != LG_ALL)]
 
-    ## _setLeagueState
     def _setLeagueState(self, newState):
         """changes the global league state"""
         if newState not in ["RUNNING", "NO_GAMES", "NO_COMMANDS",
@@ -144,13 +176,6 @@ class LeagueManager(object):
                                      TITLE_ARG: newState})
         self.log("Set global league state to %s" % (newState))
 
-    def quitAllLeagues(self, author):
-        pass
-
-    def ban(self, author, commands):
-        pass
-
-    ## _runOrders
     def _runOrders(self, orders):
         """runs orders that are not specific to any league"""
         for order in orders:
@@ -158,16 +183,24 @@ class LeagueManager(object):
             orderCmds = order['orders']
             orderAuthor = order['author']
             try:
-                {'quit_leagues': self.quitAllLeagues(orderAuthor),
-                 'ban': self.ban(orderAuthor, orderCmds)}[orderType]
+                {}[orderType]
             except KeyError:
                 self.log("Unrecognized order: %s" % (order['type']))
             except OrderError as err:
                 self.log("Order Error: %s" % (str(err)))
 
-    ## run
+    def getLeagueSheets(self, league):
+        suffix = " (%s)" % (self.league)
+        gamesTitle = SHEET_GAMES + suffix
+        teamsTitle = SHEET_TEAMS + suffix
+        templatesTitle = SHEET_TEMPLATES + suffix
+        gamesSheet = self.database.fetchTable(gamesTitle)
+        teamsSheet = self.database.fetchTable(teamsTitle)
+        templatesSheet = self.databse.fetchTable(templatesTitle)
+        return gamesSheet, teamsSheet, templatesSheet
+
     def run(self):
-        """runs leagues, updates"""
+        """runs leagues and updates"""
         thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
         offset = self.commands.findEntities({TITLE_CMD: 'OFFSET'})
         if (len(offset) == 0 or len(thread) == 0):
@@ -175,3 +208,18 @@ class LeagueManager(object):
         thread, offset = thread[0][TITLE_ARG], offset[0][TITLE_ARG]
         orders = self.fetchThreadOrders(thread, offset)
         self._runOrders(self._getNonSpecificOrders(orders, self.leagues))
+        for league in self.leagues:
+            games, teams, templates = self.getLeagueSheets(league)
+            orders = self._narrowOrders(orders, league)
+            commands = self.fetchLeagueCommands(league)
+            threadID = thread = self.commands.findEntities({TITLE_CMD:
+                                                            'THREAD'})
+            threadName = 'https://www.warlight.net/Forum/' + str(threadID)
+            lgRunner = League(games, teams, templates, commands, orders,
+                              self.admin, self, league, threadName)
+            try:
+                lgRunner.run()
+            except Exception as e:
+                errStr = str(e)
+                failStr = "Failed to run league %s: %s" % (str(league), errStr)
+                self.log(failStr, league=league, error=True)

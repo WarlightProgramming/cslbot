@@ -57,8 +57,10 @@ class League(object):
     ORD_UNDROP_TEMPLATE = "undrop_template"
     ORD_ACTIVATE_TEMPLATE = "activate_template"
     ORD_DEACTIVATE_TEMPLATE = "deactivate_template"
+    ORD_QUIT_LEAGUE = "quit_league"
 
     # settings
+    SET_MODS = "MODS"
     SET_GAME_SIZE = "GAME SIZE"
     SET_TEAM_SIZE = "TEAM SIZE"
     SET_TEAMS_PER_SIDE = "TEAMS PER SIDE"
@@ -168,17 +170,17 @@ class League(object):
     SEP_VETOCT = "."
     SEP_VETOS = "/"
     SEP_DROPS = "/"
+    SEP_MODS = ","
 
     def __init__(self, games, teams, templates, settings, orders,
-                 admin, mods, parent, name, thread):
+                 admin, parent, name, thread):
         self.games = games
         self.teams = teams
         self.templates = templates
         self.settings = settings
         self.orders = orders
         self.admin = admin
-        self.mods = copy.deepcopy(mods)
-        self.mods.add(admin)
+        self.mods = self._getMods()
         self.parent = parent
         self.name = name
         self.thread = thread
@@ -191,6 +193,11 @@ class League(object):
         creds = json.load(credsFile)
         email, token = creds['E-mail'], creds['APIToken']
         return APIHandler(email, token)
+
+    def _getMods():
+        mods = self.getIDGroup(self.SET_MODS)
+        mods.add(self.admin)
+        return mods
 
     @staticmethod
     def checkSheet(table, header, constraints, reformat=True):
@@ -756,7 +763,7 @@ class League(object):
     def logFailedOrder(self, order):
         desc = ("Failed to process %s order by %d for league %s" %
                 (order['type'], order['author'], order['orders'][0]))
-        self.parent.log(desc, league=self.name, error=True)
+        self.parent.log(desc, league=self.name)
 
     def checkTeamCreator(self, creator, members):
         if (creator not in members and
@@ -978,6 +985,16 @@ class League(object):
     def deactivateTemplate(self, order):
         self.toggleActivity(order, 'FALSE')
 
+    def quitLeague(self, order):
+        author = order['author']
+        allTeams = self.teams.findEntities({'ID': {'value': '',
+                                                   'type': 'negative'},
+                                            'Limit': {'value': '0',
+                                                      'type': 'negative'}})
+        for team in allTeams:
+            if author in team['Players']:
+                self.changeLimit(team['ID'], 0)
+
     def executeOrders(self):
         self.setCurrentID()
         for order in self.orders:
@@ -990,11 +1007,12 @@ class League(object):
                  self.ORD_DROP_TEMPLATE: self.dropTemplate,
                  self.ORD_UNDROP_TEMPLATE: self.undropTemplate,
                  self.ORD_ACTIVATE_TEMPLATE: self.activateTemplate,
-                 self.ORD_DEACTIVATE_TEMPLATE: self.deactivateTemplate
+                 self.ORD_DEACTIVATE_TEMPLATE: self.deactivateTemplate,
+                 self.ORD_QUIT_LEAGUE: self.quitLeague
                 }[orderType](order)
             except Exception as e:
                 if len(str(e)) > 0:
-                    self.parent.log(str(e), self.name, error=True)
+                    self.parent.log(str(e), self.name)
                 else:
                     self.logFailedOrder(order)
 
@@ -1551,7 +1569,7 @@ class League(object):
                                 gamesToCheck[game]['Created'])
             except (SheetError, DataError):
                 self.parent.log("Failed to update game: " + str(game),
-                                league=self.name, error=True)
+                                league=self.name, error=False)
         self.updateRanks()
 
     def checkExcess(self, playerCount):
@@ -1852,13 +1870,13 @@ class League(object):
                                       'Template': game['Template']})
             except (DataError, SheetError) as e:
                 self.parent.log(("Failed to add game to sheet due to %s" %
-                                 str(e)), self.name, error=True)
+                                 str(e)), self.name, error=False)
             try:
                 self.makeGame(currentID)
                 currentID += 1
             except APIError as e:
                 self.parent.log(("Failed to create game with ID %d" %
-                                 (currentID)), self.name, error=True)
+                                 (currentID)), self.name, error=False)
 
     def createGames(self):
         teamsDict = self.teamsDict
