@@ -64,7 +64,7 @@ class League(object):
     SET_GAME_SIZE = "GAME SIZE"
     SET_TEAM_SIZE = "TEAM SIZE"
     SET_TEAMS_PER_SIDE = "TEAMS PER SIDE"
-    SET_SYSTEM = "SYSTEM"
+    SET_SYSTEM = "RATING SYSTEM"
     SET_BANNED_PLAYERS = "BANNED PLAYERS"
     SET_BANNED_CLANS = "BANNED CLANS"
     SET_BANNED_LOCATIONS = "BANNED LOCATIONS"
@@ -123,11 +123,14 @@ class League(object):
     SET_MIN_SIZE = "MIN TEAM COUNT"
     SET_MIN_PERCENTILE = "MIN RATING PERCENTILE"
     SET_MIN_TEMPLATES = "MIN ACTIVE TEMPLATES"
+    SET_REMATCH_LIMIT = "REMATCH HORIZON"
 
     # rating systems
     RATE_ELO = "ELO"
     RATE_GLICKO = "GLICKO"
     RATE_TRUESKILL = "TRUESKILL"
+    RATE_WINCOUNT = "WINCOUNT"
+    RATE_WINRATE = "WINRATE"
 
     # timeformat
     TIMEFORMAT = "%Y-%m-%d %H:%M:%S"
@@ -164,7 +167,7 @@ class League(object):
     SEP_CONF = ","
     SEP_TEAMS = ","
     SEP_SIDES = "/"
-    SEP_RTG = "."
+    SEP_RTG = "/"
     SEP_TEMP = ","
     SEP_WIN = ","
     SEP_VETOCT = "."
@@ -230,6 +233,7 @@ class League(object):
                            'Vetos': 'STRING',
                            'Drops': 'STRING',
                            'Rank': 'INT',
+                           'History': 'STRING',
                            'Limit': 'INT',
                            'Count': 'INT'}
         if self.minRating is not None:
@@ -292,6 +296,11 @@ class League(object):
         sheetName = self.games.parent.sheet.ID
         return ("https://docs.google.com/spreadsheets/d/" +
                 str(sheetName))
+
+    @property
+    def rematchLimit(self):
+        setLimit = int(self.settings.get(self.SET_REMATCH_LIMIT, 0))
+        return (setLimit * self.teamsPerSide * self.gameSize)
 
     @property
     def teamLimit(self):
@@ -427,6 +436,14 @@ class League(object):
     @property
     def defaultTrueSkill(self):
         return str(self.trueSkillMu) + "." + str(self.trueSkillSigma)
+
+    @property
+    def defaultWinCount(self):
+        return str(0)
+
+    @property
+    def defaultWinRate(self):
+        return (self.SEP_RTG).join([0.0, 0])
 
     @property
     def maxBoot(self):
@@ -809,7 +826,9 @@ class League(object):
     def defaultRating(self):
         return {self.RATE_ELO: self.defaultElo,
                 self.RATE_GLICKO: self.defaultGlicko,
-                self.RATE_TRUESKILL: self.defaultTrueSkill}[self.ratingSystem]
+                self.RATE_TRUESKILL: self.defaultTrueSkill,
+                self.RATE_WINCOUNT: self.defaultWinCount,
+                self.RATE_WINRATE: self.defaultWinRate}[self.ratingSystem]
 
     @property
     def teamPlayers(self):
@@ -1237,6 +1256,36 @@ class League(object):
                                                  side[team].sigma])
         return results
 
+    def getNewWinCounts(self, sides, winningSide):
+        results = dict()
+        winningTeams = sides[winningSide]
+        for team in winningTeams:
+            count = self.getTeamRating(team)
+            count = str(int(count) + 1)
+            results[team] = count
+        return results
+
+    def getWinRate(self, team):
+        rating = self.getTeamRating(team)
+        winRate, numGames = rating.split(self.SEP_RTG)
+        winRate = float(winRate)
+        numGames = int(numGames)
+        return winRate, numGames
+
+    def getNewWinRates(self, sides, winningSide):
+        results = dict()
+        for i in xrange(len(sides)):
+            side = sides[i]
+            for team in side:
+                winRate, numGames = self.getWinRate(team)
+                estimatedWins = Decimal(numGames) * Decimal(winRate)
+                if i == winningSide:
+                    estimatedWins += Decimal(1)
+                numGames += 1
+                newRate = round(float(estimatedWins / Decimal(numGames)), 3)
+                results[team] = self.unsplitRtg([newRate, numGames])
+        return results
+
     def getNewRatings(self, sides, winningSide):
         """
         :param sides: list[set[string]]
@@ -1244,7 +1293,9 @@ class League(object):
         """
         return {self.RATE_ELO: self.getNewEloRatings,
                 self.RATE_GLICKO: self.getNewGlickoRatings,
-                self.RATE_TRUESKILL: self.getNewTrueSkillRatings}[
+                self.RATE_TRUESKILL: self.getNewTrueSkillRatings,
+                self.RATE_WINCOUNT: self.getNewWinCounts,
+                self.RATE_WINRATE: self.getNewWinRates}[
                 self.ratingSystem](sides, winningSide)
 
     def updateTeamRating(self, teamID, rating):
@@ -1326,8 +1377,8 @@ class League(object):
             self.adjustRating(team, -self.vetoPenalty)
 
     def vetoCurrentTemplate(self, gameData):
-        vetos = gameData['Vetoed'] + "," + str(gameData['Template'])
-        if vetos[0] == ",": vetos = vetos[1:]
+        vetos = gameData['Vetoed'] + self.SEP_VETOS + str(gameData['Template'])
+        if vetos[0] == self.SEP_VETOS: vetos = vetos[1:]
         vetoCount = int(gameData['Vetos']) + 1
         self.games.updateMatchingEntities({'ID': {'value': gameData['ID'],
                                                   'type': 'positive'}},
@@ -1398,7 +1449,9 @@ class League(object):
     def prettifyRating(self, rating):
         return {self.RATE_ELO: self.getPrettyEloRating,
                 self.RATE_GLICKO: self.getPrettyGlickoRating,
-                self.RATE_TRUESKILL: self.getPrettyTrueSkillRating}[
+                self.RATE_TRUESKILL: self.getPrettyTrueSkillRating,
+                self.RATE_WINCOUNT: (lambda r: int(r)),
+                self.RATE_WINRATE: lambda r: float(r.split(self.SEP_RTG)[0])}[
                 self.ratingSystem](rating)
 
     def getPrettyRating(self, team):
@@ -1446,6 +1499,22 @@ class League(object):
     def getGameMessage(self, gameData):
         return self.processMessage(self.leagueMessage, gameData)
 
+    def updateHistories(self, gameData):
+        allTeams = list()
+        for side in gameData['Sides'].split(self.SEP_SIDES):
+            for team in side.split(self.SEP_TEAMS):
+                allTeams.append(team)
+        for team in allTeams:
+            otherTeams = [t for t in allTeams if t != team]
+            oldHistory = self.fetchTeamData(team)['History']
+            newStr = (self.SEP_TEAMS).join(otherTeams)
+            if len(oldHistory) != 0:
+                newStr = self.SEP_TEAMS + newStr
+            newHistory = oldHistory + newStr
+            self.teams.updateMatchingEntities({'ID': {'value': team,
+                                                      'type': 'positive'}},
+                                              {'History': newHistory})
+
     def makeGame(self, gameID):
         gameData = self.fetchGameData(gameID)
         temp = int(gameData['Template'])
@@ -1461,6 +1530,7 @@ class League(object):
                                                   'type': 'positive'}},
                                           {'WarlightID': wlID,
                                            'Created': createdStr })
+        self.updateHistories(gameData)
 
     def updateTemplate(self, gameID, gameData):
         vetos = set([int(v) for v in gameData['Vetoed'].split(self.SEP_TEMP)])
@@ -1692,6 +1762,23 @@ class League(object):
                    int(rtg[1])),) for rtg in rtgs]
         return self.trueSkillEnv.quality(players)
 
+    @staticmethod
+    def getVarianceScore(vals):
+        average = Decimal(sum(vals)) / Decimal(len(vals))
+        variance = Decimal(0)
+        for val in vals:
+            variance += ((Decimal(val) - Decimal(average)) ** 2)
+        sd = math.sqrt(float(variance))
+        return (1.0 - max(1.0, (sd / float(average))))
+
+    def getWinCountParity(self, ratings):
+        winCounts = [int(r) for r in ratings]
+        return self.getVarianceScore(winCounts)
+
+    def getWinRateParity(self, ratings):
+        winRates = [float(r.split(self.SEP_RTG)[0]) for r in ratings]
+        return self.getVarianceScore(winRates)
+
     def getParityScore(self, ratings):
         """
         given two ratings, returns a score from 0.0 to 1.0
@@ -1699,7 +1786,9 @@ class League(object):
         """
         return {self.RATE_ELO: self.getEloParity,
                 self.RATE_GLICKO: self.getGlickoParity,
-                self.RATE_TRUESKILL: self.getTrueSkillParity}[
+                self.RATE_TRUESKILL: self.getTrueSkillParity,
+                self.RATE_WINCOUNT: self.getWinCountParity,
+                self.RATE_WINRATE: self.getWinRateParity}[
                 self.ratingSystem](ratings)
 
     @classmethod
@@ -1707,6 +1796,11 @@ class League(object):
         players = team['Players'].split(cls.SEP_PLYR)
         players = [int(p) for p in players]
         return players
+
+    @classmethod
+    def getHistory(cls, team):
+        history = team['History'].split(cls.SEP_TEAMS)
+        return [int(t) for t in history]
 
     def makePlayersDict(self, teams):
         result = dict()
@@ -1736,6 +1830,8 @@ class League(object):
             players = self.getPlayers(team)
             for player in players:
                 conflicts = conflicts.union(playersDict[player])
+            history = self.getHistory(team)[-(self.rematchLimit):]
+            conflicts = conflicts.union(set(history))
             teamDict['conflicts'] = conflicts
             result[ID] = teamDict
         return result
@@ -1769,7 +1865,7 @@ class League(object):
         teams = side.split(self.SEP_TEAMS)
         conflicts = set()
         for team in teams:
-            teamConflicts = teamsDict[team][conflicts].union({int(team),})
+            teamConflicts = teamsDict[team]['conflicts'].union({int(team),})
             for conflict in teamConflicts:
                 for conflictingSide in teamsToSides.get(conflict, set()):
                     conflicts.add(conflictingSide)
