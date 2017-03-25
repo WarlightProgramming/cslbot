@@ -41,7 +41,7 @@ the "ALL" keyword.
 
 ### Required Commands
 
-#### Basic Setup
+### Basic Setup
 
 **THREAD**: The ID or URL (discouraged) of the Warlight forum thread tied to the league.
 
@@ -80,7 +80,7 @@ sheet would be named "Game Data (1v1)".
 
 ### Optional Commands
 
-#### Admin Specification
+### Admin Specification
 
 **ADMIN**: The Warlight ID of the owner of this league cluster.
 
@@ -92,7 +92,7 @@ Only one admin can be specified for the league. Ideally should be same as the ow
 stored. Admin is the highest level of authorization for thread
 orders, so make sure this actually goes to whoever runs the league cluster.
 
-#### League Setup
+### League Setup
 
 **MODS**: A comma-separated list of Warlight IDs of league mods.
 
@@ -121,9 +121,9 @@ that way, if the bot thinks the sheets are not formatted properly, it will
 raise and log an error instead of messing around with the header and you'll be
 able to try and fix things yourself.
 
-#### Basic League Design
+### Basic League Design
 
-##### Game Setting Configurations
+### Game Setting Configurations
 
 **MESSAGE**: This is the message that goes out with every game created
 for the league.
@@ -196,9 +196,9 @@ This is where players should be able to head for league stats, etc., ideally
 just a short URL to the league workbook. It's recommended to use a URL
 shortener for this since users might have to remember and/or type out the URL.
 
-##### League Mechanics
+### League Mechanics
 
-##### Activity Controls
+### Activity Controls
 
 **ACTIVE**: Whether to create new games for this league.
 
@@ -258,7 +258,7 @@ Mods will not be able to deactivate any more templates once this limit is
 reached (they can reactivate templates to make up for it, though). On top of
 that, the league will not run if there are not enough active templates.
 
-##### League Definition
+### League Definition
 
 **TEAM SIZE**: The number of players per team. (This must be an integer.)
 
@@ -395,12 +395,12 @@ multiple times in a row. There are already safeguards in place to keep a single
 team from matching up with the same allies/opponents during multiple games
 created in the same batch.
 
-#### Participation Control
+### Participation Control
 
 Requirements are checked every time a league is run, so players can't evade bans by
 simply temporarily changing their location/clan/etc.
 
-##### Player/Clan/Location Restrictions
+### Player/Clan/Location Restrictions
 
 **BANNED PLAYERS**: A comma-separated list of Warlight IDs of banned players.
 
@@ -457,7 +457,7 @@ players but have set **BANNED CLANS** to "ALL", you should also toggle
 **REQUIRE CLAN** to be false (otherwise it'll be assumed you're only allowing
 players that belong to a certain clan).
 
-##### Player Join Prerequisites
+### Player Join Prerequisites
 
 These can be explicitly overriden for players using the **ALLOWED PLAYERS**
 command. So if a player is ineligible to participate based on prereqs but you
@@ -636,7 +636,7 @@ achievements they've finished. Setting this to a reasonable value can also
 deter trolls or newbies, but this probably should not be your first resort for
 that purpose.
 
-##### Seasonal Ladders
+### Seasonal Ladders
 
 **ALLOW JOINING**: Whether to allow new teams to join.
 
@@ -700,7 +700,7 @@ Keep in mind that if a team becomes inactive, it might be unable to rejoin (or
 have to wait) because of this, but it allows you to directly control the number
 of teams actually playing in a given league.
 
-#### Team Settings
+### Team Settings
 
 **MIN LIMIT**: The minimum value a team can set for how many games it wants to
 be in at once.
@@ -751,7 +751,7 @@ teams of the same X players- and, as a side-effect, multi-teaming is not
 supported in leagues where the **TEAM SIZE** is 1). You can set an upper limit
 to keep players from joining too many teams.
 
-#### Vetos and Drops
+### Vetos and Drops
 
 If a game has been in the lobby too long (past the **EXPIRY THRESHOLD**) with
 no one accepting their invite or has had all of its players Vote to End, it
@@ -808,9 +808,9 @@ you will risk the possibility that a team has actually dropped all available
 templates. (If this happens, you can manually remove their Drops in the team
 data sheet for the league.)
 
-#### Rating System Configuration
+### Rating System Configuration
 
-##### Elo
+### Elo
 
 **ELO K**: Elo k-Factor (integer)
 
@@ -837,7 +837,7 @@ pick whatever makes your league's ratings easier to parse. Try to have a good
 ratio between the default rating and the k-Factor so your ratings look
 "normal."
 
-##### Glicko
+### Glicko
 
 **GLICKO RD**: Default Glicko rating deviation (integer)
 
@@ -861,7 +861,7 @@ This is just the rating new teams start out with. If you plan on modifying it,
 try keeping the **GLICKO RD** at the same ratio as it is in the default
 settings.
 
-##### TrueSkill
+### TrueSkill
 
 **TRUESKILL SIGMA**: Default TrueSkill sigma/standard deviation (integer)
 
@@ -882,7 +882,7 @@ value.
 The TrueSkill mu defines the expected rating for a team, and this is what new
 teams get to start out with.
 
-##### All Rating Systems
+### All Rating Systems
 
 **PREFER SKEWED MATCHUPS**: Whether to prefer matchups with high skill
 variation.
@@ -896,7 +896,7 @@ games with high parity between teams- i.e., good matches- will be preferred.
 This might be useful for leagues where the rating system is based on win
 count/win rate and you want to avoid regression to the mean.
 
-#### Elimination Ladders
+### Elimination Ladders
 
 You can use a minimum rating threshold or percentile to weed out teams that
 have been at the bottom of the league for a certain amount of time. It's
