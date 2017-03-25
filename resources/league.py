@@ -305,7 +305,9 @@ class League(object):
 
     @property
     def rematchLimit(self):
-        setLimit = int(self.settings.get(self.SET_REMATCH_LIMIT, 0))
+        setLimit = self.settings.get(self.SET_REMATCH_LIMIT, 0)
+        if setLimit == self.KW_ALL: return setLimit
+        setLimit = int(setLimit)
         return (setLimit * self.teamsPerSide * self.gameSize)
 
     @property
@@ -1942,7 +1944,11 @@ class League(object):
             players = self.getPlayers(team)
             for player in players:
                 conflicts = conflicts.union(playersDict[player])
-            history = self.getHistory(team)[-(self.rematchLimit):]
+            fullHistory = self.getHistory(team)
+            if self.rematchLimit == self.KW_ALL:
+                history = fullHistory
+            else:
+                history = fullHistory[-(self.rematchLimit):]
             conflicts = conflicts.union(set(history))
             teamDict['conflicts'] = conflicts
             result[ID] = teamDict

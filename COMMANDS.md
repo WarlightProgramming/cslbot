@@ -381,7 +381,7 @@ again will be reduced. Declines will still count as losses, though.
 **REMATCH HORIZON**: Number of (most recent) games from which opponents/allies
 will be excluded from new matches.
 
-*Possible Args*: "1", "10", "15"
+*Possible Args*: "1", "10", "15", "ALL"
 
 *Default*: 0 (no restriction)
 
@@ -394,6 +394,9 @@ But you can use this to keep the same teams from matching up against each other
 multiple times in a row. There are already safeguards in place to keep a single
 team from matching up with the same allies/opponents during multiple games
 created in the same batch.
+
+If you set this to ALL, teams will never be matched with/against any team
+they've played with before- so you can set up round robins this way.
 
 ### Participation Control
 
