@@ -129,6 +129,10 @@ class League(object):
     SET_RESTORATION_PERIOD = "RESTORATION PERIOD" # days
     SET_LEAGUE_CAPACITY = "MAX TEAMS"
     SET_ACTIVE_CAPACITY = "MAX ACTIVE TEAMS"
+    SET_MIN_TO_CULL = "MIN GAMES TO CULL"
+    SET_MIN_TO_RANK = "MIN GAMES TO RANK"
+    SET_MAX_RANK = "MAX RANK"
+    SET_MIN_LIMIT_TO_RANK = "MIN LIMIT TO RANK"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -240,6 +244,7 @@ class League(object):
                            'Drops': 'STRING',
                            'Rank': 'INT',
                            'History': 'STRING',
+                           'Finished': 'INT',
                            'Limit': 'INT',
                            'Count': 'INT'}
         if self.minRating is not None:
@@ -636,6 +641,24 @@ class League(object):
                                      self.teamsPerSide * self.gameSize))
 
     @property
+    def minToCull(self):
+        return int(self.settings.get(self.SET_MIN_TO_CULL, 0))
+
+    @property
+    def minToRank(self):
+        return int(self.settings.get(self.SET_MIN_TO_RANK, 0))
+
+    @property
+    def maxRank(self):
+        cmd = self.settings.get(self.SET_MAX_RANK, None)
+        if cmd is not None: cmd = int(cmd)
+        return cmd
+
+    @property
+    def minLimitToRank(self):
+        return int(self.settings.get(self.SET_MIN_LIMIT_TO_RANK, 1))
+
+    @property
     def size(self):
         return len(self.teams.findEntities({'ID': {'value': '',
                                                    'type': 'negative'},
@@ -941,7 +964,7 @@ class League(object):
                               'Players': members,
                               'Confirmations': confirms,
                               'Vetos': "", 'Drops': "",
-                              'Count': 0,
+                              'Count': 0, 'Finished': 0,
                               'Rating': self.defaultRating})
         self.currentID += 1
 
@@ -1128,6 +1151,7 @@ class League(object):
                     self.parent.log(str(e), self.name)
                 else:
                     self.logFailedOrder(order)
+        self.updateRanks()
 
     @property
     def unfinishedGames(self):
@@ -1228,11 +1252,14 @@ class League(object):
                                                   'type': 'positive'}},
                                           {'Winners': winStr})
 
-    def adjustTeamGameCount(self, teamID, adj):
-        oldCount = int(self.fetchTeamData(teamID)['Count'])
+    def adjustTeamGameCount(self, teamID, adj, totalAdj=0):
+        teamData = self.fetchTeamData(teamID)
+        oldCount = int(teamData['Count'])
+        oldFin = int(teamData['Finished'])
         self.teams.updateMatchingEntities({'ID': {'value': teamID,
                                                   'type': 'positive'}},
-                                          {'Count': str(oldCount + adj)})
+                                          {'Count': str(oldCount + adj),
+                                           'Finished': str(oldFin + totalAdj)})
 
     def adjustTemplateGameCount(self, templateID, adj):
         oldCount = int(self.fetchTemplateData(templateID)['Games'])
@@ -1408,7 +1435,7 @@ class League(object):
     def finishGameForTeams(self, sides):
         for side in sides:
             for team in side:
-                self.adjustTeamGameCount(team, -1)
+                self.adjustTeamGameCount(team, -1, 1)
 
     def updateResults(self, gameID, sides, winningSide):
         self.setWinners(gameID, sides[winningSide])
@@ -1583,9 +1610,13 @@ class League(object):
                 teamData = self.fetchTeamData(team)
                 teamRank = teamData['Rank']
                 teamName = teamData['Name']
-                teamStr = "%s, with rank %d and rating %s" % (teamName,
-                                                              teamRank,
-                                                              teamRating)
+                if teamRank is '':
+                    teamStr = "%s, not ranked with rating %s" % (teamName,
+                                                                 teamRating)
+                else:
+                    teamStr = "%s, with rank %d and rating %s" % (teamName,
+                                                                  teamRank,
+                                                                  teamRating)
                 infoData.append(teamStr)
         infoStr = "".join(infoData[1:])
         return infoStr
@@ -1630,21 +1661,25 @@ class League(object):
                                                       'type': 'positive'}},
                                               {'History': newHistory})
 
-    def makeGame(self, gameID):
+    def createGame(self, gameID):
         gameData = self.fetchGameData(gameID)
         temp = int(gameData['Template'])
         teams = assembleTeams(gameData)
         wlID = self.handler.createGame(temp, self.getGameName(gameData), teams,
                                        self.getGameMessage(gameData))
         self.adjustTemplateGameCount(temp, 1)
-        for side in gameData['Sides'].split(self.SEP_SIDES):
-            for team in side.split(self.SEP_TEAMS):
-                self.adjustTeamGameCount(team, 1)
         createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
         self.games.updateMatchingEntities({'ID': {'value': gameID,
                                                   'type': 'positive'}},
                                           {'WarlightID': wlID,
-                                           'Created': createdStr })
+                                           'Created': createdStr})
+        return gameData
+
+    def makeGame(self, gameID):
+        gameData = self.createGame(gameID)
+        for side in gameData['Sides'].split(self.SEP_SIDES):
+            for team in side.split(self.SEP_TEAMS):
+                self.adjustTeamGameCount(team, 1)
         self.updateHistories(gameData)
 
     def updateTemplate(self, gameID, gameData):
@@ -1654,7 +1689,7 @@ class League(object):
         if i < len(ranks):
             newTemp = ranks[i][0]
             self.setGameTemplate(gameID, newTemp)
-            self.makeGame(gameID)
+            self.createGame(gameID)
         else:
             self.deleteGame(gameID, gameData)
 
@@ -1730,8 +1765,15 @@ class League(object):
                                                    'type': 'negative'}})
         teamRatings = list()
         for team in allTeams:
-            teamRatings.append((team['ID'],
-                                self.getOfficialRating(team['ID'])))
+            if ((int(team['Finished']) < self.minToRank or
+                 int(team['Limit']) < self.minLimitToRank) and
+                team['Rank'] is not ''):
+                self.teams.updateMatchingEntities({'ID': {'value': team['ID'],
+                                                          'type': 'positive'}},
+                                                  {'Rank': ''})
+            else:
+                teamRatings.append((team['ID'],
+                                    self.getOfficialRating(team['ID'])))
         teamRatings.sort(key = lambda x: x[1])
         teamRatings.reverse()
         rank, previous, offset = 0, None, 0
@@ -1755,7 +1797,6 @@ class League(object):
             except (SheetError, DataError):
                 self.parent.log("Failed to update game: " + str(game),
                                 league=self.name, error=False)
-        self.updateRanks()
 
     def checkExcess(self, playerCount):
         if self.teamLimit is None: return False
@@ -1773,13 +1814,24 @@ class League(object):
             playerCounts[player] += 1
 
     def checkTeamRating(self, teamID):
-        teamRating = self.getOfficialRating(teamID)
+        teamData = self.fetchTeamData(teamID)
+        teamFinished = int(teamData['Finished'])
+        if (teamFinished < self.minToCull):
+            if teamData['Probation Start'] is not '':
+                self.teams.updateMatchingEntities({'ID': {'value': teamID,
+                                                          'type': 'positive'}},
+                                                  {'Probation Start': ''})
+            return
+        teamRating = int(self.prettifyRating(teamData['Rating']))
+        teamRank = int(teamData['Rank'])
         start = self.fetchTeamData(teamID)['Probation Start']
-        if teamRating >= self.minRating:
+        if (teamRating >= self.minRating and (self.maxRank is None or
+            teamRank <= self.maxRank)):
             if len(start) > 0:
                 self.teams.updateMatchingEntities({'ID': {'value': teamID,
                                                           'type': 'positive'}},
                                                   {'Probation Start': ''})
+            return
         if len(start) == 0:
             start = datetime.now()
             nowStr = datetime.strftime(start, self.TIMEFORMAT)

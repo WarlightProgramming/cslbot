@@ -329,6 +329,29 @@ Here's quick descriptions of each rating system you can use:
   to push teams closer to .500 or to 1.000 (depending on the **PREFER SKEWED
   MATCHUPS** setting). Win rates are stored on a scale of 0 to 1000.
 
+**MIN GAMES TO RANK**: Minimum number of completed games before a team can be
+ranked.
+
+*Sample Args*: "1", "5", "10"
+
+*Default*: 0 (no minimum)
+
+Teams that have not yet finished this number of games (by win, loss, or
+excessive vetos) will not be ranked. This also helps you control the impact of
+other settings like **MAX RANK** to make sure that a flood of incoming new
+teams will not artificially push down existing teams and reduce the impact of
+random early fluctuations in your rankings.
+
+**MIN LIMIT TO RANK**: Minimum number of games a team must be willing to
+participate in simultaneously in order to get/remain ranked.
+
+*Sample Args*: "0", "1", "5"
+
+*Default*: 1
+
+This is to basically keep inactive teams (or teams below a certain activity
+threshold) from affecting your league rankings.
+
 **EXPIRY THRESHOLD**: Number of days until a game is considered abandoned.
 
 *Sample Args*: "1", "2", "5"
@@ -966,7 +989,8 @@ You can weed out teams below a certain official rating (using a single rating
 score, so no deviations/etc.) for a certain period of time. So if you're
 running an Elo ladder and decide that any team that's been below 1500 for 5
 days in a row doesn't belong in the league, you can set this to 1500 and
-**GRACE PERIOD** to 5.
+**GRACE PERIOD** to 5. If you set a **MIN RATING PERCENTILE**, it will override
+this.
 
 **GRACE PERIOD**: The number of *days* in a row by which a team can be below
 the minimum rating/percentile (integer).
@@ -1021,3 +1045,28 @@ up. Keep in mind that it's a bad idea to set this to "50" or below because that
 would cull the bottom half of your league very quickly and also mean that the
 *average* team (including new teams that just joined) would immediately be on
 probation (in their **GRACE PERIOD**).
+
+**MAX RANK**: Maximum rank for a team to continue participating in good
+standing.
+
+*Sample Args*: "5", "10", "15"
+
+*Default*: no maximum
+
+If you want to just allow the top N teams in the league to continue competing
+in good standing, supply a value for MAX RANK. Any team that's out of the top N
+long enough will be culled from the league- so you can make things
+particularly exciting and force teams to constantly compete for the top N
+spots.
+
+**MIN GAMES TO CULL**: Minimum games before a team can be eliminated.
+
+*Sample Args*: "5", "10", "15"
+
+*Default*: 0 (no minimum)
+
+This way, you can guarantee teams at least N finished games before they run the
+risk of probation. This reduces the impact of random early rating fluctuations
+and makes the league less hectic for teams just starting out. If you want to
+set the minimum *number of days* before a team has to worry about elimination,
+use the **GRACE PERIOD**.
