@@ -798,16 +798,18 @@ class League(object):
 
     def checkLocation(self, location):
         location = self.processLoc(location)
-        return ((location in self.allowedLocations or
-                 self.KW_ALL in self.allowedLocations) or
-                (location not in self.bannedLocations
-                 and self.KW_ALL not in self.bannedLocations))
+        if (location in self.allowedLocations or
+            self.KW_ALL in self.allowedLocations): return True
+        if (location in self.bannedLocations or
+            self.KW_ALL in self.bannedLocations): return False
 
     def locationAllowed(self, player):
         location = player.location.split(":")
+        results = set()
         for loc in location:
-            if self.checkLocation(loc): return True
-        return False
+            check = self.checkLocation(loc)
+            results.add(check)
+        return ((True in results) or (False not in results))
 
     def meetsAge(self, player):
         now = datetime.now()

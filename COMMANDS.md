@@ -439,7 +439,7 @@ this is explicitly set to false.
 
 *Sample Args*: "12", "160,161", "ALL"
 
-*Default*: No one banned
+*Default*: No clans banned
 
 You can ban clans using their Warlight clan IDs (which you should be able to
 find from their clan page URLs). You can set this to "ALL" if you want to ban
@@ -452,13 +452,60 @@ allowed clans.
 
 *Sample Args*: "10,20,30", "5"
 
-*Default*: No one banned
+*Default*: No clans
 
 If you want your league to only be open to players belonging to certain clans,
 you can set that using their clan IDs. If you want to also allow unclanned
 players but have set **BANNED CLANS** to "ALL", you should also toggle
 **REQUIRE CLAN** to be false (otherwise it'll be assumed you're only allowing
 players that belong to a certain clan).
+
+**BANNED LOCATIONS**: A comma-separated list of banned location names.
+
+*Sample Args*: "Morocco", "France,Germany,Denmark", "Pennsylvania,Texas", "ALL"
+
+*Default*: No locations banned
+
+If you want your league to only be open to players from a certain location or
+group of locations, you can specify that here. This is useful if you want to
+run a language/region-specific league, for example; you could use this to only
+allow players from Germany for a German-speaking league and then **ALLOWED
+PLAYERS** to make manual exceptions to cover players who are unfortunate enough
+to reside outside Schland. You should probably check the country values in
+player profiles to see how Warlight formats the name of a particular region you
+want to allow or ban. **Since Warlight sometimes specifies US states**, the
+states and the United States are treated as separate values in here. If you
+want to ban *all* the American states, you can simply ban the United States. if
+you want to ban some American states, you can either ban them individually or
+ban the United States as a whole and use **ALLOWED LOCATIONS** to allow the
+ones you want to allow. But if you allow the United States as a whole
+(explicitly, using ALLOWED LOCATIONS) you will not be able to ban any American
+states. The process works similarly for any other locations provided by
+Warlight with multiple degrees of resolution.
+
+In simple terms, any location with multiple degrees of resolution will have its
+status determined by thus:
+
+- If any degree of resolution is explicitly allowed, the player will be
+  allowed.
+- If no degree of resolution is explicitly allowed but no degree is explicitly
+  banned either, the player will be allowed.
+- If some degree of resolution is explicitly banned and no other degree of
+  resolution (higher or lower) is explicitly allowed, the player will be
+  disallowed.
+
+**ALLOWED LOCATIONS**
+
+*Sample Args*: "Argentina,Nicaragua,Texas", "United States,United Kingdom"
+
+*Default*: No locations
+
+Any location explicitly allowed (at any degree of resolution, if there are
+multiple- e.g., a player from Texas will get in through this if either the US or Texas is
+explicitly allowed) to participate should be in this comma-separated list.
+
+See the discussion under **BANNED LOCATIONS** for more details, especially if
+you're planning on dealing with American states.
 
 ### Player Join Prerequisites
 
