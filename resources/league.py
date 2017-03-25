@@ -1527,7 +1527,7 @@ class League(object):
             nameData.append(" vs ")
             nameInfo = list()
             for team in side.split(self.SEP_TEAMS):
-                nameInfo.append(" and ")
+                nameInfo.append("+")
                 teamName = self.getTeamName(team)
                 if len(teamName) > MAX_NAME_LEN:
                     teamName = teamName[:(MAX_NAME_LEN - 3)]
