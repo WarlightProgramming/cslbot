@@ -156,6 +156,7 @@ class LeagueManager(object):
         for command in commands:
             if (commands[command][TITLE_LG] == league):
                 args = commands[command][TITLE_ARG]
+                if len(args) == 0: continue
                 if SEP_CMD in args: args = args.split(SEP_CMD)
                 results[command] = args
         return results

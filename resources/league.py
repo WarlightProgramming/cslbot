@@ -128,7 +128,7 @@ class League(object):
     SET_REMATCH_LIMIT = "REMATCH HORIZON"
     SET_RESTORATION_PERIOD = "RESTORATION PERIOD" # days
     SET_LEAGUE_CAPACITY = "MAX TEAMS"
-    SET_LEAGUE_MAX_ACTIVE = "MAX ACTIVE TEAMS"
+    SET_ACTIVE_CAPACITY = "MAX ACTIVE TEAMS"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -373,7 +373,7 @@ class League(object):
     def maxLimit(self):
         """maximum number of max ongoing games per team"""
         lim = self.settings.get(self.SET_MAX_LIMIT, None)
-        if lim not in {None, ''}:
+        if lim is not None:
             return int(lim)
         return None
 
@@ -507,6 +507,7 @@ class League(object):
         return int(cmd)
 
     def findRatingAtPercentile(self, percentile):
+        if percentile == 0: return None
         ratings = self.teams.findValue({'ID': {'value': '',
                                                'type': 'negative'}},
                                        "Rating")
@@ -535,8 +536,62 @@ class League(object):
         return int(self.settings.get(self.SET_GRACE_PERIOD, 0))
 
     @property
+    def restorationPeriod(self):
+        cmd = self.settings.get(self.SET_RESTORATION_PERIOD, None)
+        if cmd is not None: cmd = int(cmd)
+        return (cmd + self.gracePeriod)
+
+    def restoreTeams(self):
+        restPd = self.restorationPeriod
+        if self.minRating is None or restPd is None: return
+        deadTeams = self.teams.findEntities({'ID': {'value': '',
+                                                    'type': 'negative'},
+                                             'Limit': {'value': '0',
+                                                       'type': 'positive'},
+                                             'Probation Start': {'value': '',
+                                                        'type': 'positive'}})
+        for team in deadTeams:
+            probStart = team['Probation Start']
+            probStart = datetime.strptime(probStart, self.TIMEFORMAT)
+            if ((datetime.now() - probStart).days >= self.restorationPeriod):
+                self.teams.updateMatchingEntities({'ID': {'value': team['ID'],
+                                                          'type': 'positive'}},
+                                                 {'Rating': self.defaultRating,
+                                                  'Probation Start': ''})
+
+    @property
     def allowJoins(self):
         return self.getBoolProperty(self.SET_ALLOW_JOINS, True)
+
+    @property
+    def leagueCapacity(self):
+        cmd = self.settings.get(self.SET_LEAGUE_CAPACITY, None)
+        if cmd is not None: cmd = int(cmd)
+        return cmd
+
+    @property
+    def activeCapacity(self):
+        cmd = self.settings.get(self.SET_ACTIVE_CAPACITY, None)
+        if cmd is not None: cmd = int(cmd)
+        return cmd
+
+    @property
+    def activeFull(self):
+        cap = self.activeCapacity
+        if cap is None: return False
+        activeTeams = self.teams.findEntities({'ID': {'value': '',
+                                                      'type': 'negative'},
+                                               'Limit': {'value': '0',
+                                                         'type': 'negative'}})
+        return (len(activeTeams) >= cap)
+
+    @property
+    def leagueFull(self):
+        cap = self.leagueCapacity
+        if cap is None: return False
+        allTeams = self.teams.findEntities({'ID': {'value': '',
+                                                   'type': 'negative'}})
+        return (len(allTeams) >= cap)
 
     def getDateTimeProperty(self, label, default=None):
         cmd = self.settings.get(label, default)
@@ -563,6 +618,7 @@ class League(object):
 
     @property
     def joinsAllowed(self):
+        if (self.leagueFull or self.activeFull): return False
         start, end = self.joinPeriodStart, self.joinPeriodEnd
         if self.currentDateWithinRange(start, end):
             return self.allowJoins
@@ -938,6 +994,14 @@ class League(object):
         self.teams.removeMatchingEntities({'ID':
                                            matchingTeam['ID']})
 
+    def checkLimitChange(self, teamID, newLimit):
+        if int(newLimit) <= 0: return
+        if self.activeCapacity is None: return
+        if not self.activeFull: return
+        oldLimit = int(self.fetchTeamData(teamID)['Limit'])
+        if oldLimit == 0:
+            raise ImproperOrder("League has reached max active teams.")
+
     def setLimit(self, order):
         matchingTeam = self.fetchMatchingTeam(order, False)[0]
         players = matchingTeam['Players'].split(self.SEP_PLYR)
@@ -946,6 +1010,7 @@ class League(object):
             raise ImproperOrder(str(order['author']) +
                                 " can't set the limit for team " +
                                 str(order['orders'][1]))
+        self.checkLimitChange(matchingTeam['ID'], order['orders'][2])
         self.changeLimit(matchingTeam['ID'], order['orders'][2])
 
     @property
@@ -2037,13 +2102,15 @@ class League(object):
 
     def run(self):
         """
-        runs the league in three phases
-        1. execute orders from threads
-        2. check on and update ongoing games
-        3. create new games
+        runs the league in four phases
+        1. check on and update ongoing games
+        2. execute orders from threads
+        3. update teams using prereqs
+        4. create new games
         """
-        self.executeOrders()
         self.updateGames()
+        self.executeOrders()
         self.validatePlayers()
+        self.restoreTeams()
         if self.active:
             self.createGames()
