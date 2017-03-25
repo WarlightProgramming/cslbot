@@ -1109,7 +1109,7 @@ class League(object):
     def executeOrders(self):
         self.setCurrentID()
         for order in self.orders:
-            orderType = order['type']
+            orderType = order['type'].lower()
             try:
                 {self.ORD_ADD_TEAM: self.addTeam,
                  self.ORD_CONFIRM_TEAM: self.confirmTeam,
