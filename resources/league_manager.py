@@ -22,6 +22,8 @@ TITLE_ARG = "Args"
 LG_ALL = "ALL"
 COMMANDS_HEADER = [TITLE_LG, TITLE_CMD, TITLE_ARG]
 CMD_MAKE = 'LEAGUES'
+SEP_CMD = ","
+ABUSE_THRESHOLD = 5
 
 ## log
 LOG_TITLE = "Log"
@@ -77,24 +79,59 @@ class LeagueManager(object):
         name = self.database.sheet.ID
         return "!validate_league " + str(name)
 
+    @staticmethod
+    def _getUniqueAuthors(posts):
+        authors = set()
+        for post in posts:
+            author = post['author']
+            authors.add(author)
+        return authors
+
     def _validateThread(self, thread):
-        firstPost = parser.getPosts()[0]['message']
+        posts = parser.getPosts()
+        authorCount = len(self._getUniqueAuthors(posts))
+        if authorCount < ABUSE_THRESHOLD:
+            errStr = ("Thread must have posts by at least %d unique authors" %
+                      (ABUSE_THRESHOLD))
+            raise ThreadError(errStr)
+        firstPost = posts[0]['message']
         if self.validationStr not in firstPost:
-            raise ThreadError("Thread does not confirm league. Quitting.",
-                              error=True)
+            raise ThreadError("Thread does not confirm league. Quitting.")
+
+    def logThreadFailure(self, thread):
+        self.log("Unable to scan thread. Quitting.", error=True)
+        raise ThreadError("Unable to parse thread: %s" % (str(thread)))
+
+    def _makeForumThreadParser(self, thread):
+        if isInteger(thread):
+            return ForumThreadParser(int(thread))
+        else:
+            searchStr = '/Forum/'
+            start = thread.find(searchStr)
+            if start < 0:
+                self.logThreadFailure(thread)
+            start = start + len(searchStr)
+            end = start
+            while isInteger(thread[end:]):
+                end += 1
+            if end == start:
+                self.logThreadFailure(thread)
+            return ForumThreadParser(int(thread[start:end]))
 
     def _getAdmin(self):
         """fetches the league admin's ID"""
         found = self.commands.findEntities({TITLE_CMD: 'ADMIN'})
         thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
-        parser = ForumThreadParser(int(thread))
-        self._validateThread(parser)
+        parser = self._makeForumThreadParser(thread)
+        try:
+            self._validateThread(parser)
+        except ThreadError as err:
+            self.log(str(err), error=True)
         if (len(found) == 0 or not isInteger(found[0][TITLE_ARG])):
             try:
                 return parser.getPosts()[0]['author']['ID']
-            except:
-                self.log("Unable to find admin. Quitting.", error=True)
-                raise ThreadError("Unable to parse thread: %s" % (thread))
+            except Exception:
+                self.logThreadFailure(thread)
         else:
             return found[0][TITLE_ARG]
 
@@ -119,7 +156,7 @@ class LeagueManager(object):
         for command in commands:
             if (commands[command][TITLE_LG] == league):
                 args = commands[command][TITLE_ARG]
-                if "," in args: args = args.split(",")
+                if SEP_CMD in args: args = args.split(SEP_CMD)
                 results[command] = args
         return results
 

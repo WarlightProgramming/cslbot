@@ -71,6 +71,7 @@ class League(object):
     SET_ALLOWED_PLAYERS = "ALLOWED PLAYERS"
     SET_ALLOWED_CLANS = "ALLOWED CLANS"
     SET_ALLOWED_LOCATIONS = "ALLOWED LOCATIONS"
+    SET_REQUIRE_CLAN = "REQUIRE CLAN"
     SET_MAX_LIMIT = "MAX LIMIT"
     SET_MIN_LIMIT = "MIN LIMIT"
     SET_AUTOFORMAT = "AUTOFORMAT"
@@ -84,24 +85,25 @@ class League(object):
     SET_GLICKO_DEFAULT = "GLICKO DEFAULT"
     SET_TRUESKILL_SIGMA = "TRUESKILL SIGMA"
     SET_TRUESKILL_DEFAULT = "TRUESKILL MU"
+    SET_REVERSE_PARITY = "PREFER SKEWED MATCHUPS"
     SET_LEAGUE_MESSAGE = "MESSAGE"
     SET_SUPER_NAME = "CLUSTER NAME"
-    SET_LEAGUE_ACRONYM = "ACRONYM"
+    SET_LEAGUE_ACRONYM = "SHORT NAME"
     SET_URL = "URL"
-    SET_MAX_TEAMS = "TEAM LIMIT"
+    SET_MAX_TEAMS = "PLAYER TEAM LIMIT"
     SET_REMOVE_DECLINES = "REMOVE DECLINES"
     SET_VETO_DECLINES = "COUNT DECLINES AS VETOS"
-    SET_DROP_LIMIT = "TEMPLATE AVOIDANCE LIMIT"
+    SET_DROP_LIMIT = "DROP LIMIT"
     SET_MAX_BOOT = "MAX BOOT RATE"
     SET_MIN_LEVEL = "MIN LEVEL"
     SET_MEMBERS_ONLY = "MEMBERS ONLY"
     SET_MIN_POINTS = "MIN POINTS"
-    SET_MIN_AGE = "MIN DAYS SINCE JOINING"
-    SET_MIN_MEMBER_AGE = "MIN DAYS SINCE MEMBERSHIP"
-    SET_MAX_RT_SPEED = "MAX RT SPEED (MINUTES)"
-    SET_MAX_MD_SPEED = "MAX MD SPEED (HOURS)"
+    SET_MIN_AGE = "MIN AGE" # days
+    SET_MIN_MEMBER_AGE = "MIN MEMBER AGE" # days
+    SET_MAX_RT_SPEED = "MAX RT SPEED" # minutes
+    SET_MAX_MD_SPEED = "MAX MD SPEED" # hours
     SET_MIN_RATING = "MIN RATING"
-    SET_GRACE_PERIOD = "GRACE PERIOD (DAYS)"
+    SET_GRACE_PERIOD = "GRACE PERIOD" # days
     SET_ALLOW_JOINS = "ALLOW JOINING"
     SET_JOIN_PERIOD_START = "JOIN PERIOD START"
     SET_JOIN_PERIOD_END = "JOIN PERIOD END"
@@ -110,7 +112,7 @@ class League(object):
     SET_MAX_ONGOING_GAMES = "MAX ONGOING GAMES"
     SET_MIN_RT_PERCENT = "MIN RT PERCENT"
     SET_MAX_RT_PERCENT = "MAX RT PERCENT"
-    SET_MAX_LAST_SEEN = "MAX LAST SEEN (DAYS)"
+    SET_MAX_LAST_SEEN = "MAX LAST SEEN" # days
     SET_MIN_1v1_PCT = "MIN 1v1 PERCENT"
     SET_MIN_2v2_PCT = "MIN 2v2 PERCENT"
     SET_MIN_3v3_PCT = "MIN 3v3 PERCENT"
@@ -124,6 +126,9 @@ class League(object):
     SET_MIN_PERCENTILE = "MIN RATING PERCENTILE"
     SET_MIN_TEMPLATES = "MIN ACTIVE TEMPLATES"
     SET_REMATCH_LIMIT = "REMATCH HORIZON"
+    SET_RESTORATION_PERIOD = "RESTORATION PERIOD" # days
+    SET_LEAGUE_CAPACITY = "MAX TEAMS"
+    SET_LEAGUE_MAX_ACTIVE = "MAX ACTIVE TEAMS"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -131,6 +136,7 @@ class League(object):
     RATE_TRUESKILL = "TRUESKILL"
     RATE_WINCOUNT = "WINCOUNT"
     RATE_WINRATE = "WINRATE"
+    WINRATE_SCALE = 1000
 
     # timeformat
     TIMEFORMAT = "%Y-%m-%d %H:%M:%S"
@@ -312,7 +318,7 @@ class League(object):
     @property
     def vetoLimit(self):
         """maximum number of vetos per game"""
-        return int(self.settings.get(self.SET_VETO_LIMIT, 1))
+        return int(self.settings.get(self.SET_VETO_LIMIT, 0))
 
     @property
     def dropLimit(self):
@@ -331,7 +337,12 @@ class League(object):
     @property
     def vetoPenalty(self):
         """points deduction for excessive vetos"""
-        return int(self.settings.get(self.SET_VETO_PENALTY, 25))
+        if self.ratingSystem == self.RATE_WINCOUNT:
+            default = 1
+        elif self.ratingSystem == self.RATE_WINRATE:
+            default = 50
+        else: default = 25
+        return int(self.settings.get(self.SET_VETO_PENALTY, default))
 
     @property
     def teamSize(self):
@@ -362,7 +373,7 @@ class League(object):
     def maxLimit(self):
         """maximum number of max ongoing games per team"""
         lim = self.settings.get(self.SET_MAX_LIMIT, None)
-        if lim is not None:
+        if lim not in {None, ''}:
             return int(lim)
         return None
 
@@ -443,7 +454,11 @@ class League(object):
 
     @property
     def defaultWinRate(self):
-        return (self.SEP_RTG).join([0.0, 0])
+        return (self.SEP_RTG).join(str(i) for i in [0, 0])
+
+    @property
+    def reverseParity(self):
+        return self.getBoolProperty(self.SET_REVERSE_PARITY, False)
 
     @property
     def maxBoot(self):
@@ -599,7 +614,7 @@ class League(object):
 
     @property
     def allowRemoval(self):
-        return self.getBoolProperty(self.SET_ALLOW_REMOVAL, True)
+        return self.getBoolProperty(self.SET_ALLOW_REMOVAL, False)
 
     @property
     def minOngoingGames(self):
@@ -703,12 +718,20 @@ class League(object):
         return set(self.settings.get(self.SET_ALLOWED_LOCATIONS,
                                      "").split(self.SEP_CMD))
 
+    @property
+    def requireClan(self):
+        default = (self.KW_ALL in self.bannedClans)
+        return self.getBoolProperty(self.SET_REQUIRE_CLAN, default)
+
     def clanAllowed(self, player):
-        clan = int(player.clanID)
+        clan = player.clanID
+        if clan is None:
+            return (not self.requireClan)
+        clan = int(clan)
         return ((clan in self.allowedClans or
-                 (self.KW_ALL in self.allowedClans and
-                  clan is not None)) or (clan not in self.bannedClans
-                and self.KW_ALL not in self.bannedClans))
+                 (self.KW_ALL in self.allowedClans))
+                 or (clan not in self.bannedClans
+                     and self.KW_ALL not in self.bannedClans))
 
     @staticmethod
     def processLoc(location):
@@ -1002,6 +1025,8 @@ class League(object):
         self.toggleActivity(order, 'TRUE')
 
     def deactivateTemplate(self, order):
+        if self.templateSize <= self.minTemplates:
+            raise ImproperOrder("Not enough active templates to deactivate")
         self.toggleActivity(order, 'FALSE')
 
     def quitLeague(self, order):
@@ -1068,7 +1093,7 @@ class League(object):
         return self.findMatchingPlayers(players, 'Declined')
 
     def findWaiting(self, players):
-        return self.findMatchingPlayers(players, 'Waiting', 'Declined')
+        return self.findMatchingPlayers(players, 'Invited', 'Declined')
 
     def handleFinished(self, gameData):
         if self.isAbandoned(gameData['players']):
@@ -1079,6 +1104,8 @@ class League(object):
     def handleWaiting(self, gameData, created):
         decliners = self.findDecliners(gameData['players'])
         if len(decliners) > 0:
+            if len(decliners) == len(gameData['players']):
+                return 'ABANDONED', None
             return 'DECLINED', decliners
         waiting = self.findWaiting(gameData['players'])
         if (len(waiting) == len(gameData['players']) and
@@ -1151,7 +1178,7 @@ class League(object):
         return diff
 
     def getEloRating(self, teamID):
-        return float(self.getTeamRating(teamID))
+        return int(self.getTeamRating(teamID))
 
     def getSideEloRating(self, side):
         rating = 0
@@ -1191,7 +1218,7 @@ class League(object):
 
     def getGlickoRating(self, teamID):
         return tuple([int(x) for x in
-                     self.getTeamReating(teamID).split(self.SEP_RTG)])
+                     self.getTeamRating(teamID).split(self.SEP_RTG)])
 
     def getSideGlickoRating(self, side):
         rating, dev = 0, 0
@@ -1278,11 +1305,13 @@ class League(object):
             side = sides[i]
             for team in side:
                 winRate, numGames = self.getWinRate(team)
-                estimatedWins = Decimal(numGames) * Decimal(winRate)
+                estimatedWins = (Decimal(numGames) * (Decimal(winRate)
+                                 / Decimal(self.WINRATE_SCALE)))
                 if i == winningSide:
                     estimatedWins += Decimal(1)
                 numGames += 1
                 newRate = round(float(estimatedWins / Decimal(numGames)), 3)
+                newRate = int(Decimal(newRate) * Decimal(self.WINRATE_SCALE))
                 results[team] = self.unsplitRtg([newRate, numGames])
         return results
 
@@ -1307,13 +1336,16 @@ class League(object):
         for team in newRatings:
             self.updateTeamRating(team, newRatings[team])
 
+    def finishGameForTeams(self, sides):
+        for side in sides:
+            for team in side:
+                self.adjustTeamGameCount(team, -1)
+
     def updateResults(self, gameID, sides, winningSide):
         self.setWinners(gameID, sides[winningSide])
         newRatings = self.getNewRatings(sides, winningSide)
         self.updateRatings(newRatings)
-        for side in sides:
-            for team in side:
-                self.adjustTeamGameCount(team, -1)
+        self.finishGameForTeams(sides)
 
     def updateWinners(self, gameID, winners):
         sides = self.getGameSides(gameID)
@@ -1334,31 +1366,38 @@ class League(object):
         if self.removeDeclines:
             for team in losingTeams:
                 self.changeLimit(team, 0)
+        winningSide = None
         for i in xrange(len(sides)):
             side = sides[i]
             if len(side - losingTeams) > 0:
                 winningSide = i
                 break
+        if winningSide == None:
+            self.updateVeto(gameID)
         self.updateResults(gameID, sides, winningSide)
 
     def deleteGame(self, gameID, gameData):
         self.games.removeMatchingEntities({'ID': {'value': gameID,
                                                   'type': 'positive'}})
-        for side in gameData['Sides'].split(self.SEP_SIDES):
-            for team in side.split(self.SEP_TEAMS):
-                self.adjustTeamGameCount(team, -1)
+        sides = self.getGameSidesFromData(gameData)
+        self.finishGameForTeams(sides)
 
-    def getGameSides(self, gameID):
-        gameData = self.fetchGameData(gameID)
+    def getGameSidesFromData(self, gameData):
         results = list()
         sides = gameData['Sides'].split(self.SEP_SIDES)
         for side in sides:
             results.append(set(side.split(self.SEP_TEAMS)))
         return results
 
-    def getTeamRating(self, team):
+    def getGameSides(self, gameID):
+        gameData = self.fetchGameData(gameID)
+        return self.getGameSidesFromData(gameData)
+
+    def getTeamRating(self, team, getDefault=True):
         searchDict = {'ID': {'value': team, 'type': 'positive'}}
         if len(searchDict) < 1:
+            if getDefault:
+                return self.defaultRating
             raise NonexistentItem("Nonexistent team: %s" % (str(team)))
         return self.teams.findEntities(searchDict)[0]['Rating']
 
@@ -1451,7 +1490,7 @@ class League(object):
                 self.RATE_GLICKO: self.getPrettyGlickoRating,
                 self.RATE_TRUESKILL: self.getPrettyTrueSkillRating,
                 self.RATE_WINCOUNT: (lambda r: int(r)),
-                self.RATE_WINRATE: lambda r: float(r.split(self.SEP_RTG)[0])}[
+                self.RATE_WINRATE: lambda r: int(r.split(self.SEP_RTG)[0])}[
                 self.ratingSystem](rating)
 
     def getPrettyRating(self, team):
@@ -1482,13 +1521,18 @@ class League(object):
         infoStr = "".join(infoData[1:])
         return infoStr
 
+    @staticmethod
+    def makeThread(thread):
+        if '/Forum/' in str(thread): return thread
+        return ('https://www.warlight.net/Forum/' + str(thread))
+
     def processMessage(self, message, gameData):
         replaceDict = {'_LEAGUE_NAME': self.name,
                        self.SET_SUPER_NAME: self.clusterName,
                        self.SET_URL: self.leagueUrl,
                        self.SET_VETO_LIMIT: self.vetoLimit,
                        '_VETOS': gameData['Vetos'],
-                       '_LEAGUE_THREAD': self.thread,
+                       '_LEAGUE_THREAD': self.makeThread(self.thread),
                        '_GAME_SIDES': self.sideInfo(gameData)}
         for val in replaceDict:
             checkStr = "{{%s}}" % val
@@ -1497,7 +1541,9 @@ class League(object):
         return message
 
     def getGameMessage(self, gameData):
-        return self.processMessage(self.leagueMessage, gameData)
+        MAX_MESSAGE_LEN = 2048
+        msg = self.processMessage(self.leagueMessage, gameData)
+        return msg[:MAX_MESSAGE_LEN]
 
     def updateHistories(self, gameData):
         allTeams = list()
@@ -1769,14 +1815,15 @@ class League(object):
         for val in vals:
             variance += ((Decimal(val) - Decimal(average)) ** 2)
         sd = math.sqrt(float(variance))
-        return (1.0 - max(1.0, (sd / float(average))))
+        score = max(1.0, (sd / float(average)))
+        return (1.0 - score)
 
     def getWinCountParity(self, ratings):
         winCounts = [int(r) for r in ratings]
         return self.getVarianceScore(winCounts)
 
     def getWinRateParity(self, ratings):
-        winRates = [float(r.split(self.SEP_RTG)[0]) for r in ratings]
+        winRates = [int(r.split(self.SEP_RTG)[0]) for r in ratings]
         return self.getVarianceScore(winRates)
 
     def getParityScore(self, ratings):
@@ -1837,7 +1884,10 @@ class League(object):
         return result
 
     def makeGrouping(self, groupingDict, groupSize, groupSep):
-        score_fn = lambda *args: self.getParityScore(args)
+        if self.reverseParity:
+            score_fn = lambda *args: 1.0 - self.getParityScore(args)
+        else:
+            score_fn = lambda *args: self.getParityScore(args)
         groups = group_teams(groupingDict, score_fn=score_fn,
                              game_size=self.groupSize)
         return {groupSep.join([str(x) for x in group])
