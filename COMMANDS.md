@@ -1,5 +1,35 @@
 # Commands
 
+## Table of Contents
+
+* [Introduction](#introduction)
+* [Structure](#structure)
+* [Commands List](#commands-list)
+  * [Required Commands](#required-commands)
+    * [Basic Setup](#basic-setup)
+  * [Optional Commands](#optional-commands)
+    * [Admin Specification](#admin-specification)
+    * [League Setup](#league-setup)
+    * [Basic League Design](#basic-league-design)
+      * [Game Setting Configurations](#game-setting-configurations)
+      * [League Mechanics](#league-mechanics)
+      * [Activity Controls](#activity-controls)
+      * [League Definition](#league-definition)
+      * [Participation Control](#participation-control)
+        * [Player/Clan/Location Restrictions](#playerclanlocation-restrictions)
+        * [Player Join Prerequisites](#player-join-prerequisites)
+    * [Seasonal Ladders](#seasonal-ladders)
+    * [Team Settings](#team-settings)
+    * [Vetos and Drops](#vetos-and-drops)
+    * [Rating System Configuration](#rating-system-configuration)
+      * [Elo](#elo)
+      * [Glicko](#glicko)
+      * [TrueSkill](#trueskill)
+      * [All Rating Systems](#all-rating-systems)
+    * [Elimination Ladders](#elimination-ladders)
+
+## Introduction
+
 At the heart of the CSL framework are **commands**, which let league admins
 (or anyone with edit access to the league workbook) configure the league's
 operation. Almost all of them are optional and come with default values (i.e.,
