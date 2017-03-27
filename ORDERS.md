@@ -62,9 +62,9 @@ surrounded by double-quotes. For example, if a player wanted to confirm a team
 called Master Blaster in a league called The Thunderdome, they would have to
 structure their order like this:
 
-'''
+```
 confirm\_team "The Thunderdome" "Mad Max"
-'''
+```
 
 ### Access Levels
 
@@ -86,9 +86,9 @@ available to a lower level are also available to any higher levels.
 **Minimum access level**: creator of league order thread (ideally the admin) 
 
 **Syntax**:
-'''
+```
 !validate\_league <sheetID>
-'''
+```
 
 This order **must** be placed in the top (initial) post of the league order
 thread. If the league thread changes (by modifying the **THREAD** command),
@@ -97,27 +97,27 @@ the new thread also needs a !validate\_league order in its top post.
 The sheetID can be obtained from the Google Sheets workbook URL.
 For example, if the league were hosted on a workbook with the URL:
 
-'''
+```
 https://docs.google.com/spreadsheets/d/SHEETID/edit#gid=TABID
-'''
+```
 
 (noet that '/edit' and everything after it can just be removed- they just
 specify the tab/worksheet within the workbook)
 
 The !validate\_league order would look like:
 
-'''
+```
 !validate\_league SHEETID
-'''
+```
 
 #### !BOT\_IGNORE
 
 **Minimum access level**: player
 
 **Syntax**:
-'''
+```
 !BOT\_IGNORE
-'''
+```
 
 This order takes no arguments and causes all orders after it in the same post
 to be ignored. It's essentially the equivalent of an escape character for
@@ -133,9 +133,9 @@ demonstrating sample orders, showing order syntax, etc.
 **Minimum access level**: player
 
 **Syntax**:
-'''
+```
 add\_team <leagueName> <teamName> <limit> <players>
-'''
+```
 
 This order creates new teams within a league.
 
@@ -158,9 +158,9 @@ https://www.warlight.net/Profile?p=PLAYER2
 https://www.warlight.net/Profile?p=PLAYER3
 
 You would use the following order:
-'''
+```
 add\_team "The Thunderdome" "Mad Max" 1 PLAYER1 PLAYER2 PLAYER3
-'''
+```
 
 Note that the number of players you enter should match exactly the number of
 players per team in the league you're trying to enter, or your order will be
@@ -171,9 +171,9 @@ rejected.
 **Minimum access level**: player (on the affected team)
 
 **Syntax**:
-'''
+```
 confirm\_team <leagueName> <teamName>
-'''
+```
 
 This order confirms that its author wants to be on the given team. Team
 creators do not need to enter this order (they're automatically confirmed
@@ -196,9 +196,9 @@ figure out how to use thread orders).
 **Minimum access level**: player (on the affected team)
 
 **Syntax**:
-'''
+```
 unconfirm\_team <leagueName> <teamName>
-'''
+```
 
 Works similarly to confirm\_team, but sets the authoring player's confirmation
 to false (and keeps the team from getting any new games). This allows players
@@ -216,9 +216,9 @@ name if they want to unconfirm on behalf of other players.
 **Minimum access level**: player (on the affected team)
 
 **Syntax**:
-'''
+```
 set\_limit <leagueName> <teamName> <limit>
-'''
+```
 
 This is a simple order to change the maximum number of games a team can
 participate in simultaneously. Players must be on the team affected by the
@@ -230,9 +230,9 @@ any team.
 **Minimum access level**: player (on the affected team)
 
 **Syntax**:
-'''
+```
 remove\_team <leagueName> <teamName>
-'''
+```
 
 This order is disabled by default but can be enabled using the **ALLOW
 REMOVAL** command in the commands sheet. Players using this order remove the
@@ -246,9 +246,9 @@ can contain the exact same players), they can use this order to do so.
 **Minimum access level**: player (on the affected team)
 
 **Syntax**:
-'''
+```
 drop\_template <leagueName> <teamName> <templateName>
-'''
+```
 
 Players can use this order to keep their team from ever playing on that
 template again (until/unless te template is undropped by them or one of their
@@ -269,9 +269,9 @@ can't get the other teams to cooperate).
 **Minimum access level**: player (on the affected team)
 
 **Syntax**:
-'''
-drop\_template <leagueName> <teamName> <templateName>
-'''
+```
+undrop\_template <leagueName> <teamName> <templateName>
+```
 
 This order reverses the drop\_template order and can be useful if teams want to
 try out a template they've avoided in the past or if they simply want to get
@@ -283,9 +283,9 @@ more.
 **Minimum access level**: mod
 
 **Syntax**:
-'''
+```
 activate\_template <leagueName> <templateName>
-'''
+```
 
 This order activates a template and allows it to be used in new games created
 for the league. The template name must exactly match the template name in the
@@ -296,9 +296,9 @@ league's template data sheet.
 **Minimum access level**: mod
 
 **Syntax**:
-'''
+```
 deactivate\_template <leagueName> <templateName>
-'''
+```
 
 This order deactivates a template and keeps it from being used in new games
 created for the league. It will fail if the league has already reached its minimum
@@ -309,9 +309,9 @@ number of active templates.
 **Minimum access level**: player
 
 **Syntax**:
-'''
+```
 quit\_league <leagueName>
-'''
+```
 
 This is a convenience order for users to be able to quickly unconfirm all teams
 they're affiliated with in the league- especially useful when users are on
