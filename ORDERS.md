@@ -63,7 +63,7 @@ called Master Blaster in a league called The Thunderdome, they would have to
 structure their order like this:
 
 ```
-confirm\_team "The Thunderdome" "Mad Max"
+confirm_team "The Thunderdome" "Mad Max"
 ```
 
 ### Access Levels
@@ -87,7 +87,7 @@ available to a lower level are also available to any higher levels.
 
 **Syntax**:
 ```
-!validate\_league <sheetID>
+!validate_league <sheetID>
 ```
 
 This order **must** be placed in the top (initial) post of the league order
@@ -107,7 +107,7 @@ specify the tab/worksheet within the workbook)
 The !validate\_league order would look like:
 
 ```
-!validate\_league SHEETID
+!validate_league SHEETID
 ```
 
 #### !BOT\_IGNORE
@@ -116,7 +116,7 @@ The !validate\_league order would look like:
 
 **Syntax**:
 ```
-!BOT\_IGNORE
+!BOT_IGNORE
 ```
 
 This order takes no arguments and causes all orders after it in the same post
@@ -134,7 +134,7 @@ demonstrating sample orders, showing order syntax, etc.
 
 **Syntax**:
 ```
-add\_team <leagueName> <teamName> <limit> <players>
+add_team <leagueName> <teamName> <limit> <players>
 ```
 
 This order creates new teams within a league.
@@ -161,7 +161,7 @@ https://www.warlight.net/Profile?p=PLAYER3
 
 You would use the following order:
 ```
-add\_team "The Thunderdome" "Mad Max" 1 PLAYER1 PLAYER2 PLAYER3
+add_team "The Thunderdome" "Mad Max" 1 PLAYER1 PLAYER2 PLAYER3
 ```
 
 Note that the number of players you enter should match exactly the number of
@@ -174,7 +174,7 @@ rejected.
 
 **Syntax**:
 ```
-confirm\_team <leagueName> <teamName>
+confirm_team <leagueName> <teamName>
 ```
 
 This order confirms that its author wants to be on the given team. Team
@@ -199,7 +199,7 @@ figure out how to use thread orders).
 
 **Syntax**:
 ```
-unconfirm\_team <leagueName> <teamName>
+unconfirm_team <leagueName> <teamName>
 ```
 
 Works similarly to confirm\_team, but sets the authoring player's confirmation
@@ -219,7 +219,7 @@ name if they want to unconfirm on behalf of other players.
 
 **Syntax**:
 ```
-set\_limit <leagueName> <teamName> <limit>
+set_limit <leagueName> <teamName> <limit>
 ```
 
 This is a simple order to change the maximum number of games a team can
@@ -233,7 +233,7 @@ any team.
 
 **Syntax**:
 ```
-remove\_team <leagueName> <teamName>
+remove_team <leagueName> <teamName>
 ```
 
 This order is disabled by default but can be enabled using the **ALLOW
@@ -249,7 +249,7 @@ can contain the exact same players), they can use this order to do so.
 
 **Syntax**:
 ```
-drop\_template <leagueName> <teamName> <templateName>
+drop_template <leagueName> <teamName> <templateName>
 ```
 
 Players can use this order to keep their team from ever playing on that
@@ -272,7 +272,7 @@ can't get the other teams to cooperate).
 
 **Syntax**:
 ```
-undrop\_template <leagueName> <teamName> <templateName>
+undrop_template <leagueName> <teamName> <templateName>
 ```
 
 This order reverses the drop\_template order and can be useful if teams want to
@@ -286,7 +286,7 @@ more.
 
 **Syntax**:
 ```
-activate\_template <leagueName> <templateName>
+activate_template <leagueName> <templateName>
 ```
 
 This order activates a template and allows it to be used in new games created
@@ -299,7 +299,7 @@ league's template data sheet.
 
 **Syntax**:
 ```
-deactivate\_template <leagueName> <templateName>
+deactivate_template <leagueName> <templateName>
 ```
 
 This order deactivates a template and keeps it from being used in new games
@@ -312,7 +312,7 @@ number of active templates.
 
 **Syntax**:
 ```
-quit\_league <leagueName>
+quit_league <leagueName>
 ```
 
 This is a convenience order for users to be able to quickly unconfirm all teams
