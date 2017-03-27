@@ -12,7 +12,7 @@ from pair import group_teams, assign_templates
 from elo import Elo
 from glicko2.glicko2 import Player
 from trueskill import TrueSkill
-from datetime import datetime
+from datetime import datetime, timedelta
 from wl_parsers import PlayerParser
 from wl_api import APIHandler
 from wl_api.wl_api import APIError
@@ -51,6 +51,7 @@ class League(object):
     # orders
     ORD_ADD_TEAM = "add_team"
     ORD_CONFIRM_TEAM = "confirm_team"
+    ORD_UNCONFIRM_TEAM = "unconfirm_team"
     ORD_SET_LIMIT = "set_limit"
     ORD_REMOVE_TEAM = "remove_team"
     ORD_DROP_TEMPLATE = "drop_template"
@@ -133,6 +134,7 @@ class League(object):
     SET_MIN_TO_RANK = "MIN GAMES TO RANK"
     SET_MAX_RANK = "MAX RANK"
     SET_MIN_LIMIT_TO_RANK = "MIN LIMIT TO RANK"
+    SET_MAX_VACATION = "MAX VACATION LENGTH" # days
 
     # rating systems
     RATE_ELO = "ELO"
@@ -372,9 +374,32 @@ class League(object):
         return int(self.settings.get(self.SET_EXP_THRESH, 3))
 
     @property
+    def maxVacation(self):
+        """maximum vacation length (in days) to remain on ladder"""
+        cmd = self.settings.get(self.SET_MAX_VACATION, None)
+        if cmd is not None:
+            cmd = int(cmd)
+        return cmd
+
+    @property
+    def meetsVacation(self, player):
+        maxVac, secsPerDay = self.maxVacation, 86400
+        if maxVac is None: return True
+        timeZoneDiff = timedelta(hours=5)
+        ID, formatStr = int(player.ID), '%m/%d/%Y %H:%M:%S'
+        validationData = self.handler.validateToken(ID)
+        if 'onVacationUntil' not in validationData: return True
+        if maxVac is 0: return False
+        vacayTime = datetime.strptime(validationData['onVacationUntil'],
+                                      formatStr)
+        diff = ((vacayTime - datetime.now()) - timeDelta)
+        totalDays = diff.days + float(diff.seconds) / secsPerDay
+        return (totalDays <= maxVac)
+
+    @property
     def minLimit(self):
         """minimum number of max ongoing games per team"""
-        return int(self.settings.get(self.SET_MIN_LIMIT, 0))
+        return max(int(self.settings.get(self.SET_MIN_LIMIT, 0)), 0)
 
     @property
     def maxLimit(self):
@@ -859,6 +884,7 @@ class League(object):
                 player.bootRate <= self.maxBoot and
                 player.level >= self.minLevel and
                 self.meetsMembership(player) and
+                self.meetsVacation(player) and
                 player.points >= self.minPoints and
                 self.meetsAge(player) and
                 self.meetsSpeed(player) and
@@ -921,8 +947,23 @@ class League(object):
             else: raise ImproperOrder()
         return limit
 
+    @property
+    def existingIDs(self):
+        officialIDs = self.teams.findValue({'ID': {'value': '',
+                                                   'type': 'negative'}}, 'ID')
+        usedSides = self.games.findValue({'ID': {'value': '',
+                                                 'type': 'negative'}}, 'Sides')
+        unofficialIDs = set()
+        for sideGroup in usedSides:
+            for side in sideGroup.split(self.SEP_SIDES):
+                for team in side.split(self.SEP_TEAMS):
+                    unofficialIDs.add(int(team))
+        for ID in officialIDs:
+            unofficialIDs.add(int(ID))
+        return unofficialIDs
+
     def setCurrentID(self):
-        existingIDs = self.teams.findValue(dict(), 'ID')
+        existingIDs = self.existingIDs
         if len(existingIDs) == 0:
             self.currentID = 0
         else:
@@ -990,29 +1031,36 @@ class League(object):
         except ValueError: pass
         return matchingTeam, index
 
-    def confirmTeam(self, order):
-        author = int(order['author'])
-        if (author in self.mods and len(order['orders']) > 2):
-            self.confirmAsMod(order)
+    def toggleConfirm(self, order, confirm=True):
         try:
-            matchingTeam, index = self.fetchMatchingTeam(order, True,
-                                                         False)
-        except:
-            raise ImproperOrder(str(order['author']) + " not in " +
-                                str(order['orders'][1]))
+            matchingTeam, index = self.fetchMatchingTeam(order, True, False)
+        except ImproperOrder:
+            raise ImproperOrder(str(player) + " not in " + str(team))
+        if index is None:
+            raise ImproperOrder(str(player) + " not in " + str(team))
         confirms = matchingTeam['Confirmations'].split(self.SEP_CONF)
-        confirms[index] = "TRUE"
+        confirms[index] = "TRUE" if confirm else "FALSE"
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
-        self.teams.updateMatchingEntities({'Name': teamName},
+        self.teams.updateMatchingEntities({'Name': {'value': teamName,
+                                                    'type': 'positive'}},
                                           {'Confirmations': confirms})
 
-    def confirmAsMod(self, order):
+    def confirmTeam(self, order):
+        if (author in self.mods and len(order['orders']) > 2):
+            self.toggleConfirms(order)
+        self.toggleConfirm(order)
+
+    def unconfirmTeam(self, order):
+        if (author in self.mods and len(order['orders']) > 2):
+            self.toggleConfirms(order, False)
+        self.toggleConfirm(order, False)
+
+    def toggleConfirms(self, order, confirm=True):
         players = order['orders'][2:]
+        teamName = order['orders'][1]
         for player in players:
-            newOrder = dict()
-            newOrder['author'] = player
-            newOrder['orders'] = order['orders'][:2]
-            self.confirmTeam(newOrder)
+            newOrder = {'author': int(player), 'orders': [self.name, teamName]}
+            self.toggleConfirm(newOrder, confirm=confirm)
 
     def removeTeam(self, order):
         if not self.allowRemoval:
@@ -1088,7 +1136,7 @@ class League(object):
             raise ImproperOrder("Team %s already reached its drop limit" %
                                 (teamName))
         existingDrops.append(temp)
-        dropStr = (self.SEP_DROPS).join(existingDrops)
+        dropStr = (self.SEP_DROPS).join(set(existingDrops))
         self.teams.updateMatchingEntities({'ID': {'value': teamData['ID'],
                                                   'type': 'positive'}},
                                           {'Drops': dropStr})
@@ -1099,7 +1147,7 @@ class League(object):
         if temp is None: return
         teamData, existingDrops = self.getExistingDrops(order)
         existingDrops.remove(temp)
-        dropStr = (self.SEP_DROPS).join(existingDrops)
+        dropStr = (self.SEP_DROPS).join(set(existingDrops))
         self.teams.updateMatchingEntities({'ID': {'value': teamData['ID'],
                                                   'type': 'positive'}},
                                           {'Drops': dropStr})
@@ -1123,13 +1171,23 @@ class League(object):
 
     def quitLeague(self, order):
         author = order['author']
+        if (author in self.mods and len(order['orders']) > 1):
+            players = set(order['orders'][1:])
+        else:
+            players = set([author,])
         allTeams = self.teams.findEntities({'ID': {'value': '',
-                                                   'type': 'negative'},
-                                            'Limit': {'value': '0',
-                                                      'type': 'negative'}})
+                                                   'type': 'negative'}})
         for team in allTeams:
-            if author in team['Players']:
-                self.changeLimit(team['ID'], 0)
+            members = team['Players'].split(self.SEP_PLYR)
+            confirms = team['Confirmations'].split(self.SEP_CONF)
+            for player in players:
+                if player in members:
+                    index = members.index(player)
+                    confirms[index] = "FALSE"
+            confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
+            self.teams.updateMatchingEntities({'ID': {'value': team['ID'],
+                                                      'type': 'positive'}},
+                                              {'Confirmations': confirms})
 
     def executeOrders(self):
         self.setCurrentID()
@@ -1138,6 +1196,7 @@ class League(object):
             try:
                 {self.ORD_ADD_TEAM: self.addTeam,
                  self.ORD_CONFIRM_TEAM: self.confirmTeam,
+                 self.ORD_UNCONFIRM_TEAM: self.unconfirmTeam,
                  self.ORD_SET_LIMIT: self.setLimit,
                  self.ORD_REMOVE_TEAM: self.removeTeam,
                  self.ORD_DROP_TEMPLATE: self.dropTemplate,
@@ -1990,6 +2049,7 @@ class League(object):
                                                       'type': 'positive'}})
         playersDict = self.makePlayersDict(allTeams)
         for team in allTeams:
+            if ('FALSE' in team['Confirmations']): continue
             teamDict = {'rating': team['Rating'],
                         'count': max(0,
                                  (int(team['Limit']) - int(team['Count'])))}

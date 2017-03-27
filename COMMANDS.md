@@ -73,7 +73,9 @@ the "ALL" keyword.
 
 ### Basic Setup
 
-**THREAD**: The ID or URL (discouraged) of the Warlight forum thread tied to the league.
+#### THREAD
+
+The ID or URL (discouraged) of the Warlight forum thread tied to the league.
 
 *This command does not require a League to be specified*
 
@@ -91,7 +93,16 @@ quotes, of course) and the validation command would look like:
 
 "!validate\_league THISISWHERETHESHEETIDSHOULDBE"
 
-**LEAGUES**: A comma-separated list of all the leagues tied to this sheet.
+Note that you can change the league thread by changing the THREAD command. The
+**OFFSET** is also tracked in the commands sheet to determine from which point
+to start looking for new orders; in general, you should not edit this unless
+you want cslbot to go back and reprocess all orders starting from a certain
+offset. Note that the offset is the number of posts that will be skipped, so if
+you want to start rechecking at the Nth post, you want the offset to be N-1.
+
+#### LEAGUES
+
+A comma-separated list of all the leagues tied to this sheet.
 
 *This command does not require a League to be specified*
 
@@ -112,7 +123,9 @@ sheet would be named "Game Data (1v1)".
 
 ### Admin Specification
 
-**ADMIN**: The Warlight ID of the owner of this league cluster.
+#### ADMIN
+
+The Warlight ID of the owner of this league cluster.
 
 *This command does not require a League to be specified*
 
@@ -124,7 +137,9 @@ orders, so make sure this actually goes to whoever runs the league cluster.
 
 ### League Setup
 
-**MODS**: A comma-separated list of Warlight IDs of league mods.
+#### MODS
+
+A comma-separated list of Warlight IDs of league mods.
 
 *Sample Args*: "3022124041", "1,2,3,4"
 
@@ -135,7 +150,9 @@ authorization for thread orders- they're able to create teams that don't
 include them, confirm team membership on behalf of other players, set the limit
 for teams they don't belong to, and toggle the activity status of templates.
 
-**AUTOFORMAT**: Whether to automatically format the league sheets.
+#### AUTOFORMAT
+
+Whether to automatically format the league sheets.
 
 *Possible Args*: "TRUE", "FALSE"
 
@@ -155,8 +172,9 @@ able to try and fix things yourself.
 
 ### Game Setting Configurations
 
-**MESSAGE**: This is the message that goes out with every game created
-for the league.
+#### MESSAGE
+
+This is the message that goes out with every game created for the league.
 
 *Sample Args*: "Hi this is my league kthxbai"
 
@@ -194,7 +212,9 @@ Here's a list of all of them, with some basic descriptions:
 * **\_GAME_SIDES**: The name, rank, and rating for each team on each side of
   the game
 
-**CLUSTER NAME**: The name of the league cluster to which this league belongs.
+#### CLUSTER NAME
+  
+The name of the league cluster to which this league belongs.
 
 *Sample Args*: "Infinity Premier League", "Hydra Clan Ladders"
 
@@ -206,7 +226,9 @@ your workbook are round-robins and the rest are seasonal, you can use the
 CLUSTER NAME command (for each league in the workbook) to specify which belongs
 to which cluster.
 
-**SHORT NAME**: A name for the league to be used in game titles.
+#### SHORT NAME
+
+A name for the league to be used in game titles.
 
 *Sample Args*: "IPL", "MDL", "1v1 Ladder", "Ligue One"
 
@@ -216,7 +238,9 @@ This comes at the start of the titles for any games created in this league. For
 example, all games in a hypothetical league with the short name "IPL" will have
 their titles start with "IPL | ".
 
-**URL**: A URL where players can head to if they want to check out the league.
+#### URL
+
+A URL where players can head to if they want to check out the league.
 
 *Sample Args*: 'http://tinyurl.com/fake-league'
 
@@ -230,7 +254,9 @@ shortener for this since users might have to remember and/or type out the URL.
 
 ### Activity Controls
 
-**ACTIVE**: Whether to create new games for this league.
+#### ACTIVE
+
+Whether to create new games for this league.
 
 *Possible Args*: "TRUE", "FALSE"
 
@@ -241,7 +267,9 @@ see **ALLOW JOINING** if you want to just control the addition of new teams.
 This is overriden by **LEAGUE START** and **LEAGUE END** if they are more
 restrictive.
 
-**LEAGUE START**: The start time for the league.
+#### LEAGUE START
+
+The start time for the league.
 
 *Sample Args*: "2015-04-20 01:02:03", "1994-03-09 10:12:40"
 
@@ -252,7 +280,9 @@ a "YYYY-mm-dd HH:MM:SS" format with zero-padding. Even after the league start,
 if the league is not **ACTIVE**, games will not be created. This is in the
 timezone of the machine running the cslbot instance (US Eastern).
 
-**LEAGUE END**: The end time for the league.
+#### LEAGUE END
+
+The end time for the league.
 
 *Sample Args*: "2015-04-02 01:02:06", "1995-03-09 10:12:40"
 
@@ -262,7 +292,9 @@ See **LEAGUE START** for important information about the time format. Keep in
 mind that you can have a LEAGUE END defined without explicitly defining the
 LEAGUE START (and vice versa).
 
-**MIN TEAM COUNT**: The minimum number of teams before games are created.
+#### MIN TEAM COUNT
+
+The minimum number of teams before games are created.
 
 *Sample Args*: "0", "10", "50"
 
@@ -278,7 +310,9 @@ that your **REMATCH HORIZON** gets in the way of creating new games.
 Keep in mind that, for abuse-prevention reasons, the league won't even start
 until at least 5 unique people have commented on the league thread.
 
-**MIN ACTIVE TEMPLATES**: The minimum number of active templates.
+#### MIN ACTIVE TEMPLATES
+
+The minimum number of active templates.
 
 *Sample Args*: "0", "10", "15"
 
@@ -290,7 +324,9 @@ that, the league will not run if there are not enough active templates.
 
 ### League Definition
 
-**TEAM SIZE**: The number of players per team. (This must be an integer.)
+#### TEAM SIZE
+
+The number of players per team. (This must be an integer.)
 
 *Sample Args*: any integer value 
 
@@ -301,7 +337,9 @@ If you have players sign up in groups of 1 in a 2v2 league (and automatically
 pair them), this would be 1 since the basic unit of the league is a 1-member
 team.
 
-**TEAMS PER SIDE**: The number of teams per side. (This must be an integer.)
+#### TEAMS PER SIDE
+
+The number of teams per side. (This must be an integer.)
 
 *Sample Args*: any integer value
 
@@ -315,7 +353,9 @@ league where people join and compete in teams of 4, this would be 2.
 Or in other words, this is the number of players on each side of a game divided
 by the number of players on each side.
 
-**GAME SIZE**: The number of sides to a game. (This must be an integer.)
+#### GAME SIZE
+
+The number of sides to a game. (This must be an integer.)
 
 *Sample Args*: any integer value
 
@@ -325,7 +365,9 @@ In an XvXv....XvX game, this is the number of v's + 1. So in a 2v2 league, this
 would be 2. In a 5v5v5 league, this would be 3- there's 3 sides of 5 players
 each competing in every single game.
 
-**RATING SYSTEM**: The rating system used by the league.
+#### RATING SYSTEM
+
+The rating system used by the league.
 
 *Possible Args*: "ELO", "GLICKO", "TRUESKILL", "WINCOUNT", "WINRATE"
 
@@ -359,8 +401,9 @@ Here's quick descriptions of each rating system you can use:
   to push teams closer to .500 or to 1.000 (depending on the **PREFER SKEWED
   MATCHUPS** setting). Win rates are stored on a scale of 0 to 1000.
 
-**MIN GAMES TO RANK**: Minimum number of completed games before a team can be
-ranked.
+#### MIN GAMES TO RANK
+  
+Minimum number of completed games before a team can be ranked.
 
 *Sample Args*: "1", "5", "10"
 
@@ -372,8 +415,9 @@ other settings like **MAX RANK** to make sure that a flood of incoming new
 teams will not artificially push down existing teams and reduce the impact of
 random early fluctuations in your rankings.
 
-**MIN LIMIT TO RANK**: Minimum number of games a team must be willing to
-participate in simultaneously in order to get/remain ranked.
+#### MIN LIMIT TO RANK
+
+Minimum number of games a team must be willing to participate in simultaneously in order to get/remain ranked.
 
 *Sample Args*: "0", "1", "5"
 
@@ -382,7 +426,9 @@ participate in simultaneously in order to get/remain ranked.
 This is to basically keep inactive teams (or teams below a certain activity
 threshold) from affecting your league rankings.
 
-**EXPIRY THRESHOLD**: Number of days until a game is considered abandoned.
+#### EXPIRY THRESHOLD
+
+Number of days until a game is considered abandoned.
 
 *Sample Args*: "1", "2", "5"
 
@@ -392,8 +438,9 @@ If a game is in the lobby for a long-enough while, it will be considered
 abandoned (or vetoed if you enable that feature) and all teams that have yet to
 accept the game will be penalized (if you enable that feature).
 
-**ALLOW REMOVAL**: Whether to allow teams to remove themselves (and potentially
-start over with new default ratings).
+#### ALLOW REMOVAL
+
+Whether to allow teams to remove themselves (and potentially start over with new default ratings).
 
 *Possible Args*: "TRUE", "FALSE"
 
@@ -409,8 +456,9 @@ changed so significantly that the ladder rating system hasn't kept up. Even if
 you disable this, teams will be able to set their limit to 0 and thereby
 discontinue participation without deleting all their data/history.
 
-**REMOVE DECLINES**: Whether to remove Declined teams from the league (by
-setting their Limit to 0).
+#### REMOVE DECLINES
+
+Whether to remove Declined teams from the league (by setting their Limit to 0).
 
 *Possible Args*: "TRUE", "FALSE"
 
@@ -420,8 +468,9 @@ If you want players to be able to exit the league just by declining a game (to
 avoid the risk of players tanking their team's rating when they're simply trying to
 quit the league), set this to be true.
 
-**COUNT DECLINES AS VETOS**: Whether to consider declines as vetos (as well as
-losses).
+#### COUNT DECLINES AS VETOS
+
+Whether to consider declines as vetos (as well as losses).
 
 *Possible Args*: "TRUE", "FALSE"
 
@@ -431,8 +480,9 @@ If you set this to be true, all declines will be considered as the team vetoing
 the game's template and as such their odds of playing on the same template
 again will be reduced. Declines will still count as losses, though.
 
-**REMATCH HORIZON**: Number of (most recent) games from which opponents/allies
-will be excluded from new matches.
+#### REMATCH HORIZON
+
+Number of (most recent) games from which opponents/allies will be excluded from new matches.
 
 *Possible Args*: "1", "10", "15", "ALL"
 
@@ -458,7 +508,9 @@ simply temporarily changing their location/clan/etc.
 
 ### Player/Clan/Location Restrictions
 
-**BANNED PLAYERS**: A comma-separated list of Warlight IDs of banned players.
+#### BANNED PLAYERS
+
+A comma-separated list of Warlight IDs of banned players.
 
 *Sample Args*: "3022124041", "1,2,3,4", "ALL"
 
@@ -471,7 +523,9 @@ players by default (BANNED PLAYERS is overriden by **ALLOWED PLAYERS** so if
 you allow someone explicitly they'll get in even if you use the "ALL" keyword
 here- or even if you explicitly ban them).
 
-**ALLOWED PLAYERS**: A comma-separated list of Warlight IDs of explicitly allowed players.
+#### ALLOWED PLAYERS
+
+A comma-separated list of Warlight IDs of explicitly allowed players.
 
 *Sample Args*: "3022124041", "1,2,3,4"
 
@@ -481,14 +535,18 @@ You can also explicitly allow players using their Warlight IDs. If you're
 running an exclusive league, for example, that's not based on an automatically
 discernible feature, you can simply just allow the players to join your league.
 
-**REQUIRE CLAN**: Whether to require all players to belong to a clan.
+#### REQUIRE CLAN
+
+Whether to require all players to belong to a clan.
 
 *Possible Args*: "TRUE", "FALSE"
 
 Setting **BANNED CLANS** to "ALL" will also ban any unclanned players unless
 this is explicitly set to false.
 
-**BANNED CLANS**: A comma-separated list of Warlight clan IDs of banned clans.
+#### BANNED CLANS
+
+A comma-separated list of Warlight clan IDs of banned clans.
 
 *Sample Args*: "12", "160,161", "ALL"
 
@@ -500,8 +558,9 @@ all clans by default (so you can explicitly allow certain clans and only those
 clans using the **ALLOWED CLANS** commands). Using the "ALL" keyword will also
 ban any unclanned players unless you explicitly set **REQUIRE CLAN** to false. 
 
-**ALLOWED CLANS**: A comma-separated list of Warlight clan IDs of explicitly
-allowed clans.
+#### ALLOWED CLANS
+
+A comma-separated list of Warlight clan IDs of explicitly allowed clans.
 
 *Sample Args*: "10,20,30", "5"
 
@@ -513,7 +572,9 @@ players but have set **BANNED CLANS** to "ALL", you should also toggle
 **REQUIRE CLAN** to be false (otherwise it'll be assumed you're only allowing
 players that belong to a certain clan).
 
-**BANNED LOCATIONS**: A comma-separated list of banned location names.
+#### BANNED LOCATIONS
+
+A comma-separated list of banned location names.
 
 *Sample Args*: "Morocco", "France,Germany,Denmark", "Pennsylvania,Texas", "ALL"
 
@@ -547,7 +608,7 @@ status determined by thus:
   resolution (higher or lower) is explicitly allowed, the player will be
   disallowed.
 
-**ALLOWED LOCATIONS**
+#### ALLOWED LOCATIONS
 
 *Sample Args*: "Argentina,Nicaragua,Texas", "United States,United Kingdom"
 
@@ -567,7 +628,9 @@ command. So if a player is ineligible to participate based on prereqs but you
 still want them to allow them to participate without changing the rules for
 everyone else, you can do so.
 
-**MAX BOOT RATE**: Maximum boot rate (as a percentage on a 0-100 scale).
+#### MAX BOOT RATE
+
+Maximum boot rate (as a percentage on a 0-100 scale).
 
 *Sample Args*: "5.0", "8", "90"
 
@@ -576,7 +639,9 @@ everyone else, you can do so.
 If a player's boot rate is strictly higher than the MAX BOOT RATE, they will
 not be allowed to participate in the league.
 
-**MIN LEVEL**: Minimum level on Warlight (integer).
+#### MIN LEVEL
+
+Minimum level on Warlight (integer).
 
 *Sample Args*: "10", "50"
 
@@ -585,7 +650,9 @@ not be allowed to participate in the league.
 If a player's level is strictly beow the MIN LEVEL, they will not be allowed to
 participate.
 
-**MEMBERS ONLY**: Whether to restrict the league to just Warlight Members.
+#### MEMBERS ONLY
+
+Whether to restrict the league to just Warlight Members.
 
 *Possible Args*: "TRUE", "FALSE"
 
@@ -595,7 +662,9 @@ If this is set to true, only Warlight Members will be allowed to participate.
 So if you want to pick up the slack for Fizzer when it comes to Warlight Member
 benefits, you can enable this.
 
-**MIN POINTS**: Minimum points over the last 30 days (integer).
+#### MIN POINTS
+
+Minimum points over the last 30 days (integer).
 
 *Sample Args*: "0", "1000", "90000"
 
@@ -604,7 +673,9 @@ benefits, you can enable this.
 You can use this to weed out less-active players, although **MAX LAST SEEN**
 is likely better for that.
 
-**MIN AGE**: Minimum number of days since joining Warlight (integer).
+#### MIN AGE
+
+Minimum number of days since joining Warlight (integer).
 
 *Sample Args*: "0", "10", "30"
 
@@ -613,7 +684,9 @@ is likely better for that.
 You can use this to weed out new accounts, especially if you have a troll
 problem.
 
-**MIN MEMBER AGE**: Minimum number of days since Warlight Membership (integer).
+#### MIN MEMBER AGE
+
+Minimum number of days since Warlight Membership (integer).
 
 *Sample Args*: "0", "10", "30"
 
@@ -622,7 +695,9 @@ problem.
 Setting this to a non-zero value will also make the league Members-only,
 regardless of the value of **MEMBERS ONLY**.
 
-**MAX RT SPEED**: Maximum number of *minutes* per average turn in RT games.
+#### MAX RT SPEED
+
+Maximum number of *minutes* per average turn in RT games.
 
 *Sample Args*: "5", "10", "30"
 
@@ -630,7 +705,9 @@ regardless of the value of **MEMBERS ONLY**.
 
 If you want to weed out slowpokes in RT games, you can use this.
 
-**MAX MD SPEED**: Maximum number of *hours* per average turn in MD games.
+#### MAX MD SPEED
+
+Maximum number of *hours* per average turn in MD games.
 
 *Sample Args*: "1", "5", "30"
 
@@ -638,7 +715,9 @@ If you want to weed out slowpokes in RT games, you can use this.
 
 If you want to weed out slowpokes in MD games, you can use this.
 
-**MIN ONGOING GAMES**: Minimum number of ongoing (multi-day) games.
+#### MIN ONGOING GAMES
+
+Minimum number of ongoing (multi-day) games.
 
 *Sample Args*: "0", "5", "30"
 
@@ -646,7 +725,9 @@ If you want to weed out slowpokes in MD games, you can use this.
 
 Just another way to set a minimum activity threshold.
 
-**MAX ONGOING GAMES**: Maximum number of ongoing (multi-day) games.
+#### MAX ONGOING GAMES
+
+Maximum number of ongoing (multi-day) games.
 
 *Sample Args*: "0", "5", "30"
 
@@ -655,7 +736,9 @@ Just another way to set a minimum activity threshold.
 You can set this to a specific value if you want to avoid players who are
 possibly overstretched.
 
-**MIN RT PERCENT**: Minimum % of played games that were real-time
+#### MIN RT PERCENT
+
+Minimum % of played games that were real-time
 
 *Sample Args*: "0", "10", "51.43"
 
@@ -664,7 +747,9 @@ possibly overstretched.
 Players are allowed so long as RT games constitute at least this percent of
 their overall gameplay.
 
-**MAX RT PERCENT**: Maximum % of played games that were real-time
+#### MAX RT PERCENT
+
+Maximum % of played games that were real-time
 
 *Sample Args*: "10", "20.3", "100"
 
@@ -672,7 +757,9 @@ their overall gameplay.
 
 If you want to weed out players that mostly play RT games.
 
-**MAX LAST SEEN**: Maximum number of days since the player was last online.
+#### MAX LAST SEEN
+
+Maximum number of days since the player was last online.
 
 *Sample Args*: "3", "5", "10"
 
@@ -684,7 +771,31 @@ creating games with those players. Be careful about setting this limit too low,
 though, because you could accidentally deactivate teams where the players were
 active or just temporarily gone.
 
-**MIN 1v1 PERCENT**: Minimum win rate in ranked 1v1 games.
+#### MAX VACATION LENGTH
+
+Maximum number of days for which a player could be on vacation and remain in
+the league.
+
+*Sample Args*: "1", "2", "5"
+
+*Default*: no maximum
+
+Like with **MAX LAST SEEN**, this command can be used to actively prune out
+players that go inactive. Players whose remaining vacation team exceeds MAX
+VACATION LENGTH days at the time they're checked against the prereqs will
+automatically have their teams' limits set to 0.
+
+Note that, due to possible differences in time zones between Warlight's
+published times and the way that these prereqs will not be checked when the
+vacation is started but during the next cslbot iteration, there is some
+imprecision to account for (on the magnitude of a few hours). In general,
+though, you should be able to simply use this to trim any players who take
+vacations too long for your league's interest. Set this command's argument to 0
+if you want to simply trim any players that enter a vacation.
+
+#### MIN 1v1 PERCENT
+
+Minimum win rate in ranked 1v1 games.
 
 *Sample Args*: "10", "50", "66.6"
 
@@ -692,7 +803,9 @@ active or just temporarily gone.
 
 This is across ranked games only.
 
-**MIN 2v2 PERCENT**: Minimum win rate in ranked 2v2 games.
+#### MIN 2v2 PERCENT
+
+Minimum win rate in ranked 2v2 games.
 
 *Sample Args*: "10", "50", "66.6"
 
@@ -700,7 +813,9 @@ This is across ranked games only.
 
 This is across ranked games only.
 
-**MIN 3v3 PERCENT**: Minimum win rate in ranked 3v3 games.
+#### MIN 3v3 PERCENT
+
+Minimum win rate in ranked 3v3 games.
 
 *Sample Args*: "10", "50", "66.6"
 
@@ -708,7 +823,9 @@ This is across ranked games only.
 
 This is across ranked games only.
 
-**MIN RANKED GAMES**: Minimum number of ranked games to participate.
+#### MIN RANKED GAMES
+
+Minimum number of ranked games to participate.
 
 *Sample Args*: "10", "50", "200"
 
@@ -717,7 +834,9 @@ This is across ranked games only.
 You can use this to weed out weak players and trolls creating accounts to abuse
 or spam your league.
 
-**MIN PLAYED GAMES**: Minimum number of finished games to participate.
+#### MIN PLAYED GAMES
+
+Minimum number of finished games to participate.
 
 *Sample Args*: "10", "50", "200"
 
@@ -728,7 +847,9 @@ counted. You can still probably use this to weed out trolls but it's likely
 less effective than **MIN RANKED GAMES** at weeding out inexperienced players
 in strategic games.
 
-**MIN ACHIEVEMENT RATE**: Minimum achievement rate to participate.
+#### MIN ACHIEVEMENT RATE
+
+Minimum achievement rate to participate.
 
 *Sample Args*: "10", "50", "60"
 
@@ -741,7 +862,9 @@ that purpose.
 
 ### Seasonal Ladders
 
-**ALLOW JOINING**: Whether to allow new teams to join.
+#### ALLOW JOINING
+
+Whether to allow new teams to join.
 
 *Possible Args*: "TRUE", "FALSE"
 
@@ -754,7 +877,9 @@ and **JOIN PERIOD END** if a request is processed outside the join period, but
 can conversely override those commands if a request is processed within the
 join period but ALLOW JOINING is set to false.
 
-**JOIN PERIOD START**: The time at which join requests can be accepted.
+#### JOIN PERIOD START
+
+The time at which join requests can be accepted.
 
 *Sample Args*: "2015-04-12 10:00:00", "2017-01-01 00:00:00"
 
@@ -766,7 +891,9 @@ zero-padding). Keep in mind this is based on when an add\_team command is
 of the machine on which cslbot runs (US Eastern). When in doubt, leave some
 room or just use **ALLOW JOINING** and a formula.
 
-**JOIN PERIOD END**: The time at which join requests are no longer accepted.
+#### JOIN PERIOD END
+
+The time at which join requests are no longer accepted.
 
 *Sample Args*: "2015-04-12 10:00:00", "2017-01-01 00:00:00"
 
@@ -778,8 +905,9 @@ END** will override **ALLOW JOINING**- although if the date at which a request
 is processed is within the join period, ALLOW JOINING will be used to make the
 decision.
 
-**MAX TEAMS**: The max number of (active and inactive) teams allowed to compete
-simultaneously.
+#### MAX TEAMS
+
+The max number of (active and inactive) teams allowed to compete simultaneously.
 
 *Sample Args*: "10", "20", "30"
 
@@ -790,8 +918,9 @@ Once there are at least MAX TEAMS teams in the league (even if their limit is
 teams that were kicked out of the league (if you're using elimination ladder
 settings) will be counted against this.
 
-**MAX ACTIVE TEAMS**: The max number of active teams allowed to compete
-simultaneously.
+#### MAX ACTIVE TEAMS
+
+The max number of active teams allowed to compete simultaneously.
 
 *Sample Args*: "10", "20", "30"
 
@@ -805,8 +934,9 @@ of teams actually playing in a given league.
 
 ### Team Settings
 
-**MIN LIMIT**: The minimum value a team can set for how many games it wants to
-be in at once.
+#### MIN LIMIT
+
+The minimum value a team can set for how many games it wants to be in at once.
 
 *Sample Args*: "0", "1", "5"
 
@@ -815,8 +945,9 @@ be in at once.
 If you want teams to only be able to compete if they're willing to participate
 in at least a certain number of games at once, set the MIN LIMIT to that value.
 
-**MAX LIMIT**: The maximum value a team can set for how many games it wants to
-be in at once.
+#### MAX LIMIT
+
+The maximum value a team can set for how many games it wants to be in at once.
 
 *Sample Args*: "5", "10", "20"
 
@@ -828,8 +959,9 @@ joining your league with their Limit to a really high number of games they
 don't intend to actually play (to spam Warlight or to overload your league),
 you can set this to a specific value (highly recommended).
 
-**CONSTRAIN LIMIT**: Whether to constrain limits to a specific range instead of
-rejecting a set\_limit order (or add\_team order with an inappropriate limit).
+#### CONSTRAIN LIMIT:
+
+Whether to constrain limits to a specific range instead of rejecting a set\_limit order (or add\_team order with an inappropriate limit).
 
 *Possible Args*: "TRUE", "FALSE"
 
@@ -841,8 +973,9 @@ it to be just set to the league **MAX LIMIT**. If it's too low, it becomes the
 automatically adjust teams' limits if the league's minimum/maximum limits get
 changed.
 
-**PLAYER TEAM LIMIT**: Maximum number of teams a player can join within the
-same league (integer).
+#### PLAYER TEAM LIMIT
+
+Maximum number of teams a player can join within the same league (integer).
 
 *Sample Args*: "1", "5", "10"
 
@@ -868,11 +1001,20 @@ the lobby too long, the game will be counted as a loss against them. A single
 player on a team can decline/veto on behalf of the whole team (but votes to end
 are not counted unless the game is finished by voting to end).
 
+In leagues where the sides are automatically assembled using multiple teams,
+failed vetos do not incur penalties on teams on the same side as the vetoing
+players as long as those teams do not have any vetos themselves. Instead,
+failed vetos (and declines) are treated as losses and the other teams in the
+game- even those on the same side- will actually gain points as if they had all
+together beaten the teams that declined/were involved in the veto attempt.
+
 Players are also able to simply directly *drop* templates- i.e., prevent
 themselves from ever playing on a given template- by using the drop\_template
 order.
 
-**VETO LIMIT**: Maximum number of vetos per game. (Must be an integer.)
+#### VETO LIMIT
+
+Maximum number of vetos per game. (Must be an integer.)
 
 *Sample Args*: "0", "1", "10"
 
@@ -884,7 +1026,9 @@ veto limit, in which case the **VETO PENALTY** will be applied to every team's
 rating. If the veto limit is exceeded, the game will also be deleted and no
 attempts will be made to recreate it on a different template.
 
-**VETO PENALTY**: Penalty for exceeding the veto limit. (Must be an integer.)
+#### VETO PENALTY
+
+Penalty for exceeding the veto limit. (Must be an integer.)
 
 *Sample Args*: "0", "10", "100"
 
@@ -894,7 +1038,9 @@ If teams veto a game too many times (or if they try to veto even though vetoing
 isn't enabled in a given league), their ratings will be reduced by the veto
 penalty.
 
-**DROP LIMIT**: The maximum number of templates a team can drop (integer).
+#### DROP LIMIT
+
+The maximum number of templates a team can drop (integer).
 
 *Sample Args*: "0", "5", "10"
 
@@ -915,7 +1061,9 @@ data sheet for the league.)
 
 ### Elo
 
-**ELO K**: Elo k-Factor (integer)
+#### ELO K
+
+Elo k-Factor (integer)
 
 *Sample Args*: "10", "20", "32"
 
@@ -926,7 +1074,9 @@ the k-Factor is 32, the team's rating can change by at most 32 points based on
 the result of that game- so higher k-Factors will lead to more fluctuation in a
 team's rating.
 
-**ELO DEFAULT**: Default Elo rating (integer)
+#### ELO DEFAULT
+
+Default Elo rating (integer)
 
 *Sample Args*: "1000", "1500", "2000"
 
@@ -942,7 +1092,9 @@ ratio between the default rating and the k-Factor so your ratings look
 
 ### Glicko
 
-**GLICKO RD**: Default Glicko rating deviation (integer)
+#### GLICKO RD
+
+Glicko rating deviation (integer)
 
 *Sample Args*: "100", "350", "500"
 
@@ -954,7 +1106,9 @@ might fall within. This is just the default rating deviation all new teams will
 begin with, to be generally narrowed as the league progresses and we become
 more certain of where their actual skill falls.
 
-**GLICKO DEFAULT**: Default Glicko rating (integer)
+#### GLICKO DEFAULT
+
+Default Glicko rating (integer)
 
 *Sample Args*: "1000", "1500", "2000"
 
@@ -966,7 +1120,9 @@ settings.
 
 ### TrueSkill
 
-**TRUESKILL SIGMA**: Default TrueSkill sigma/standard deviation (integer)
+#### TRUESKILL SIGMA
+
+Default TrueSkill sigma/standard deviation (integer)
 
 *Sample Args*: "300", "500", "1000"
 
@@ -976,7 +1132,9 @@ The TrueSkill sigma defines the range within which a team's actual rating
 is expected to fall. The recommended value is 1/3 of the **TRUESKILL MU**
 value.
 
-**TRUESKILL MU**: Default TrueSkill mu/expected rating (integer)
+#### TRUESKILL MU
+
+Default TrueSkill mu/expected rating (integer)
 
 *Sample Args*: "1000", "1500", "2000"
 
@@ -987,8 +1145,9 @@ teams get to start out with.
 
 ### All Rating Systems
 
-**PREFER SKEWED MATCHUPS**: Whether to prefer matchups with high skill
-variation.
+#### PREFER SKEWED MATCHUPS
+
+Whether to prefer matchups with high skill variation.
 
 *Possible Args*: "TRUE", "FALSE"
 
@@ -1008,8 +1167,9 @@ remove all evidence of their participation and rejoin your league. That's the
 default value anyway, so if you don't specifically set it to true, you should
 be good.
 
-**MIN RATING**: The minimum rating for a team to participate in good standing
-(integer).
+#### MIN RATING
+
+The minimum rating for a team to participate in good standing (integer).
 
 *Sample Args*: "1000", "1500", "1800"
 
@@ -1022,8 +1182,9 @@ days in a row doesn't belong in the league, you can set this to 1500 and
 **GRACE PERIOD** to 5. If you set a **MIN RATING PERCENTILE**, it will override
 this.
 
-**GRACE PERIOD**: The number of *days* in a row by which a team can be below
-the minimum rating/percentile (integer).
+#### GRACE PERIOD
+
+The number of *days* in a row by which a team can be below the minimum rating/percentile (integer).
 
 *Sample Args*: "0", "1", "3", "5"
 
@@ -1037,8 +1198,9 @@ once they fall below the threshold). Also keep in mind that some players might
 deliberately stall in an Elimination ladder if their opponents are within their
 grace period, so try and watch for that.
 
-**RESTORATION PERIOD**: Number of *days* after which an inactive removed team
-will have its rating restored to the league default (integer).
+#### RESTORATION PERIOD
+
+Number of *days* after which an inactive removed team will have its rating restored to the league default (integer).
 
 *Sample Args*: "5", "10", "30"
 
@@ -1057,8 +1219,9 @@ directly below to compete; you'd have to use a formula that also let players on
 existing active teams to remain- so all players in non-probation teams in the
 current league + players from the top N teams in the league directly below).
 
-**MIN RATING PERCENTILE**: Minimum percentile for a team to participate in good
-standing.
+#### MIN RATING PERCENTILE
+
+Minimum percentile for a team to participate in good standing.
 
 *Sample Args*: "10", "15", "35.5"
 
@@ -1076,8 +1239,9 @@ would cull the bottom half of your league very quickly and also mean that the
 *average* team (including new teams that just joined) would immediately be on
 probation (in their **GRACE PERIOD**).
 
-**MAX RANK**: Maximum rank for a team to continue participating in good
-standing.
+#### MAX RANK
+
+Maximum rank for a team to continue participating in good standing.
 
 *Sample Args*: "5", "10", "15"
 
@@ -1089,7 +1253,9 @@ long enough will be culled from the league- so you can make things
 particularly exciting and force teams to constantly compete for the top N
 spots.
 
-**MIN GAMES TO CULL**: Minimum games before a team can be eliminated.
+#### MIN GAMES TO CULL
+
+Minimum games before a team can be eliminated.
 
 *Sample Args*: "5", "10", "15"
 
