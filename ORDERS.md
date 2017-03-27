@@ -52,6 +52,8 @@ it's strongly advised against to try to get orders in by editing your post. If
 the post has already been processed and the **OFFSET** command hasn't been
 changed, your post will not be looked at again.
 
+___
+
 ### Syntax
 
 Orders must be entered in code tags and multiline orders should be separated
@@ -65,6 +67,8 @@ structure their order like this:
 ```
 confirm_team "The Thunderdome" "Mad Max"
 ```
+
+___
 
 ### Access Levels
 
@@ -80,6 +84,8 @@ available to a lower level are also available to any higher levels.
 ## Orders List
 
 ### Special Orders
+
+___
 
 #### !validate\_league
 
@@ -101,7 +107,7 @@ For example, if the league were hosted on a workbook with the URL:
 https://docs.google.com/spreadsheets/d/SHEETID/edit#gid=TABID
 ```
 
-(noet that '/edit' and everything after it can just be removed- they just
+(note that '/edit' and everything after it can just be removed- they just
 specify the tab/worksheet within the workbook)
 
 The !validate\_league order would look like:
@@ -109,6 +115,8 @@ The !validate\_league order would look like:
 ```
 !validate_league SHEETID
 ```
+
+___
 
 #### !BOT\_IGNORE
 
@@ -126,7 +134,11 @@ orders. To un-escape, you can either enter all real orders before the
 processed. The !BOT\_IGNORE order is mainly intended to be used for
 demonstrating sample orders, showing order syntax, etc.
 
+___
+
 ### Normal Orders
+
+___
 
 #### add\_team
 
@@ -168,6 +180,8 @@ Note that the number of players you enter should match exactly the number of
 players per team in the league you're trying to enter, or your order will be
 rejected.
 
+___
+
 #### confirm\_team
 
 **Minimum access level**: player (on the affected team)
@@ -193,6 +207,8 @@ Mod and admins can also specify player IDs at the end of the order in order to
 confirm on behalf of other players (e.g., to confirm a team of which the members can't
 figure out how to use thread orders).
 
+___
+
 #### unconfirm\_team
 
 **Minimum access level**: player (on the affected team)
@@ -213,6 +229,8 @@ to remove themselves from teams in which they no longer intend to participate.
 As with confirm\_team, mods and admins can specify player IDs after the team
 name if they want to unconfirm on behalf of other players.
 
+___
+
 #### set\_limit
 
 **Minimum access level**: player (on the affected team)
@@ -226,6 +244,8 @@ This is a simple order to change the maximum number of games a team can
 participate in simultaneously. Players must be on the team affected by the
 order in order to use this, although mods and admins can set the limit for
 any team.
+
+___
 
 #### remove\_team
 
@@ -242,6 +262,8 @@ team's record from the league's team data sheet, wiping its history beyond any
 games played (which will no longer affect its rating). If players want to
 remove a team and its history so they can get a fresh start (since no two teams
 can contain the exact same players), they can use this order to do so.
+
+___
 
 #### drop\_template
 
@@ -266,6 +288,8 @@ end)- although that mechanism is disabled by default too and can incur
 penalties on declining teams if they exceed the veto limit for the game or
 can't get the other teams to cooperate).
 
+___
+
 #### undrop\_template
 
 **Minimum access level**: player (on the affected team)
@@ -280,6 +304,8 @@ try out a template they've avoided in the past or if they simply want to get
 below the drop limit again so they can drop a template they want to avoid even
 more.
 
+___
+
 #### activate\_template
 
 **Minimum access level**: mod
@@ -293,6 +319,8 @@ This order activates a template and allows it to be used in new games created
 for the league. The template name must exactly match the template name in the
 league's template data sheet.
 
+___
+
 #### deactivate\_template
 
 **Minimum access level**: mod
@@ -305,6 +333,8 @@ deactivate_template <leagueName> <templateName>
 This order deactivates a template and keeps it from being used in new games
 created for the league. It will fail if the league has already reached its minimum
 number of active templates.
+
+___
 
 #### quit\_league
 
