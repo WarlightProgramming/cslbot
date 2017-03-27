@@ -1,6 +1,6 @@
 # Commands
 
-At the heart of the CSL frameworks are **commands**, which let league admins
+At the heart of the CSL framework are **commands**, which let league admins
 (or anyone with edit access to the league workbook) configure the league's
 operation. Almost all of them are optional and come with default values (i.e.,
 you don't have to worry about them unless you want to use them) but give you
