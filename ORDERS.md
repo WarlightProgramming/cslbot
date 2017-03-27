@@ -151,11 +151,13 @@ Players should be supplied as a space-separated list of Warlight IDs
 for The Thunderdome called Mad Max with up to 1 game at a time and the
 members with the following profile URLs:
 
+```
 https://www.warlight.net/Profile?p=PLAYER1
 
 https://www.warlight.net/Profile?p=PLAYER2
 
 https://www.warlight.net/Profile?p=PLAYER3
+```
 
 You would use the following order:
 ```
