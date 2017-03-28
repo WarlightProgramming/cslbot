@@ -70,6 +70,8 @@ class League(object):
     ORD_REMOVE_TEAM = "remove_team"
     ORD_DROP_TEMPLATE = "drop_template"
     ORD_UNDROP_TEMPLATE = "undrop_template"
+    ORD_DROP_TEMPLATES = "drop_templates"
+    ORD_UNDROP_TEMPLATES = "undrop_templates"
     ORD_ACTIVATE_TEMPLATE = "activate_template"
     ORD_DEACTIVATE_TEMPLATE = "deactivate_template"
     ORD_QUIT_LEAGUE = "quit_league"
@@ -1192,26 +1194,35 @@ class League(object):
         teamID = teamData['ID']
         return teamID, existingDrops
 
-    def dropTemplate(self, order):
-        templateName = order['orders'][2]
-        temp = self.findMatchingTemplate(templateName)
-        if temp is None: return
+    def dropTemplates(self, order):
+        templateNames = order['orders'][2:]
+        teamName = order['orders'][1]
         teamID, existingDrops = self.getExistingDrops(order)
-        if len(existingDrops) >= self.dropLimit:
+        remainingDrops = (self.dropLimit - len(existingDrops))
+        if remainingDrops < 1:
             raise ImproperOrder("Team %s already reached its drop limit" %
                                 (teamName))
-        existingDrops.append(temp)
+        elif remainingDrops < len(templateNames):
+            dataStr = ("Too many drops attempted by team %s, dropping first %d"
+                       % (teamName, remainingDrops))
+            self.parent.log(dataStr, self.name)
+            templateNames = templateNames[:remainingDrops]
+        for templateName in templateNames:
+            temp = self.findMatchingTemplate(templateName)
+            if temp is None: continue
+            existingDrops.append(temp)
         dropStr = (self.SEP_DROPS).join(set(existingDrops))
         self.teams.updateMatchingEntities({'ID': {'value': teamID,
                                                   'type': 'positive'}},
                                           {'Drops': dropStr})
 
-    def undropTemplate(self, order):
-        templateName = order['orders'][2]
-        temp = self.findMatchingTemplate(templateName)
-        if temp is None: return
+    def undropTemplates(self, order):
+        templateNames = order['orders'][2:]
         teamID, existingDrops = self.getExistingDrops(order)
-        existingDrops.remove(temp)
+        for templateName in templateNames:
+            temp = self.findMatchingTemplate(templateName)
+            if (temp is not None and temp in existingDrops):
+                existingDrops.remove(temp)
         dropStr = (self.SEP_DROPS).join(set(existingDrops))
         self.teams.updateMatchingEntities({'ID': {'value': teamID,
                                                   'type': 'positive'}},
@@ -1265,8 +1276,10 @@ class League(object):
                  self.ORD_UNCONFIRM_TEAM: self.unconfirmTeam,
                  self.ORD_SET_LIMIT: self.setLimit,
                  self.ORD_REMOVE_TEAM: self.removeTeam,
-                 self.ORD_DROP_TEMPLATE: self.dropTemplate,
-                 self.ORD_UNDROP_TEMPLATE: self.undropTemplate,
+                 self.ORD_DROP_TEMPLATE: self.dropTemplates,
+                 self.ORD_UNDROP_TEMPLATE: self.undropTemplates,
+                 self.ORD_DROP_TEMPLATES: self.dropTemplates,
+                 self.ORD_UNDROP_TEMPLATES: self.undropTemplates,
                  self.ORD_ACTIVATE_TEMPLATE: self.activateTemplate,
                  self.ORD_DEACTIVATE_TEMPLATE: self.deactivateTemplate,
                  self.ORD_QUIT_LEAGUE: self.quitLeague

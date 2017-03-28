@@ -274,6 +274,13 @@ ___
 drop_template <leagueName> <teamName> <templateName>
 ```
 
+OR
+
+```
+drop_templates <leagueName> <teamName> <templateNames>
+```
+(where template names are space-separated)
+
 Players can use this order to keep their team from ever playing on that
 template again (until/unless te template is undropped by them or one of their
 teammates). Leagues can set a **DROP LIMIT** (using the commands sheet),
@@ -298,6 +305,13 @@ ___
 ```
 undrop_template <leagueName> <teamName> <templateName>
 ```
+
+OR
+
+```
+undrop_templates <leagueName> <teamName> <templateNames>
+```
+(where template names are space-separated)
 
 This order reverses the drop\_template order and can be useful if teams want to
 try out a template they've avoided in the past or if they simply want to get

@@ -1211,6 +1211,29 @@ data sheet for the league.)
 
 ___
 
+#### AUTODROP
+
+Whether to automatically drop templates that a team's players can't use.
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: True
+
+If you want to accommodate as many players as possible in your league, you can
+use the AUTODROP command to automatically drop any templates the team can't
+play on (so long as the [**DROP LIMIT**](#drop-limit) permits doing so).
+Automatic dropping is still constrained by the league's drop limit, so teams
+would not be able to participate if they're not able to play on enough
+templates to do so. But if you're allowing teams to drop N templates and a new
+team tries to join of which the players are unable to play on M templates
+(where M <= N), that team would still be allowed to join and compete with the M
+templates they're unable to play on forcibly dropped. Keep in mind that teams
+can still drop templates themselves, so if they decide to undrop a template
+that they're unable to play on and drop another template to take its place they
+run the risk of hitting their drop limit and not being able to accommodate the
+forced drops- i.e., becoming unable to compete. Teams with forced drops should
+use the drop feature very carefullly.
+
 ### Rating System Configuration
 
 ### Elo
