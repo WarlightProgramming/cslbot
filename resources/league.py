@@ -149,6 +149,7 @@ class League(object):
     SET_MAX_RANK = "MAX RANK"
     SET_MIN_LIMIT_TO_RANK = "MIN LIMIT TO RANK"
     SET_MAX_VACATION = "MAX VACATION LENGTH" # days
+    SET_AUTODROP = "AUTODROP"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -315,6 +316,12 @@ class League(object):
     def autoformat(self):
         """whether to automatically format sheets"""
         return self.fetchProperty(self.SET_AUTOFORMAT, True,
+                                  self.getBoolProperty)
+
+    @property
+    def autodrop(self):
+        """whether to automatically drop templates players can't use"""
+        return self.fetchProperty(self.SET_AUTODROP, (self.dropLimit > 0),
                                   self.getBoolProperty)
 
     @property
@@ -943,24 +950,59 @@ class League(object):
             raise ImproperOrder(str(creator) + " isn't able to" +
                                 " add a team that excludes them")
 
-    def hasTemplateAccess(self, playerID):
+    def checkTemplateAccess(self, playerID):
         """returns True if a player can play on all templates"""
+        tempIDs = self.templateIDs
+        tempWLIDs, unusables = dict(), set()
+        for ID in tempIDs:
+            tempWLIDs[tempIDs[ID]['WarlightID']] = ID
         tempResults = self.handler.validateToken(int(playerID),
-                                                 *self.templateIDs)
-        for temp in self.templateIDs:
+                                                 *tempWLIDs)
+        for temp in tempWLIDs:
             tempName = "template" + str(temp)
             if tempResults[tempName]['result'] != 'CannotUseTemplate':
-                return False
-        return True
+                unusables.add(tempWLIDs[temp])
+        return unusables
 
-    def checkTeam(self, members):
+    def handleAutodrop(self, teamID, templates):
+        teams = self.teams.findEntities({'ID': {'value': teamID,
+                                                'type': 'positive'}})
+        if len(teams) == 0:
+            raise ImproperOrder("Cannot autodrop for nonexistent team %s" %
+                                (str(teamID)))
+        team = teams[0]
+        existingDrops = set(team['Drops'].split(self.SEP_DROPS))
+        if (len(existingDrops) + len(templates)) > self.dropLimit:
+            raise ImproperOrder("Team %s has already reached its drop limit" %
+                                (str(teamID)))
+        existingDrops = existingDrops.union(str(t) for t in templates)
+        drops = (self.SEP_DROPS).join(str(d) for d in existingDrops)
+        self.teams.updateMatchingEntities({'ID': {'value': teamID,
+                                                  'type': 'positive'}},
+                                          {'Drops': drops})
+
+    def checkTeam(self, members, teamID=None):
+        badTemplates = set()
         for member in members:
             if self.banned(member):
                 raise ImproperOrder(str(member) +
                                     " is banned from this league")
-            elif not self.hasTemplateAccess(member):
-                raise ImproperOrder(str(member) +
-                                    " cannot access all templates")
+            else:
+                tempAccess = self.checkTemplateAccess(member)
+                badTemplates = badTemplates.union(tempAccess)
+        if (self.autodrop and
+            len(badTemplates) <= self.dropLimit):
+            if teamID is None:
+                forcedDrops = (self.SEP_DROPS).join([str(t) for
+                                                    t in badTemplates])
+                return forcedDrops
+            else:
+                self.handleAutodrop(teamID, badTemplates)
+                return ""
+        else:
+            memberStr = (self.SEP_PLYR).join([str(m) for m in members])
+            raise ImproperOrder("Team with %s cannot play on enough templates"
+                                % (memberStr))
 
     def checkLimit(self, limit):
         if not self.limitInRange(limit):
@@ -1013,7 +1055,7 @@ class League(object):
         members = [int(member) for member in order['orders'][3:]]
         author = int(order['author'])
         self.checkTeamCreator(author, members)
-        self.checkTeam(members)
+        forcedDrops = self.checkTeam(members)
         gameLimit = self.checkLimit(gameLimit)
         members.sort()
         confirms = [(m == author) for m in members]
@@ -1027,7 +1069,7 @@ class League(object):
                               'Limit': gameLimit,
                               'Players': members,
                               'Confirmations': confirms,
-                              'Vetos': "", 'Drops': "",
+                              'Vetos': "", 'Drops': forcedDrops,
                               'Count': 0, 'Finished': 0,
                               'Rating': self.defaultRating})
         self.currentID += 1
@@ -1939,7 +1981,7 @@ class League(object):
     def validateTeam(self, teamID, players):
         try:
             self.checkTeamRating(teamID)
-            self.checkTeam(players)
+            self.checkTeam(players, teamID)
             return False
         except ImproperOrder:
             self.changeLimit(teamID, 0)
