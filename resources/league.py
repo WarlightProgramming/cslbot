@@ -294,29 +294,44 @@ class League(object):
         self.checkGamesSheet()
         self.checkTemplatesSheet()
 
-    def getBoolProperty(self, label, default=True):
-        return (self.settings.get(label, default).lower() == 'true')
+    def fetchProperty(self, label, default, process_fn=None):
+        cmd = self.settings.get(label, default)
+        try:
+            if (process_fn is None or
+                cmd is default): return cmd
+            return process_fn(cmd)
+        except Exception as e:
+            errType = type(e).__name__
+            failStr = ("Couldn't get %s due to %s, using default of %s" %
+                       (str(label), errType, str(default)))
+            self.parent.log(failStr, self.name)
+            return default
+
+    @staticmethod
+    def getBoolProperty(val):
+        return (val.lower() == 'true')
 
     @property
     def autoformat(self):
         """whether to automatically format sheets"""
-        return self.getBoolProperty(self.SET_AUTOFORMAT, True)
+        return self.fetchProperty(self.SET_AUTOFORMAT, True,
+                                  self.getBoolProperty)
 
     @property
     def leagueAcronym(self):
-        return self.settings.get(self.SET_LEAGUE_ACRONYM, self.clusterName)
+        return self.fetchProperty(self.SET_LEAGUE_ACRONYM, self.clusterName)
 
     @property
     def clusterName(self):
-        return self.settings.get(self.SET_SUPER_NAME, self.name)
+        return self.fetchProperty(self.SET_SUPER_NAME, self.name)
 
     @property
     def leagueMessage(self):
-        return self.settings.get(self.SET_LEAGUE_MESSAGE, self.DEFAULT_MSG)
+        return self.fetchProperty(self.SET_LEAGUE_MESSAGE, self.DEFAULT_MSG)
 
     @property
     def leagueUrl(self):
-        return self.settings.get(self.SET_URL, self.defaultUrl)
+        return self.fetchProperty(self.SET_URL, self.defaultUrl)
 
     @property
     def defaultUrl(self):
@@ -326,74 +341,69 @@ class League(object):
 
     @property
     def rematchLimit(self):
-        setLimit = self.settings.get(self.SET_REMATCH_LIMIT, 0)
-        if setLimit == self.KW_ALL: return setLimit
-        setLimit = int(setLimit)
-        return (setLimit * self.teamsPerSide * self.gameSize)
+        process_fn = (lambda val: val if val == self.KW_ALL else
+                      int(val) * self.teamsPerSide * self.gameSize)
+        return self.fetchProperty(self.SET_REMATCH_LIMIT, 0, process_fn)
 
     @property
     def teamLimit(self):
+        process_fn = lambda x: None if x is None else int(x)
         defaultMax = None if self.teamSize > 1 else 1
-        maxTeams = self.settings.get(self.SET_MAX_TEAMS, defaultMax)
-        if maxTeams is not None: maxTeams = int(maxTeams)
-        return maxTeams
+        return self.fetchProperty(self.SET_MAX_TEAMS, defaultMax, process_fn)
 
     @property
     def vetoLimit(self):
         """maximum number of vetos per game"""
-        return int(self.settings.get(self.SET_VETO_LIMIT, 0))
+        return self.fetchProperty(self.SET_VETO_LIMIT, 0, int)
 
     @property
     def dropLimit(self):
         """maximum number of templates a player can drop"""
-        limit = int(self.settings.get(self.SET_DROP_LIMIT, 0))
-        return min(limit, len(self.templateIDs) - 1)
+        process_fn = lambda x: min(int(x), len(self.templateIDs) - 1)
+        return self.fetchProperty(self.SET_DROP_LIMIT, 0, process_fn)
 
     @property
     def removeDeclines(self):
-        return self.getBoolProperty(self.SET_REMOVE_DECLINES, True)
+        return self.fetchProperty(self.SET_REMOVE_DECLINES, True,
+                                  self.getBoolProperty)
 
     @property
     def countDeclinesAsVetos(self):
-        return self.getBoolProperty(self.SET_VETO_DECLINES, False)
+        return self.fetchProperty(self.SET_VETO_DECLINES, False,
+                                  self.getBoolProperty)
 
     @property
     def vetoPenalty(self):
         """points deduction for excessive vetos"""
-        if self.ratingSystem == self.RATE_WINCOUNT:
-            default = 1
-        elif self.ratingSystem == self.RATE_WINRATE:
-            default = 50
+        if self.ratingSystem == self.RATE_WINCOUNT: default = 1
+        elif self.ratingSystem == self.RATE_WINRATE: default = 50
         else: default = 25
-        return int(self.settings.get(self.SET_VETO_PENALTY, default))
+        return self.fetchProperty(self.SET_VETO_PENALTY, default, int)
 
     @property
     def teamSize(self):
         """number of players per team"""
-        return int(self.settings.get(self.SET_TEAM_SIZE, 1))
+        return self.fetchProperty(self.SET_TEAM_SIZE, 1, int)
 
     @property
     def gameSize(self):
         """number of sides per game"""
-        return int(self.settings.get(self.SET_GAME_SIZE, 2))
+        return self.fetchProperty(self.SET_GAME_SIZE, 2, int)
 
     @property
     def sideSize(self):
         """number of teams per side"""
-        return int(self.settings.get(self.SET_TEAMS_PER_SIDE, 1))
+        return self.fetchProperty(self.SET_TEAMS_PER_SIDE, 1, int)
 
     @property
     def expiryThreshold(self):
         """number of days until game is declared abandoned"""
-        return int(self.settings.get(self.SET_EXP_THRESH, 3))
+        return self.fetchProperty(self.SET_EXP_THRESH, 3, int)
 
     @property
     def maxVacation(self):
         """maximum vacation length (in days) to remain on ladder"""
-        cmd = self.settings.get(self.SET_MAX_VACATION, None)
-        if cmd is not None:
-            cmd = int(cmd)
-        return cmd
+        return self.fetchProperty(self.SET_MAX_VACATION, None, int)
 
     def meetsVacation(self, player):
         maxVac, secsPerDay = self.maxVacation, 86400
@@ -412,15 +422,13 @@ class League(object):
     @property
     def minLimit(self):
         """minimum number of max ongoing games per team"""
-        return max(int(self.settings.get(self.SET_MIN_LIMIT, 0)), 0)
+        process_fn = lambda x: max(int(x), 0)
+        return self.fetchProperty(self.SET_MIN_LIMIT, 0, process_fn)
 
     @property
     def maxLimit(self):
         """maximum number of max ongoing games per team"""
-        lim = self.settings.get(self.SET_MAX_LIMIT, None)
-        if lim is not None:
-            return int(lim)
-        return None
+        return self.fetchProperty(self.SET_MAX_LIMIT, None, int)
 
     @property
     def constrainLimit(self):
@@ -428,7 +436,8 @@ class League(object):
         whether to constrain out-of-range limits
         limits outside range are set to the min or max limit
         """
-        return self.getBoolProperty(self.SET_CONSTRAIN_LIMIT, True)
+        return self.fetchProperty(self.SET_CONSTRAIN_LIMIT, True,
+                                  self.getBoolProperty)
 
     def limitInRange(self, limit):
         """returns True if a limit is in an acceptable range"""
@@ -438,15 +447,16 @@ class League(object):
     @property
     def ratingSystem(self):
         """rating system to use"""
-        return self.settings.get(self.SET_SYSTEM, self.RATE_ELO)
+        return self.fetchProperty(self.SET_SYSTEM, self.RATE_ELO)
 
     @property
     def kFactor(self):
-        return int(self.settings.get(self.SET_ELO_K, 32)) * self.sideSize
+        prop = self.fetchProperty(self.SET_ELO_K, 32, int)
+        return (prop * self.sideSize)
 
     @property
     def defaultElo(self):
-        return self.settings.get(self.SET_ELO_DEFAULT, 1500)
+        return self.fetchProperty(self.SET_ELO_DEFAULT, 1500, int)
 
     @property
     def eloEnv(self):
@@ -454,11 +464,11 @@ class League(object):
 
     @property
     def glickoRd(self):
-        return self.settings.get(self.SET_GLICKO_RD, 350)
+        return self.fetchProperty(self.SET_GLICKO_RD, 350, int)
 
     @property
     def glickoRating(self):
-        return self.settings.get(self.SET_GLICKO_DEFAULT, 1500)
+        return self.fetchProperty(self.SET_GLICKO_DEFAULT, 1500, int)
 
     @property
     def defaultGlicko(self):
@@ -466,11 +476,11 @@ class League(object):
 
     @property
     def trueSkillSigma(self):
-        return self.settings.get(self.SET_TRUESKILL_SIGMA, 500)
+        return self.fetchProperty(self.SET_TRUESKILL_SIGMA, 500, int)
 
     @property
     def trueSkillMu(self):
-        return self.settings.get(self.SET_TRUESKILL_DEFAULT, 1500)
+        return self.fetchProperty(self.SET_TRUESKILL_DEFAULT, 1500, int)
 
     @property
     def trueSkillBeta(self):
@@ -503,19 +513,21 @@ class League(object):
 
     @property
     def reverseParity(self):
-        return self.getBoolProperty(self.SET_REVERSE_PARITY, False)
+        return self.fetchProperty(self.SET_REVERSE_PARITY, False,
+                                  self.getBoolProperty)
 
     @property
     def maxBoot(self):
-        return float(self.settings.get(self.SET_MAX_BOOT, 100.0))
+        return self.fetchProperty(self.SET_MAX_BOOT, 100.0, float)
 
     @property
     def minLevel(self):
-        return int(self.settings.get(self.SET_MIN_LEVEL, 0))
+        return self.fetchProperty(self.SET_MIN_LEVEL, 0, int)
 
     @property
     def membersOnly(self):
-        exp = self.getBoolProperty(self.SET_MEMBERS_ONLY, False)
+        exp = self.fetchProperty(self.SET_MEMBERS_ONLY, False,
+                                 self.getBoolProperty)
         return (exp or (self.minMemberAge > 0))
 
     def meetsMembership(self, player):
@@ -523,33 +535,28 @@ class League(object):
 
     @property
     def minPoints(self):
-        return int(self.settings.get(self.SET_MIN_POINTS, 0))
+        return self.fetchProperty(self.SET_MIN_POINTS, 0, int)
 
     @property
     def minAge(self):
-        return int(self.settings.get(self.SET_MIN_AGE, 0))
+        return self.fetchProperty(self.SET_MIN_AGE, 0, int)
 
     @property
     def minMemberAge(self):
-        return int(self.settings.get(self.SET_MIN_MEMBER_AGE, 0))
+        return self.fetchProperty(self.SET_MIN_MEMBER_AGE, 0, int)
 
     @property
     def maxRTSpeed(self):
-        cmd = self.settings.get(self.SET_MAX_RT_SPEED, None)
-        if cmd is None: return None
-        return float(Decimal(cmd) / Decimal(60.0))
+        process_fn = lambda x: float(Decimal(x) / Decimal(60.0))
+        return self.fetchProperty(self.SET_MAX_RT_SPEED, None, process_fn)
 
     @property
     def maxMDSpeed(self):
-        cmd = self.settings.get(self.SET_MAX_MD_SPEED, None)
-        if cmd is None: return None
-        return float(cmd)
+        return self.fetchProperty(self.SET_MAX_MD_SPEED, None, float)
 
     @property
     def minExplicitRating(self):
-        cmd = self.settings.get(self.SET_MIN_RATING, None)
-        if cmd is None: return None
-        return int(cmd)
+        return self.fetchProperty(self.SET_MIN_RATING, None, int)
 
     def findRatingAtPercentile(self, percentile):
         if percentile == 0: return None
@@ -565,26 +572,24 @@ class League(object):
 
     @property
     def minPercentileRating(self):
-        cmd = self.settings.get(self.SET_MIN_PERCENTILE, None)
-        if cmd is None: return None
-        return findRatingAtPercentile(float(cmd))
+        process_fn = lambda x: self.findRatingAtPercentile(float(x))
+        self.fetchProperty(self.SET_MIN_PERCENTILE, None, process_fn)
 
     @property
     def minRating(self):
         minPercentile = self.minPercentileRating
-        if minPercentile is None:
-            return self.minExplicitRating
+        if minPercentile is None: return self.minExplicitRating
         return minPercentile
 
     @property
     def gracePeriod(self):
-        return int(self.settings.get(self.SET_GRACE_PERIOD, 0))
+        return self.fetchProperty(self.SET_GRACE_PERIOD, 0, int)
 
     @property
     def restorationPeriod(self):
-        cmd = self.settings.get(self.SET_RESTORATION_PERIOD, None)
-        if cmd is not None: cmd = int(cmd)
-        return (cmd + self.gracePeriod)
+        process_fn = lambda x: int(x) + self.gracePeriod
+        return self.fetchProperty(self.SET_RESTORATION_PERIOD, None,
+                                  process_fn)
 
     @runPhase
     def restoreTeams(self):
@@ -607,19 +612,16 @@ class League(object):
 
     @property
     def allowJoins(self):
-        return self.getBoolProperty(self.SET_ALLOW_JOINS, True)
+        return self.fetchProperty(self.SET_ALLOW_JOINS, True,
+                                  self.getBoolProperty)
 
     @property
     def leagueCapacity(self):
-        cmd = self.settings.get(self.SET_LEAGUE_CAPACITY, None)
-        if cmd is not None: cmd = int(cmd)
-        return cmd
+        return self.fetchProperty(self.SET_LEAGUE_CAPACITY, None, int)
 
     @property
     def activeCapacity(self):
-        cmd = self.settings.get(self.SET_ACTIVE_CAPACITY, None)
-        if cmd is not None: cmd = int(cmd)
-        return cmd
+        return self.fetchProperty(self.SET_ACTIVE_CAPACITY, None, int)
 
     @property
     def activeFull(self):
@@ -639,19 +641,20 @@ class League(object):
                                                    'type': 'negative'}})
         return (len(allTeams) >= cap)
 
-    def getDateTimeProperty(self, label, default=None):
-        cmd = self.settings.get(label, default)
-        if cmd is None: return None
-        if isinstance(cmd, datetime): return cmd
-        return datetime.strptime(cmd, self.TIMEFORMAT)
+    @staticmethod
+    def getDateTimeProperty(val):
+        if isinstance(val, datetime): return val
+        return datetime.strptime(val, self.TIMEFORMAT)
 
     @property
     def joinPeriodStart(self):
-        return self.getDateTimeProperty(self.SET_JOIN_PERIOD_START)
+        return self.fetchProperty(self.SET_JOIN_PERIOD_START, None,
+                                  self.getDateTimeProperty)
 
     @property
     def joinPeriodEnd(self):
-        return self.getDateTimeProperty(self.SET_JOIN_PERIOD_END)
+        return self.fetchProperty(self.SET_JOIN_PERIOD_END, None,
+                                  self.getDateTimeProperty)
 
     @staticmethod
     def currentTimeWithinRange(start, end):
@@ -672,30 +675,28 @@ class League(object):
 
     @property
     def leagueActive(self):
-        return self.getBoolProperty(self.SET_ACTIVE, True)
+        return self.fetchProperty(self.SET_ACTIVE, True, self.getBoolProperty)
 
     @property
     def minSize(self):
-        return int(self.settings.get(self.SET_MIN_SIZE,
-                                     self.teamsPerSide * self.gameSize))
+        return self.fetchProperty(self.SET_MIN_SIZE, (self.teamsPerSide *
+                                  self.gameSize), int)
 
     @property
     def minToCull(self):
-        return int(self.settings.get(self.SET_MIN_TO_CULL, 0))
+        return self.fetchProperty(self.SET_MIN_TO_CULL, 0, int)
 
     @property
     def minToRank(self):
-        return int(self.settings.get(self.SET_MIN_TO_RANK, 0))
+        return self.fetchProperty(self.SET_MIN_TO_RANK, 0, int)
 
     @property
     def maxRank(self):
-        cmd = self.settings.get(self.SET_MAX_RANK, None)
-        if cmd is not None: cmd = int(cmd)
-        return cmd
+        return self.fetchProperty(self.SET_MAX_RANK, None, int)
 
     @property
     def minLimitToRank(self):
-        return int(self.settings.get(self.SET_MIN_LIMIT_TO_RANK, 1))
+        return self.fetchProperty(self.SET_MIN_LIMIT_TO_RANK, 1, int)
 
     @property
     def size(self):
@@ -713,15 +714,17 @@ class League(object):
 
     @property
     def minTemplates(self):
-        return int(self.settings.get(self.SET_MIN_TEMPLATES, 1))
+        return self.fetchProperty(self.SET_MIN_TEMPLATES, 1, int)
 
     @property
     def activityStart(self):
-        return self.getDateTimeProperty(self.SET_START_DATE)
+        return self.fetchProperty(self.SET_START_DATE, None,
+                                  self.getDateTimeProperty)
 
     @property
     def activityEnd(self):
-        return self.getDateTimeProperty(self.SET_END_DATE)
+        return self.fetchProperty(self.SET_END_DATE, None,
+                                  self.getDateTimeProperty)
 
     @property
     def active(self):
@@ -734,17 +737,16 @@ class League(object):
 
     @property
     def allowRemoval(self):
-        return self.getBoolProperty(self.SET_ALLOW_REMOVAL, False)
+        return self.fetchProperty(self.SET_ALLOW_REMOVAL, False,
+                                  self.getBoolProperty)
 
     @property
     def minOngoingGames(self):
-        return int(self.settings.get(self.SET_MIN_ONGOING_GAMES, 0))
+        return self.fetchProperty(self.SET_MIN_ONGOING_GAMES, 0, int)
 
     @property
     def maxOngoingGames(self):
-        cmd = self.settings.get(self.SET_MAX_ONGOING_GAMES, None)
-        if cmd is not None: cmd = int(cmd)
-        return cmd
+        return self.fetchProperty(self.SET_MAX_ONGOING_GAMES, None, int)
 
     def gameCountInRange(self, player):
         ongoing = player.currentGames
@@ -754,11 +756,11 @@ class League(object):
 
     @property
     def minRTPercent(self):
-        return float(self.settings.get(self.SET_MIN_RT_PERCENT, 0.0))
+        return self.fetchProperty(self.SET_MIN_RT_PERCENT, 0.0, float)
 
     @property
     def maxRTPercent(self):
-        return float(self.settings.get(self.SET_MAX_RT_PERCENT, 100.0))
+        return self.fetchProperty(self.SET_MAX_RT_PERCENT, 100.0, float)
 
     def RTPercentInRange(self, player):
         pct = player.percentRT
@@ -766,25 +768,23 @@ class League(object):
 
     @property
     def maxLastSeen(self):
-        cmd = self.settings.get(self.SET_MAX_LAST_SEEN, None)
-        if cmd is not None: cmd = float(cmd)
-        return cmd
+        return self.fetchProperty(self.SET_MAX_LAST_SEEN, None, float)
 
     @property
     def min1v1Pct(self):
-        return float(self.settings.get(self.SET_MIN_1v1_PCT, 0.0))
+        return self.fetchProperty(self.SET_MIN_1v1_PCT, 0.0, float)
 
     @property
     def min2v2Pct(self):
-        return float(self.settings.get(self.SET_MIN_2v2_PCT, 0.0))
+        return self.fetchProperty(self.SET_MIN_2v2_PCT, 0.0, float)
 
     @property
     def min3v3Pct(self):
-        return float(self.settings.get(self.SET_MIN_3v3_PCT, 0.0))
+        return self.fetchProperty(self.SET_MIN_3v3_PCT, 0.0. float)
 
     @property
     def minRanked(self):
-        return int(self.settings.get(self.SET_MIN_RANKED, 0))
+        return self.fetchProperty(self.SET_MIN_RANKED, 0, int)
 
     def meetsMinRanked(self, player):
         data = player.rankedGames
@@ -798,50 +798,59 @@ class League(object):
 
     @property
     def minGames(self):
-        return int(self.settings.get(self.SET_MIN_GAMES, 0))
+        return self.fetchProperty(self.SET_MIN_GAMES, 0, int)
 
     @property
     def minAchievementRate(self):
-        return float(self.settings.get(self.SET_MIN_ACH, 0))
+        return self.fetchProperty(self.SET_MIN_ACH, 0, float)
 
-    def getIDGroup(self, label):
-        groupList = self.settings.get(label, "").split(self.SEP_CMD)
-        return set([int(x) for x in groupList])
+    @staticmethod
+    def getIDGroup(val, process_fn=int):
+        return set([process_fn(x) for x in val.split(self.SEP_CMD)])
+
+    @staticmethod
+    def getGroup(val):
+        return self.getIDGroup(val, process_fn=str)
 
     @property
     def bannedPlayers(self):
         """set containing IDs of banned players"""
-        return self.getIDGroup(self.SET_BANNED_PLAYERS)
+        return self.fetchProperty(self.SET_BANNED_PLAYERS, set(),
+                                  self.getIDGroup)
 
     @property
     def bannedClans(self):
         """set containing IDs of banned clans"""
-        return self.getIDGroup(self.SET_BANNED_CLANS)
+        return self.fetchProperty(self.SET_BANNED_CLANS, set(),
+                                  self.getIDGroup)
 
     @property
     def bannedLocations(self):
-        return set(self.settings.get(self.SET_BANNED_LOCATIONS,
-                                     "").split(self.SEP_CMD))
+        return self.fetchProperty(self.SET_BANNED_LOCATIONS, set(),
+                                  self.getGroup)
 
     @property
     def allowedPlayers(self):
         """set containing IDs of allowed players"""
-        return self.getIDGroup(self.SET_ALLOWED_PLAYERS)
+        return self.fetchProperty(self.SET_ALLOWED_PLAYERS, set(),
+                                  self.getIDGroup)
 
     @property
     def allowedClans(self):
         """set containing IDs of allowed clans"""
-        return self.getIDGroup(self.SET_ALLOWED_CLANS)
+        return self.fetchProperty(self.SET_ALLOWED_CLANS, set(),
+                                  self.getIDGroup)
 
     @property
     def allowedLocations(self):
-        return set(self.settings.get(self.SET_ALLOWED_LOCATIONS,
-                                     "").split(self.SEP_CMD))
+        return self.fetchProperty(self.SET_ALLOWED_LOCATIONS, set(),
+                                  self.getGroup)
 
     @property
     def requireClan(self):
         default = (self.KW_ALL in self.bannedClans)
-        return self.getBoolProperty(self.SET_REQUIRE_CLAN, default)
+        return self.fetchProperty(self.SET_REQUIRE_CLAN, default,
+                                  self.getBoolProperty)
 
     def clanAllowed(self, player):
         clan = player.clanID
