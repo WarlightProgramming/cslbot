@@ -96,7 +96,7 @@ quotes, of course) and the validation command would look like:
 "!validate\_league THISISWHERETHESHEETIDSHOULDBE"
 
 Note that you can change the league thread by changing the THREAD command. The
-**OFFSET** is also tracked in the commands sheet to determine from which point
+[**OFFSET**](#offset) is also tracked in the commands sheet to determine from which point
 to start looking for new orders; in general, you should not edit this unless
 you want cslbot to go back and reprocess all orders starting from a certain
 offset. Note that the offset is the number of posts that will be skipped, so if
@@ -291,8 +291,8 @@ Whether to create new games for this league.
 *Default*: True
 
 You can set this manually or using a formula (if you have special rules). Also
-see **ALLOW JOINING** if you want to just control the addition of new teams.
-This is overriden by **LEAGUE START** and **LEAGUE END** if they are more
+see [**ALLOW JOINING**](#allow-joining) if you want to just control the addition of new teams.
+This is overriden by [**LEAGUE START**](#league-start) and [**LEAGUE END**](#league-end) if they are more
 restrictive.
 
 ___
@@ -307,7 +307,7 @@ The start time for the league.
 
 No games will be created before the LEAGUE START. The date supplied must be in
 a "YYYY-mm-dd HH:MM:SS" format with zero-padding. Even after the league start,
-if the league is not **ACTIVE**, games will not be created. This is in the
+if the league is not [**ACTIVE**](#active), games will not be created. This is in the
 timezone of the machine running the cslbot instance (US Eastern).
 
 ___
@@ -320,7 +320,7 @@ The end time for the league.
 
 *Default*: no restriction
 
-See **LEAGUE START** for important information about the time format. Keep in
+See [**LEAGUE START**](#league-start) for important information about the time format. Keep in
 mind that you can have a LEAGUE END defined without explicitly defining the
 LEAGUE START (and vice versa).
 
@@ -339,7 +339,7 @@ matchups, you can set this to a specific value. If you start the league too
 early, you can have teams end up with opponents out of their league (because
 there aren't enough opponents in their league) or have the league take a long
 pause because all the teams have already played one another recently enough
-that your **REMATCH HORIZON** gets in the way of creating new games.
+that your [**REMATCH HORIZON**](#rematch-horizon) gets in the way of creating new games.
 
 Keep in mind that, for abuse-prevention reasons, the league won't even start
 until at least 5 unique people have commented on the league thread.
@@ -459,7 +459,7 @@ Minimum number of completed games before a team can be ranked.
 
 Teams that have not yet finished this number of games (by win, loss, or
 excessive vetos) will not be ranked. This also helps you control the impact of
-other settings like **MAX RANK** to make sure that a flood of incoming new
+other settings like [**MAX RANK**](#max-rank) to make sure that a flood of incoming new
 teams will not artificially push down existing teams and reduce the impact of
 random early fluctuations in your rankings.
 
@@ -583,7 +583,7 @@ league has blacklisted the account providing cslbot's Warlight credentials
 
 You can ban players using their Warlight IDs- if they're found to be
 somehow cheating, for example. You can set this to "ALL" if you want to ban
-players by default (BANNED PLAYERS is overriden by **ALLOWED PLAYERS** so if
+players by default (BANNED PLAYERS is overriden by [**ALLOWED PLAYERS**](#allowed-players) so if
 you allow someone explicitly they'll get in even if you use the "ALL" keyword
 here- or even if you explicitly ban them).
 
@@ -609,7 +609,7 @@ Whether to require all players to belong to a clan.
 
 *Possible Args*: "TRUE", "FALSE"
 
-Setting **BANNED CLANS** to "ALL" will also ban any unclanned players unless
+Setting [**BANNED CLANS**](#banned-clans) to "ALL" will also ban any unclanned players unless
 this is explicitly set to false.
 
 ___
@@ -625,8 +625,8 @@ A comma-separated list of Warlight clan IDs of banned clans.
 You can ban clans using their Warlight clan IDs (which you should be able to
 find from their clan page URLs). You can set this to "ALL" if you want to ban
 all clans by default (so you can explicitly allow certain clans and only those
-clans using the **ALLOWED CLANS** commands). Using the "ALL" keyword will also
-ban any unclanned players unless you explicitly set **REQUIRE CLAN** to false.
+clans using the [**ALLOWED CLANS**](#allowed-clans) commands). Using the "ALL" keyword will also
+ban any unclanned players unless you explicitly set [**REQUIRE CLAN**](#require-clan) to false.
 
 ___
 
@@ -640,8 +640,8 @@ A comma-separated list of Warlight clan IDs of explicitly allowed clans.
 
 If you want your league to only be open to players belonging to certain clans,
 you can set that using their clan IDs. If you want to also allow unclanned
-players but have set **BANNED CLANS** to "ALL", you should also toggle
-**REQUIRE CLAN** to be false (otherwise it'll be assumed you're only allowing
+players but have set [**BANNED CLANS**](#banned-clans) to "ALL", you should also toggle
+[**REQUIRE CLAN**](#require-clan) to be false (otherwise it'll be assumed you're only allowing
 players that belong to a certain clan).
 
 ___
@@ -657,15 +657,15 @@ A comma-separated list of banned location names.
 If you want your league to only be open to players from a certain location or
 group of locations, you can specify that here. This is useful if you want to
 run a language/region-specific league, for example; you could use this to only
-allow players from Germany for a German-speaking league and then **ALLOWED
-PLAYERS** to make manual exceptions to cover players who are unfortunate enough
+allow players from Germany for a German-speaking league and then [**ALLOWED PLAYERS**](#allowed-players)
+to make manual exceptions to cover players who are unfortunate enough
 to reside outside Schland. You should probably check the country values in
 player profiles to see how Warlight formats the name of a particular region you
 want to allow or ban. **Since Warlight sometimes specifies US states**, the
 states and the United States are treated as separate values in here. If you
 want to ban *all* the American states, you can simply ban the United States. if
 you want to ban some American states, you can either ban them individually or
-ban the United States as a whole and use **ALLOWED LOCATIONS** to allow the
+ban the United States as a whole and use [**ALLOWED LOCATIONS**](#allowed-locations) to allow the
 ones you want to allow. But if you allow the United States as a whole
 (explicitly, using ALLOWED LOCATIONS) you will not be able to ban any American
 states. The process works similarly for any other locations provided by
@@ -694,14 +694,14 @@ Any location explicitly allowed (at any degree of resolution, if there are
 multiple- e.g., a player from Texas will get in through this if either the US or Texas is
 explicitly allowed) to participate should be in this comma-separated list.
 
-See the discussion under **BANNED LOCATIONS** for more details, especially if
+See the discussion under [**BANNED LOCATIONS**](#banned-locations) for more details, especially if
 you're planning on dealing with American states.
 
 ___
 
 ### Player Join Prerequisites
 
-These can be explicitly overriden for players using the **ALLOWED PLAYERS**
+These can be explicitly overriden for players using the [**ALLOWED PLAYERS**](#allowed-players)
 command. So if a player is ineligible to participate based on prereqs but you
 still want them to allow them to participate without changing the rules for
 everyone else, you can do so.
@@ -760,7 +760,7 @@ Minimum points over the last 30 days (integer).
 
 *Default*: 0 (no minimum)
 
-You can use this to weed out less-active players, although **MAX LAST SEEN**
+You can use this to weed out less-active players, although [**MAX LAST SEEN**](#max-last-seen)
 is likely better for that.
 
 ___
@@ -787,7 +787,7 @@ Minimum number of days since Warlight Membership (integer).
 *Default*: 0 (no minimum)
 
 Setting this to a non-zero value will also make the league Members-only,
-regardless of the value of **MEMBERS ONLY**.
+regardless of the value of [**MEMBERS ONLY**](#members-only).
 
 ___
 
@@ -890,7 +890,7 @@ the league.
 
 *Default*: no maximum
 
-Like with **MAX LAST SEEN**, this command can be used to actively prune out
+Like with [**MAX LAST SEEN**](#max-last-seen), this command can be used to actively prune out
 players that go inactive. Players whose remaining vacation team exceeds MAX
 VACATION LENGTH days at the time they're checked against the prereqs will
 automatically have their teams' limits set to 0.
@@ -964,7 +964,7 @@ Minimum number of finished games to participate.
 
 This is across all games, not just ranked games- so Practice diplos/etc. are
 counted. You can still probably use this to weed out trolls but it's likely
-less effective than **MIN RANKED GAMES** at weeding out inexperienced players
+less effective than [**MIN RANKED GAMES**](#min-ranked-games) at weeding out inexperienced players
 in strategic games.
 
 ___
@@ -998,8 +998,8 @@ Whether to allow new teams to join.
 
 You can use this to manually whether players are able to join your league. Or
 if you have some fancier rules, you could use a Google Sheets formula to
-set this value based on those rules. This is overriden by **JOIN PERIOD START**
-and **JOIN PERIOD END** if a request is processed outside the join period, but
+set this value based on those rules. This is overriden by [**JOIN PERIOD START**](#join-period-start)
+and [**JOIN PERIOD END**](#join-period-end) if a request is processed outside the join period, but
 can conversely override those commands if a request is processed within the
 join period but ALLOW JOINING is set to false.
 
@@ -1017,7 +1017,7 @@ This has to follow a particular time format- "YYYY-mm-dd HH:MM:SS" (with
 zero-padding). Keep in mind this is based on when an add\_team command is
 *processed*, not when it's made, and that it's also dependent on the timezone
 of the machine on which cslbot runs (US Eastern). When in doubt, leave some
-room or just use **ALLOW JOINING** and a formula.
+room or just use [**ALLOW JOINING**](#allow-joining) and a formula.
 
 ___
 
@@ -1029,9 +1029,9 @@ The time at which join requests are no longer accepted.
 
 *Default*: no restriction
 
-See **JOIN PERIOD START** for important caveats and a description of how to
-format the time. Keep in mind that both **JOIN PERIOD START** and **JOIN PERIOD
-END** will override **ALLOW JOINING**- although if the date at which a request
+See [**JOIN PERIOD START**](#join-period-start) for important caveats and a description of how to
+format the time. Keep in mind that both [**JOIN PERIOD START**](#join-period-start) and [**JOIN PERIOD END**](#join-period-end)
+will override [**ALLOW JOINING**](#allow-joining)- although if the date at which a request
 is processed is within the join period, ALLOW JOINING will be used to make the
 decision.
 
@@ -1110,8 +1110,8 @@ Whether to constrain limits to a specific range instead of rejecting a set\_limi
 *Default*: True
 
 If a team tries to set their limit too high, constraining the limit will cause
-it to be just set to the league **MAX LIMIT**. If it's too low, it becomes the
-**MIN LIMIT**. To avoid springing surprises on teams, cslbot will not
+it to be just set to the league [**MAX LIMIT**](#max-limit). If it's too low, it becomes the
+[**MIN LIMIT**](#min-limit). To avoid springing surprises on teams, cslbot will not
 automatically adjust teams' limits if the league's minimum/maximum limits get
 changed.
 
@@ -1128,14 +1128,14 @@ Maximum number of teams a player can join within the same league (integer).
 The CSL framework supports leagues that allow players to join multiple teams as
 long as those players don't contain the same players (so you can't have two
 teams of the same X players- and, as a side-effect, multi-teaming is not
-supported in leagues where the **TEAM SIZE** is 1). You can set an upper limit
+supported in leagues where the [**TEAM SIZE**](#team-size) is 1). You can set an upper limit
 to keep players from joining too many teams.
 
 ___
 
 ### Vetos and Drops
 
-If a game has been in the lobby too long (past the **EXPIRY THRESHOLD**) with
+If a game has been in the lobby too long (past the [**EXPIRY THRESHOLD**](#expiry-threshold)) with
 no one accepting their invite or has had all of its players Vote to End, it
 will be considered abandoned. This gives players a mechanism to veto
 templates/games they dislike- vetoing makes players less likely to be assigned
@@ -1170,7 +1170,7 @@ Maximum number of vetos per game. (Must be an integer.)
 
 Every team a veto occurs, the game is recreated with the same teams (but a
 different template, of course). That is, until/unless the game has exceeded its
-veto limit, in which case the **VETO PENALTY** will be applied to every team's
+veto limit, in which case the [**VETO PENALTY**](#veto-penalty) will be applied to every team's
 rating. If the veto limit is exceeded, the game will also be deleted and no
 attempts will be made to recreate it on a different template.
 
@@ -1279,7 +1279,7 @@ Default Glicko rating (integer)
 *Default*: 1500
 
 This is just the rating new teams start out with. If you plan on modifying it,
-try keeping the **GLICKO RD** at the same ratio as it is in the default
+try keeping the [**GLICKO RD**](#glicko-rd) at the same ratio as it is in the default
 settings.
 
 ___
@@ -1297,7 +1297,7 @@ Default TrueSkill sigma/standard deviation (integer)
 *Default*: 500
 
 The TrueSkill sigma defines the range within which a team's actual rating
-is expected to fall. The recommended value is 1/3 of the **TRUESKILL MU**
+is expected to fall. The recommended value is 1/3 of the [**TRUESKILL MU**](#trueskill-mu)
 value.
 
 ___
@@ -1338,7 +1338,7 @@ ___
 
 You can use a minimum rating threshold or percentile to weed out teams that
 have been at the bottom of the league for a certain amount of time. It's
-recommend that you set **ALLOW REMOVAL** to false so that these teams can't
+recommend that you set [**ALLOW REMOVAL**](#allow-removal) to false so that these teams can't
 remove all evidence of their participation and rejoin your league. That's the
 default value anyway, so if you don't specifically set it to true, you should
 be good.
@@ -1357,7 +1357,7 @@ You can weed out teams below a certain official rating (using a single rating
 score, so no deviations/etc.) for a certain period of time. So if you're
 running an Elo ladder and decide that any team that's been below 1500 for 5
 days in a row doesn't belong in the league, you can set this to 1500 and
-**GRACE PERIOD** to 5. If you set a **MIN RATING PERCENTILE**, it will override
+[**GRACE PERIOD**](#grace-period) to 5. If you set a [**MIN RATING PERCENTILE**](#min-rating-percentile), it will override
 this.
 
 ___
@@ -1395,8 +1395,8 @@ after a certain number of days to give it a chance to compete again.
 If you want to set up a promotion/relegation league as an elimination ladder,
 you can use this to allow teams that were knocked down to eventually climb back
 up (although this would be a function of time rather than a function of their
-performance in lower leagues- but you can resolve that by using the **ALLOWED
-PLAYERS** command to only allow players from the top N teams in the league
+performance in lower leagues- but you can resolve that by using the [**ALLOWED
+PLAYERS**](#allowed-players) command to only allow players from the top N teams in the league
 directly below to compete; you'd have to use a formula that also let players on
 existing active teams to remain- so all players in non-probation teams in the
 current league + players from the top N teams in the league directly below).
@@ -1412,16 +1412,16 @@ Minimum percentile for a team to participate in good standing.
 *Default*: 0 (no minimum)
 
 If you want to regularly cut out the bottom x% of your league, just set your
-MIN RATING PERCENTILE to that same x. While using just **MIN RATING** will also
+MIN RATING PERCENTILE to that same x. While using just [**MIN RATING**](#min-rating) will also
 eventually cull your league down (assuming you don't allow any new players to
-join- see **ALLOW JOINING**, **JOIN PERIOD START**, and **JOIN PERIOD END**) to
+join- see [**ALLOW JOINING**](#allow-joining), [**JOIN PERIOD START**](#join-period-start), and [**JOIN PERIOD END**](#join-period-end)) to
 just its top member, it's not going to be as fast since after each culling it
 will take teams longer and longer to fall from their higher ratings to your
 rating threshold. This allows you to set a dynamic threshold to speed things
 up. Keep in mind that it's a bad idea to set this to "50" or below because that
 would cull the bottom half of your league very quickly and also mean that the
 *average* team (including new teams that just joined) would immediately be on
-probation (in their **GRACE PERIOD**).
+probation (in their [**GRACE PERIOD**](#grace-period)).
 
 ___
 
@@ -1453,4 +1453,4 @@ This way, you can guarantee teams at least N finished games before they run the
 risk of probation. This reduces the impact of random early rating fluctuations
 and makes the league less hectic for teams just starting out. If you want to
 set the minimum *number of days* before a team has to worry about elimination,
-use the **GRACE PERIOD**.
+use the [**GRACE PERIOD**](#grace-period).
