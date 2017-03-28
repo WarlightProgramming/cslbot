@@ -19,6 +19,20 @@ from wl_api.wl_api import APIError
 from sheetDB.errors import *
 from constants import API_CREDS
 
+# decorators
+
+def runPhase(func):
+    """
+    function decorator to log failures if phase fails
+    """
+    def func_wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except Exception as e:
+            failStr = ("Phase %s failed due to %s" % (func.__name__, str(e)))
+            self.parent.log(failStr, self.name, True)
+    return func_wrapper
+
 # errors
 class ImproperLeague(Exception):
     """raised for improperly formatted leagues"""
@@ -572,6 +586,7 @@ class League(object):
         if cmd is not None: cmd = int(cmd)
         return (cmd + self.gracePeriod)
 
+    @runPhase
     def restoreTeams(self):
         restPd = self.restorationPeriod
         if self.minRating is None or restPd is None: return
@@ -1188,6 +1203,7 @@ class League(object):
                                                       'type': 'positive'}},
                                               {'Confirmations': confirms})
 
+    @runPhase
     def executeOrders(self):
         self.setCurrentID()
         for order in self.orders:
@@ -1723,15 +1739,23 @@ class League(object):
         gameData = self.fetchGameData(gameID)
         temp = int(gameData['Template'])
         teams = assembleTeams(gameData)
-        wlID = self.handler.createGame(temp, self.getGameName(gameData), teams,
-                                       self.getGameMessage(gameData))
-        self.adjustTemplateGameCount(temp, 1)
-        createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
-        self.games.updateMatchingEntities({'ID': {'value': gameID,
-                                                  'type': 'positive'}},
-                                          {'WarlightID': wlID,
-                                           'Created': createdStr})
-        return gameData
+        try:
+            wlID = self.handler.createGame(temp, self.getGameName(gameData),
+                                           teams,
+                                           self.getGameMessage(gameData))
+            self.adjustTemplateGameCount(temp, 1)
+            createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
+            self.games.updateMatchingEntities({'ID': {'value': gameID,
+                                                      'type': 'positive'}},
+                                              {'WarlightID': wlID,
+                                               'Created': createdStr})
+            return gameData
+        except Exception as e:
+            sides = gameData['Sides']
+            self.parent.log("Failed to make game with %s on %d because of %s" %
+                            (sides, temp, str(e)), self.name)
+            self.games.removeMatchingEntities({'ID': {'value': gameID,
+                                                      'type': 'positive'}})
 
     def makeGame(self, gameID):
         gameData = self.createGame(gameID)
@@ -1846,6 +1870,7 @@ class League(object):
                                                       'type': 'positive'}},
                                               {'Rank': rank})
 
+    @runPhase
     def updateGames(self):
         gamesToCheck = self.unfinishedGames
         for game in gamesToCheck:
@@ -1919,6 +1944,7 @@ class League(object):
                 return True
         return False
 
+    @runPhase
     def validatePlayers(self):
         allTeams = self.teams.findEntities({'ID': {'value': '',
                                                    'type': 'negative'}})
@@ -2209,6 +2235,7 @@ class League(object):
                 self.parent.log(("Failed to create game with ID %d" %
                                  (currentID)), self.name, error=False)
 
+    @runPhase
     def createGames(self):
         teamsDict = self.teamsDict
         if self.sideSize > 1:
