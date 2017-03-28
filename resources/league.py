@@ -1825,7 +1825,7 @@ class League(object):
         try:
             wlID = self.handler.createGame(tempID, self.getGameName(gameData),
                        teams, settingsDict=tempSettings,
-                       message=self.getGameMessage(gameData), tempSettings)
+                       message=self.getGameMessage(gameData))
             self.adjustTemplateGameCount(temp, 1)
             createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
             self.games.updateMatchingEntities({'ID': {'value': gameID,
