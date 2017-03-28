@@ -1196,6 +1196,12 @@ class League(object):
         teamID = teamData['ID']
         return teamID, existingDrops
 
+    def updateTeamDrops(self, teamID, drops):
+        dropStr = (self.SEP_DROPS).join(set(drops))
+        self.teams.updateMatchingEntities({'ID': {'value': teamID,
+                                                  'type': 'positive'}},
+                                          {'Drops': dropStr})
+
     def dropTemplates(self, order):
         templateNames = order['orders'][2:]
         teamName = order['orders'][1]
@@ -1213,10 +1219,7 @@ class League(object):
             temp = self.findMatchingTemplate(templateName)
             if temp is None: continue
             existingDrops.append(temp)
-        dropStr = (self.SEP_DROPS).join(set(existingDrops))
-        self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                  'type': 'positive'}},
-                                          {'Drops': dropStr})
+        self.updateTeamDrops(teamID, existingDrops)
 
     def undropTemplates(self, order):
         templateNames = order['orders'][2:]
@@ -1225,10 +1228,7 @@ class League(object):
             temp = self.findMatchingTemplate(templateName)
             if (temp is not None and temp in existingDrops):
                 existingDrops.remove(temp)
-        dropStr = (self.SEP_DROPS).join(set(existingDrops))
-        self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                  'type': 'positive'}},
-                                          {'Drops': dropStr})
+        self.updateTeamDrops(teamID, existingDrops)
 
     def toggleActivity(self, order, setTo):
         author = int(order['author'])
@@ -1980,31 +1980,35 @@ class League(object):
                 playerCounts[player] = 0
             playerCounts[player] += 1
 
+    def setProbation(self, teamID, start=None):
+        if start is None: probStr = ''
+        else: probStr = datetime.strftime(start, self.TIMEFORMAT)
+        self.teams.updateMatchingEntities({'ID': {'value': teamID,
+                                                  'type': 'positive'}},
+                                          {'Probation Start': probStr})
+
+    def wipeProbation(self, teamID):
+        self.setProbation(teamID)
+
+    def startProbation(self, teamID):
+        self.setProbation(teamID, datetime.now())
+
     def checkTeamRating(self, teamID):
         teamData = self.fetchTeamData(teamID)
         teamFinished = int(teamData['Finished'])
         if (teamFinished < self.minToCull):
             if teamData['Probation Start'] is not '':
-                self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                          'type': 'positive'}},
-                                                  {'Probation Start': ''})
+                self.wipeProbation(teamID)
             return
         teamRating = int(self.prettifyRating(teamData['Rating']))
         teamRank = int(teamData['Rank'])
         start = self.fetchTeamData(teamID)['Probation Start']
         if (teamRating >= self.minRating and (self.maxRank is None or
-            teamRank <= self.maxRank)):
+            teamRank <= self.maxRank)): # no longer meets probation criteria
             if len(start) > 0:
-                self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                          'type': 'positive'}},
-                                                  {'Probation Start': ''})
-            return
-        if len(start) == 0:
-            start = datetime.now()
-            nowStr = datetime.strftime(start, self.TIMEFORMAT)
-            self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                      'type': 'positive'}},
-                                              {'Probation Start': nowStr})
+                self.wipeProbation(teamID)
+        elif len(start) == 0:
+            self.startProbation(teamID)
         else:
             start = datetime.strptime(start, self.TIMEFORMAT)
         if (datetime.now() - start).days >= self.gracePeriod:
@@ -2015,7 +2019,9 @@ class League(object):
             self.checkTeamRating(teamID)
             self.checkTeam(players, teamID)
             return False
-        except ImproperOrder:
+        except ImproperOrder as e:
+            self.parent.log(("Removing %s because: %s" % (str(teamID),
+                             e.message)), self.name)
             self.changeLimit(teamID, 0)
             return True
 
