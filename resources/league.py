@@ -76,7 +76,7 @@ class League(object):
     ORD_DEACTIVATE_TEMPLATE = "deactivate_template"
     ORD_QUIT_LEAGUE = "quit_league"
 
-    # settings
+    # commands
     SET_MODS = "MODS"
     SET_GAME_SIZE = "GAME SIZE"
     SET_TEAM_SIZE = "TEAM SIZE"
@@ -189,6 +189,7 @@ class League(object):
 
     # keywords
     KW_ALL = "ALL"
+    KW_TEMPSETTING = "SET_"
 
     # separators
     SEP_CMD = ","
@@ -203,6 +204,7 @@ class League(object):
     SEP_VETOS = "/"
     SEP_DROPS = "/"
     SEP_MODS = ","
+    SEP_TEMPSET = "#"
 
     def __init__(self, games, teams, templates, settings, orders,
                  admin, parent, name, thread):
@@ -1799,14 +1801,31 @@ class League(object):
                                                       'type': 'positive'}},
                                               {'History': newHistory})
 
+    def getTempSettings(self, tempID):
+        tempData = self.fetchTemplateData(tempID)
+        template = tempData['WarlightID']
+        settingsDict, checkLen = dict(), len(self.TEMPSETTING)
+        for head in tempData:
+            if self.TEMPSETTING == head[:checkLen]:
+                settingName = head[checkLen:]
+                if (settingName.count(self.SEP_TEMPSET) == 1):
+                    settingName, sVal = settingName.split(self.SEP_TEMPSET)
+                    if settingName not in settingsDict:
+                        settingsDict[settingName] = dict()
+                    settingsDict[settingName][sVal] = tempData[head]
+                else:
+                    settingsDict[settingName] = tempData[head]
+        return template, settingsDict
+
     def createGame(self, gameID):
         gameData = self.fetchGameData(gameID)
         temp = int(gameData['Template'])
+        tempID, tempSettings = self.getTempSettings(temp)
         teams = assembleTeams(gameData)
         try:
-            wlID = self.handler.createGame(temp, self.getGameName(gameData),
-                                           teams,
-                                           self.getGameMessage(gameData))
+            wlID = self.handler.createGame(tempID, self.getGameName(gameData),
+                       teams, settingsDict=tempSettings,
+                       message=self.getGameMessage(gameData), tempSettings)
             self.adjustTemplateGameCount(temp, 1)
             createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
             self.games.updateMatchingEntities({'ID': {'value': gameID,
