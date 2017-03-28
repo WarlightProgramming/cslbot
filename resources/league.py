@@ -209,7 +209,7 @@ class League(object):
         email, token = creds['E-mail'], creds['APIToken']
         return APIHandler(email, token)
 
-    def _getMods():
+    def _getMods(self):
         mods = self.getIDGroup(self.SET_MODS)
         mods.add(self.admin)
         return mods
@@ -381,7 +381,6 @@ class League(object):
             cmd = int(cmd)
         return cmd
 
-    @property
     def meetsVacation(self, player):
         maxVac, secsPerDay = self.maxVacation, 86400
         if maxVac is None: return True
@@ -392,7 +391,7 @@ class League(object):
         if maxVac is 0: return False
         vacayTime = datetime.strptime(validationData['onVacationUntil'],
                                       formatStr)
-        diff = ((vacayTime - datetime.now()) - timeDelta)
+        diff = ((vacayTime - datetime.now()) - timeZoneDiff)
         totalDays = diff.days + float(diff.seconds) / secsPerDay
         return (totalDays <= maxVac)
 
@@ -897,9 +896,9 @@ class League(object):
 
     def allowed(self, playerID):
         """returns True if a player is allowed to join the league"""
-        if player in self.allowedPlayers: return True
         player = int(playerID)
-        parser = PlayerParser(playerID)
+        if player in self.allowedPlayers: return True
+        parser = PlayerParser(player)
         if not self.checkPrereqs(parser):
             return False
         return (player not in self.bannedPlayers and
@@ -1121,23 +1120,23 @@ class League(object):
         return IDs[0]
 
     def getExistingDrops(self, order):
-        author = int(order['author'])
         teamData = self.fetchMatchingTeam(order)
         existingDrops = teamData['Drops']
         existingDrops = existingDrops.split(self.SEP_DROPS)
-        return teamData, existingDrops
+        teamID = teamData['ID']
+        return teamID, existingDrops
 
     def dropTemplate(self, order):
         templateName = order['orders'][2]
         temp = self.findMatchingTemplate(templateName)
         if temp is None: return
-        teamData, existingDrops = self.getExistingDrops(order)
+        teamID, existingDrops = self.getExistingDrops(order)
         if len(existingDrops) >= self.dropLimit:
             raise ImproperOrder("Team %s already reached its drop limit" %
                                 (teamName))
         existingDrops.append(temp)
         dropStr = (self.SEP_DROPS).join(set(existingDrops))
-        self.teams.updateMatchingEntities({'ID': {'value': teamData['ID'],
+        self.teams.updateMatchingEntities({'ID': {'value': teamID,
                                                   'type': 'positive'}},
                                           {'Drops': dropStr})
 
@@ -1145,10 +1144,10 @@ class League(object):
         templateName = order['orders'][2]
         temp = self.findMatchingTemplate(templateName)
         if temp is None: return
-        teamData, existingDrops = self.getExistingDrops(order)
+        teamID, existingDrops = self.getExistingDrops(order)
         existingDrops.remove(temp)
         dropStr = (self.SEP_DROPS).join(set(existingDrops))
-        self.teams.updateMatchingEntities({'ID': {'value': teamData['ID'],
+        self.teams.updateMatchingEntities({'ID': {'value': teamID,
                                                   'type': 'positive'}},
                                           {'Drops': dropStr})
 
@@ -1644,7 +1643,7 @@ class League(object):
         return {self.RATE_ELO: self.getPrettyEloRating,
                 self.RATE_GLICKO: self.getPrettyGlickoRating,
                 self.RATE_TRUESKILL: self.getPrettyTrueSkillRating,
-                self.RATE_WINCOUNT: (lambda r: int(r)),
+                self.RATE_WINCOUNT: int,
                 self.RATE_WINRATE: lambda r: int(r.split(self.SEP_RTG)[0])}[
                 self.ratingSystem](rating)
 
@@ -1866,7 +1865,8 @@ class League(object):
                                                   'type': 'positive'}},
                                           {'Limit': limit})
 
-    def updatePlayerCounts(self, playerCounts, players):
+    @staticmethod
+    def updatePlayerCounts(playerCounts, players):
         for player in players:
             if player not in playerCounts:
                 playerCounts[player] = 0

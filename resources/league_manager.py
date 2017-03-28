@@ -217,10 +217,8 @@ class LeagueManager(object):
         """runs orders that are not specific to any league"""
         for order in orders:
             orderType = order['type'].lower()
-            orderCmds = order['orders']
-            orderAuthor = order['author']
             try:
-                {}[orderType]
+                {}[orderType](order)
             except KeyError:
                 self.log("Unrecognized order: %s" % (order['type']))
             except OrderError as err:
