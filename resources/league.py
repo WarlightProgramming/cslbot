@@ -1327,10 +1327,11 @@ class League(object):
 
     @property
     def unfinishedGames(self):
-        return self.getExtantEntities(self.games,
-                                      {'Winner': {'value': '',
-                                                  'type': 'positive'}},
-                                      keyLabel='WarlightID')
+        return self.games.findEntities({'ID': {'value': '',
+                                               'type': 'negative'},
+                                        'Winner': {'value': '',
+                                                   'type': 'positive'}},
+                                        keyLabel='WarlightID')
 
     @staticmethod
     def isAbandoned(players):
@@ -1384,23 +1385,21 @@ class League(object):
             return self.handleWaiting(gameData, created)
 
     @staticmethod
-    def fetchDataByID(table, ID, nonexStr=""):
+    def fetchDataByID(table, ID, itemType):
+        nonexStr = "Nonexistent %s: %s" % (str(itemType), str(ID))
         data = table.findEntities({'ID': {'value': ID,
                                           'type': 'positive'}})
         if len(data) == 0: raise NonexistentItem(nonexStr)
         return data[0]
 
     def fetchGameData(self, gameID):
-        nonexStr = "Nonexistent game: %s" % (str(gameID))
-        return self.fetchDataByID(self.games, gameID, nonexStr)
+        return self.fetchDataByID(self.games, gameID, "game")
 
     def fetchTeamData(self, teamID):
-        nonexStr = "Nonexistent team: %s" % (str(teamID))
-        return self.fetchDataByID(self.teams, teamID, nonexStr)
+        return self.fetchDataByID(self.teams, teamID, "team")
 
     def fetchTemplateData(self, templateID):
-        nonexStr = "Nonexistent template: %s" % (str(templateID))
-        return self.fetchDataByID(self.templates, templateID, nonexStr)
+        return self.fetchDataByID(self.templates, templateID, "template")
 
     def findCorrespondingTeams(self, gameID, players):
         players = set([str(player) for player in players])
