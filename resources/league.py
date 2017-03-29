@@ -38,8 +38,8 @@ class ImproperLeague(Exception):
     """raised for improperly formatted leagues"""
     pass
 
-class ImproperOrder(Exception):
-    """raised for improperly formatted orders"""
+class ImproperInput(Exception):
+    """raised for improperly formatted orders and commands"""
     pass
 
 class NonexistentItem(Exception):
@@ -220,6 +220,34 @@ class League(object):
         self.thread = thread
         self.handler = self._makeHandler()
         self.checkFormat()
+        self.makeRateSysDict()
+
+    def makeRateSysDict(self):
+        self.sysDict = {self.RATE_ELO: {'default': self.defaultElo,
+                                        'update': self.getNewEloRatings,
+                                        'prettify': self.getPrettyEloRating,
+                                        'parity': self.getEloParity},
+                        self.RATE_GLICKO: {'default': self.defaultGlicko,
+                                           'update': self.getNewGlickoRatings,
+                                           'prettify':
+                                           self.getPrettyGlickoRating,
+                                           'parity': self.getGlickoParity},
+                        self.RATE_TRUESKILL: {'default': self.defaultTrueSkill,
+                                              'update':
+                                              self.getNewTrueSkillRatings,
+                                              'prettify':
+                                              self.getPrettyTrueSkillRating,
+                                              'parity':
+                                              self.getTrueSkillParity},
+                        self.RATE_WINCOUNT: {'default': self.defaultWinCount,
+                                             'update': self.getNewWinCounts,
+                                             'prettify': int,
+                                             'parity': self.getWinCountParity},
+                        self.RATE_WINRATE: {'default': self.defaultWinRate,
+                                            'update': self.getNewWinRates,
+                                            'prettify': (lambda r:
+                                            int(r.split(self.SEP_RTG)[0])),
+                                            'parity': self.getWinRateParity}}
 
     @staticmethod
     def _makeHandler():
@@ -450,15 +478,23 @@ class League(object):
         return self.fetchProperty(self.SET_CONSTRAIN_LIMIT, True,
                                   self.getBoolProperty)
 
+    @staticmethod
+    def valueInRange(val, rangeMin, rangeMax):
+        return ((rangeMin is None or val >= rangeMin) and
+                (rangeMax is None or val <= rangeMax))
+
     def limitInRange(self, limit):
         """returns True if a limit is in an acceptable range"""
-        return (limit >= self.minLimit and
-                (self.maxLimit is None or limit <= self.maxLimit))
+        return self.valueInRange(limit, self.minLimit, self.maxLimit)
 
     @property
     def ratingSystem(self):
         """rating system to use"""
-        return self.fetchProperty(self.SET_SYSTEM, self.RATE_ELO)
+        system = self.fetchProperty(self.SET_SYSTEM, self.RATE_ELO,
+                                    lambda x: x.upper())
+        if system not in self.sysDict:
+            raise ImproperInput("Unrecognized rating system. Aborting.")
+        return system
 
     @property
     def kFactor(self):
@@ -483,7 +519,7 @@ class League(object):
 
     @property
     def defaultGlicko(self):
-        return str(self.glickoRating) + "." + str(self.glickoRd)
+        return self.unsplitRtg([self.glickoRating, self.glickoRd])
 
     @property
     def trueSkillSigma(self):
@@ -512,7 +548,7 @@ class League(object):
 
     @property
     def defaultTrueSkill(self):
-        return str(self.trueSkillMu) + "." + str(self.trueSkillSigma)
+        return self.unsplitRtg([self.trueSkillMu, self.trueSkillSigma])
 
     @property
     def defaultWinCount(self):
@@ -606,12 +642,11 @@ class League(object):
     def restoreTeams(self):
         restPd = self.restorationPeriod
         if self.minRating is None or restPd is None: return
-        deadTeams = self.teams.findEntities({'ID': {'value': '',
-                                                    'type': 'negative'},
-                                             'Limit': {'value': '0',
-                                                       'type': 'positive'},
-                                             'Probation Start': {'value': '',
-                                                        'type': 'positive'}})
+        deadTeams = self.getExtantEntities(self.teams,
+                                           {'Limit': {'value': '0',
+                                                      'type': 'positive'},
+                                            'Probation Start': {'value': '',
+                                                          'type': 'negative'}})
         for team in deadTeams:
             probStart = team['Probation Start']
             probStart = datetime.strptime(probStart, self.TIMEFORMAT)
@@ -638,18 +673,13 @@ class League(object):
     def activeFull(self):
         cap = self.activeCapacity
         if cap is None: return False
-        activeTeams = self.teams.findEntities({'ID': {'value': '',
-                                                      'type': 'negative'},
-                                               'Limit': {'value': '0',
-                                                         'type': 'negative'}})
-        return (len(activeTeams) >= cap)
+        return (len(self.activeTeams) >= cap)
 
     @property
     def leagueFull(self):
         cap = self.leagueCapacity
         if cap is None: return False
-        allTeams = self.teams.findEntities({'ID': {'value': '',
-                                                   'type': 'negative'}})
+        allTeams = self.getExtantEntities(self.teams)
         return (len(allTeams) >= cap)
 
     @staticmethod
@@ -709,19 +739,33 @@ class League(object):
     def minLimitToRank(self):
         return self.fetchProperty(self.SET_MIN_LIMIT_TO_RANK, 1, int)
 
+    @staticmethod
+    def getExtantEntities(table, restrictions=None):
+        matchDict = {'ID': {'value': '', 'type': 'negative'}}
+        if restrictions is not None:
+            for restriction in restrictions:
+                matchDict[restriction] = restrictions[restriction]
+        return table.findEntities(matchDict)
+
+    @property
+    def activeTeams(self):
+        return self.getExtantEntities(self.teams,
+                                      {'Limit': {'value': '0',
+                                                 'type': 'negative'}})
+
+    @property
+    def activeTemplates(self):
+        return self.getExtantEntities(self.templates,
+                                      {'Active': {'value': 'TRUE',
+                                                  'type': 'positive'}})
+
     @property
     def size(self):
-        return len(self.teams.findEntities({'ID': {'value': '',
-                                                   'type': 'negative'},
-                                            'Limit': {'value': '0',
-                                                      'type': 'negative'}}))
+        return len(self.activeTeams)
 
     @property
     def templateSize(self):
-        return len(self.templates.findEntities({'ID': {'value': '',
-                                                       'type': 'negative'},
-                                               'Active': {'value': "TRUE",
-                                                         'type': 'positive'}}))
+        return len(self.activeTemplates)
 
     @property
     def minTemplates(self):
@@ -761,9 +805,8 @@ class League(object):
 
     def gameCountInRange(self, player):
         ongoing = player.currentGames
-        return (ongoing >= self.minOngoingGames and
-                ((self.maxOngoingGames is None) or
-                  ongoing <= self.maxOngoingGames))
+        return self.valueInRange(ongoing, self.minOngoingGames,
+                                 self.maxOngoingGames)
 
     @property
     def minRTPercent(self):
@@ -913,21 +956,19 @@ class League(object):
                 lastSeen <= self.maxLastSeen)
 
     def checkPrereqs(self, player):
-        return (self.clanAllowed(player) and
-                self.locationAllowed(player) and
-                player.bootRate <= self.maxBoot and
-                player.level >= self.minLevel and
-                self.meetsMembership(player) and
-                self.meetsVacation(player) and
-                player.points >= self.minPoints and
-                self.meetsAge(player) and
-                self.meetsSpeed(player) and
-                self.gameCountInRange(player) and
-                self.RTPercentInRange(player) and
-                self.meetsLastSeen(player) and
-                self.meetsMinRanked(player) and
-                player.playedGames >= self.minGames and
-                player.achievementRate >= self.minAchievementRate)
+        prereqs = {self.clanAllowed(player), self.locationAllowed(player),
+                   (player.bootRate <= self.maxBoot),
+                   (player.level >= self.minLevel),
+                   self.meetsMembership(player), self.meetsVacation(player),
+                   (player.points >= self.minPoints), self.meetsAge(player),
+                   self.meetsSpeed(player), self.gameCountInRange(player),
+                   self.RTPercentInRange(player), self.meetsLastSeen(player),
+                   self.meetsMinRanked(player),
+                   (player.playedGames >= self.minGames),
+                   (player.achievementRate >= self.minAchievementRate)}
+        for prereq in prereqs:
+            if prereq is not True: return False
+        return True
 
     def allowed(self, playerID):
         """returns True if a player is allowed to join the league"""
@@ -951,7 +992,7 @@ class League(object):
     def checkTeamCreator(self, creator, members):
         if (creator not in members and
             creator not in self.mods):
-            raise ImproperOrder(str(creator) + " isn't able to" +
+            raise ImproperInput(str(creator) + " isn't able to" +
                                 " add a team that excludes them")
 
     def checkTemplateAccess(self, playerID):
@@ -972,12 +1013,12 @@ class League(object):
         teams = self.teams.findEntities({'ID': {'value': teamID,
                                                 'type': 'positive'}})
         if len(teams) == 0:
-            raise ImproperOrder("Cannot autodrop for nonexistent team %s" %
+            raise ImproperInput("Cannot autodrop for nonexistent team %s" %
                                 (str(teamID)))
         team = teams[0]
         existingDrops = set(team['Drops'].split(self.SEP_DROPS))
         if (len(existingDrops) + len(templates)) > self.dropLimit:
-            raise ImproperOrder("Team %s has already reached its drop limit" %
+            raise ImproperInput("Team %s has already reached its drop limit" %
                                 (str(teamID)))
         existingDrops = existingDrops.union(str(t) for t in templates)
         drops = (self.SEP_DROPS).join(str(d) for d in existingDrops)
@@ -989,7 +1030,7 @@ class League(object):
         badTemplates = set()
         for member in members:
             if self.banned(member):
-                raise ImproperOrder(str(member) +
+                raise ImproperInput(str(member) +
                                     " is banned from this league")
             else:
                 tempAccess = self.checkTemplateAccess(member)
@@ -1005,7 +1046,7 @@ class League(object):
                 return ""
         else:
             memberStr = (self.SEP_PLYR).join([str(m) for m in members])
-            raise ImproperOrder("Team with %s cannot play on enough templates"
+            raise ImproperInput("Team with %s cannot play on enough templates"
                                 % (memberStr))
 
     def checkLimit(self, limit):
@@ -1013,7 +1054,7 @@ class League(object):
             if self.constrainLimit:
                 if limit < self.minLimit: return self.minLimit
                 return self.maxLimit
-            else: raise ImproperOrder()
+            else: raise ImproperInput()
         return limit
 
     @property
@@ -1040,11 +1081,7 @@ class League(object):
 
     @property
     def defaultRating(self):
-        return {self.RATE_ELO: self.defaultElo,
-                self.RATE_GLICKO: self.defaultGlicko,
-                self.RATE_TRUESKILL: self.defaultTrueSkill,
-                self.RATE_WINCOUNT: self.defaultWinCount,
-                self.RATE_WINRATE: self.defaultWinRate}[self.ratingSystem]
+        return self.sysDict[self.ratingSystem]['default']
 
     @property
     def teamPlayers(self):
@@ -1053,7 +1090,7 @@ class League(object):
 
     def addTeam(self, order):
         if not self.joinsAllowed:
-            raise ImproperOrder("This league is not open to new teams")
+            raise ImproperInput("This league is not open to new teams")
         teamName = order['orders'][1]
         gameLimit = int(order['orders'][2])
         members = [int(member) for member in order['orders'][3:]]
@@ -1066,7 +1103,7 @@ class League(object):
         members = (self.SEP_PLYR).join([str(m) for m in members])
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
         if members in self.teamPlayers:
-            raise ImproperOrder("Team %s is a duplicate of an existing team." %
+            raise ImproperInput("Team %s is a duplicate of an existing team." %
                                 (teamName))
         self.teams.addEntity({'ID': self.currentID,
                               'Name': teamName,
@@ -1091,7 +1128,7 @@ class League(object):
         if (checkAuthor and (author not in self.mods or not allowMod)
             and str(author) not in
             matchingTeam['Players'].split(self.SEP_PLYR)):
-            raise ImproperOrder(str(author) + " not in " +
+            raise ImproperInput(str(author) + " not in " +
                                 str(name))
         try:
             index = (matchingTeam['Players'].
@@ -1103,10 +1140,10 @@ class League(object):
     def toggleConfirm(self, order, confirm=True):
         try:
             matchingTeam, index = self.fetchMatchingTeam(order, True, False)
-        except ImproperOrder:
-            raise ImproperOrder(str(player) + " not in " + str(team))
+        except ImproperInput:
+            raise ImproperInput(str(player) + " not in " + str(team))
         if index is None:
-            raise ImproperOrder(str(player) + " not in " + str(team))
+            raise ImproperInput(str(player) + " not in " + str(team))
         confirms = matchingTeam['Confirmations'].split(self.SEP_CONF)
         confirms[index] = "TRUE" if confirm else "FALSE"
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
@@ -1133,7 +1170,7 @@ class League(object):
 
     def removeTeam(self, order):
         if not self.allowRemoval:
-            raise ImproperOrder("Team removal has been disabled.")
+            raise ImproperInput("Team removal has been disabled.")
         matchingTeam = self.fetchMatchingTeam(order)[0]
         self.teams.removeMatchingEntities({'ID':
                                            matchingTeam['ID']})
@@ -1144,14 +1181,14 @@ class League(object):
         if not self.activeFull: return
         oldLimit = int(self.fetchTeamData(teamID)['Limit'])
         if oldLimit == 0:
-            raise ImproperOrder("League has reached max active teams.")
+            raise ImproperInput("League has reached max active teams.")
 
     def setLimit(self, order):
         matchingTeam = self.fetchMatchingTeam(order, False)[0]
         players = matchingTeam['Players'].split(self.SEP_PLYR)
         if (str(order['author']) not in players and
             order['author'] not in self.mods):
-            raise ImproperOrder(str(order['author']) +
+            raise ImproperInput(str(order['author']) +
                                 " can't set the limit for team " +
                                 str(order['orders'][1]))
         self.checkLimitChange(matchingTeam['ID'], order['orders'][2])
@@ -1171,11 +1208,7 @@ class League(object):
 
     @property
     def templateRanks(self):
-        tempData = self.templates.findEntities({'ID': {'value': '',
-                                                       'type': 'negative'},
-                                                'Active': {'values':
-                                                           ['TRUE', True],
-                                                       'type': 'positive'}})
+        tempData = self.activeTemplates
         tempInfo = [(int(tempData[temp]['ID']), int(tempData[temp]['Games']))
                     for temp in tempData]
         tempInfo.sort(key = lambda x: x[1])
@@ -1208,7 +1241,7 @@ class League(object):
         teamID, existingDrops = self.getExistingDrops(order)
         remainingDrops = (self.dropLimit - len(existingDrops))
         if remainingDrops < 1:
-            raise ImproperOrder("Team %s already reached its drop limit" %
+            raise ImproperInput("Team %s already reached its drop limit" %
                                 (teamName))
         elif remainingDrops < len(templateNames):
             dataStr = ("Too many drops attempted by team %s, dropping first %d"
@@ -1233,7 +1266,7 @@ class League(object):
     def toggleActivity(self, order, setTo):
         author = int(order['author'])
         if author not in self.mods:
-            raise ImproperOrder("Only mods can toggle template active status")
+            raise ImproperInput("Only mods can toggle template active status")
         tempName = order['orders'][1]
         self.templates.updateMatchingEntities({'Name': {'value': tempName,
                                                         'type': 'positive'}},
@@ -1244,7 +1277,7 @@ class League(object):
 
     def deactivateTemplate(self, order):
         if self.templateSize <= self.minTemplates:
-            raise ImproperOrder("Not enough active templates to deactivate")
+            raise ImproperInput("Not enough active templates to deactivate")
         self.toggleActivity(order, 'FALSE')
 
     def quitLeague(self, order):
@@ -1253,8 +1286,7 @@ class League(object):
             players = set(order['orders'][1:])
         else:
             players = set([author,])
-        allTeams = self.teams.findEntities({'ID': {'value': '',
-                                                   'type': 'negative'}})
+        allTeams = self.getExtantEntities(self.teams)
         for team in allTeams:
             members = team['Players'].split(self.SEP_PLYR)
             confirms = team['Confirmations'].split(self.SEP_CONF)
@@ -1295,11 +1327,10 @@ class League(object):
 
     @property
     def unfinishedGames(self):
-        return self.games.findEntities({'ID': {'value': '',
-                                               'type': 'negative'},
-                                        'Winner': {'value': '',
-                                                   'type': 'positive'}},
-                                       keyLabel='WarlightID')
+        return self.getExtantEntities(self.games,
+                                      {'Winner': {'value': '',
+                                                  'type': 'positive'}},
+                                      keyLabel='WarlightID')
 
     @staticmethod
     def isAbandoned(players):
@@ -1556,12 +1587,7 @@ class League(object):
         :param sides: list[set[string]]
         :param winningSide: int (index of winning side)
         """
-        return {self.RATE_ELO: self.getNewEloRatings,
-                self.RATE_GLICKO: self.getNewGlickoRatings,
-                self.RATE_TRUESKILL: self.getNewTrueSkillRatings,
-                self.RATE_WINCOUNT: self.getNewWinCounts,
-                self.RATE_WINRATE: self.getNewWinRates}[
-                self.ratingSystem](sides, winningSide)
+        return self.sysDict[self.ratingSystem]['update'](sides, winningSide)
 
     def updateTeamRating(self, teamID, rating):
         self.teams.updateMatchingEntities({'ID': {'value': teamID,
@@ -1722,12 +1748,7 @@ class League(object):
         return str(mu - 3 * sigma)
 
     def prettifyRating(self, rating):
-        return {self.RATE_ELO: self.getPrettyEloRating,
-                self.RATE_GLICKO: self.getPrettyGlickoRating,
-                self.RATE_TRUESKILL: self.getPrettyTrueSkillRating,
-                self.RATE_WINCOUNT: int,
-                self.RATE_WINRATE: lambda r: int(r.split(self.SEP_RTG)[0])}[
-                self.ratingSystem](rating)
+        return self.sysDict[self.ratingSystem]['prettify'](rating)
 
     def getPrettyRating(self, team):
         teamRating = self.getTeamRating(team)
@@ -1926,8 +1947,7 @@ class League(object):
          'ABANDONED': self.updateVeto(gameID)}.get([status[0]])
 
     def updateRanks(self):
-        allTeams = self.teams.findEntities({'ID': {'value': '',
-                                                   'type': 'negative'}})
+        allTeams = self.getExtantEntities(self, teams)
         teamRatings = list()
         for team in allTeams:
             if ((int(team['Finished']) < self.minToRank or
@@ -2012,14 +2032,14 @@ class League(object):
         else:
             start = datetime.strptime(start, self.TIMEFORMAT)
         if (datetime.now() - start).days >= self.gracePeriod:
-            raise ImproperOrder("Team %s rating is too low" % (str(teamID)))
+            raise ImproperInput("Team %s rating is too low" % (str(teamID)))
 
     def validateTeam(self, teamID, players):
         try:
             self.checkTeamRating(teamID)
             self.checkTeam(players, teamID)
             return False
-        except ImproperOrder as e:
+        except ImproperInput as e:
             self.parent.log(("Removing %s because: %s" % (str(teamID),
                              e.message)), self.name)
             self.changeLimit(teamID, 0)
@@ -2035,8 +2055,7 @@ class League(object):
 
     @runPhase
     def validatePlayers(self):
-        allTeams = self.teams.findEntities({'ID': {'value': '',
-                                                   'type': 'negative'}})
+        allTeams = self.teams.findEntities(self.teams)
         playerCounts = dict()
         for i in xrange(len(allTeams)):
             team, dropped = allTeams[i], False
@@ -2126,12 +2145,7 @@ class League(object):
         given two ratings, returns a score from 0.0 to 1.0
         representing the preferability of the pairing
         """
-        return {self.RATE_ELO: self.getEloParity,
-                self.RATE_GLICKO: self.getGlickoParity,
-                self.RATE_TRUESKILL: self.getTrueSkillParity,
-                self.RATE_WINCOUNT: self.getWinCountParity,
-                self.RATE_WINRATE: self.getWinRateParity}[
-                self.ratingSystem](ratings)
+        return self.sysDict[self.ratingSystem]['parity'](ratings)
 
     @classmethod
     def getPlayers(cls, team):
@@ -2144,24 +2158,24 @@ class League(object):
         history = team['History'].split(cls.SEP_TEAMS)
         return [int(t) for t in history]
 
+    @staticmethod
+    def addToSetWithinDict(data, label, value):
+        if label not in data:
+            data[label] = set()
+        data[label].add(value)
+
     def makePlayersDict(self, teams):
         result = dict()
         for team in teams:
             players = self.getPlayers(team)
             ID = int(team['ID'])
             for player in players:
-                if player not in result:
-                    result[player] = set()
-                result[player].add(ID)
+                self.addToSetWithinDict(result, player, ID)
         return result
 
     @property
     def teamsDict(self):
-        result = dict()
-        allTeams = self.teams.findEntities({'ID': {'value': '',
-                                                  'type': 'negative'},
-                                            'Limit': {'value': 0,
-                                                      'type': 'positive'}})
+        result, allTeams = dict(), self.activeTeams
         playersDict = self.makePlayersDict(allTeams)
         for team in allTeams:
             if ('FALSE' in team['Confirmations']): continue
@@ -2207,8 +2221,7 @@ class League(object):
         for side in sides:
             teams = side.split(self.SEP_TEAMS)
             for team in teams:
-                if team not in result: result[team] = set()
-                result[team].add(side)
+                self.addToSetWithinDict(result, team, side)
         return result
 
     def getSideConflicts(self, side, teamsDict, teamsToSides):
