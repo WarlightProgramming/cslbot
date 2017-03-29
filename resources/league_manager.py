@@ -143,6 +143,23 @@ class LeagueManager(object):
                                  TITLE_STATUS: error,
                                  TITLE_DESC: description})
 
+    def getDefaultResults(self, league):
+        if league is not LG_ALL:
+            return self.fetchLeagueCommands(LG_ALL)
+        return dict()
+
+    @staticmethod
+    def getCommandArgs(commands, command):
+        args = commands[command][TITLE_ARG]
+        if len(args):
+            if SEP_CMD in args: return args.split(SEP_CMD)
+            return args
+
+    def addArgToResults(self, results, commands, command):
+        args = self.getCommandArgs(commands, command)
+        if args is not None:
+            results[command] = args
+
     def fetchLeagueCommands(self, league):
         """
         given a league (string), fetches a dictionary
@@ -150,15 +167,10 @@ class LeagueManager(object):
         league-specific commands override commands given to all leagues
         """
         commands = self.commands.getAllEntities(keyLabel=TITLE_CMD)
-        if league is not LG_ALL:
-            results = self.fetchLeagueCommands(LG_ALL)
-        else: results = dict()
+        results = self.getDefaultResults(league)
         for command in commands:
             if (commands[command][TITLE_LG] == league):
-                args = commands[command][TITLE_ARG]
-                if len(args) == 0: continue
-                if SEP_CMD in args: args = args.split(SEP_CMD)
-                results[command] = args
+                self.addArgToResults(results, commands, command)
         return results
 
     @staticmethod
