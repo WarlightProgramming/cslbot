@@ -1736,11 +1736,8 @@ class League(object):
         vetos = gameData['Vetoed'] + self.SEP_VETOS + str(gameData['Template'])
         if vetos[0] == self.SEP_VETOS: vetos = vetos[1:]
         vetoCount = int(gameData['Vetos']) + 1
-        self.games.updateMatchingEntities({'ID': {'value': gameData['ID'],
-                                                  'type': 'positive'}},
-                                          {'Vetoed': vetos,
-                                           'Vetos': vetoCount,
-                                           'Template': ''})
+        self.updateEntityValue(self.games, gameData['ID'], Vetoed=vetos,
+                               Vetos=vetoCount, Template='')
         self.adjustTemplateGameCount(gameData['Template'], -1)
 
     def setGameTemplate(self, gameID, tempID):
@@ -1936,9 +1933,16 @@ class League(object):
                 self.adjustTeamGameCount(team, 1)
         self.updateHistories(gameData)
 
+    def getGameVetos(self, gameData):
+        vetos = set([v for v in gameData['Vetoed'].split(self.SEP_TEMP)])
+        for side in gameData['sides'].split(self.SEP_SIDES):
+            for team in side.split(self.SEP_TEAMS):
+                teamData = self.fetchTeamData(team)
+                self.updateConflicts(teamData, vetos)
+        return set(int(v) for v in vetos)
+
     def updateTemplate(self, gameID, gameData):
-        vetos = set([int(v) for v in gameData['Vetoed'].split(self.SEP_TEMP)])
-        ranks, i = self.templateRanks, 0
+        vetos, ranks, i = self.getGameVetos(gameData), self.templateRanks, 0
         while (i < len(ranks) and ranks[i][0] in vetos): i += 1
         if i < len(ranks):
             newTemp = ranks[i][0]
@@ -1978,13 +1982,10 @@ class League(object):
                 newVetos = newVetos[1:]
         else:
             newVetos = self.updateVetoCt(oldVetos, template, adj)
-        self.teams.updateMatchingEntities({'ID': {'value': team,
-                                                  'type': 'positive'}},
-                                          {'Vetos': newVetos})
+        self.updateEntityValue(self.teams, team, Vetos=newVetos)
 
     def updateGameVetos(self, teams, template):
-        for team in teams:
-            self.updateTeamVetos(team, template, 1)
+        for team in teams: self.updateTeamVetos(team, template, 1)
 
     @classmethod
     def getTeams(cls, gameData):
