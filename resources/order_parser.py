@@ -11,40 +11,26 @@ class OrderParser(ForumThreadParser):
     takes a threadID (int or string)
     """
 
-    ## parseOrderData
+    ## getOrderInfo
     @staticmethod
-    def parseOrderData(orderText):
+    def getOrderInfo(orderText):
+        orderInfo, quote, space = list(), '&quot;', " "
+        regions = orderText.split(quote)
+        for i in xrange(len(regions)):
+            region = regions[i]
+            if (i % 2): # odd indices - in quotes
+                orderInfo.append(region)
+            else:
+                orderInfo += region.split()
+        return orderInfo
+
+    ## parseOrderData
+    def parseOrderData(self, orderText):
         """parses a single chunk of text"""
-        quote, orderData = "&quot;", orderText.split()
-        orderInfo, reserved = list(), None
-        for order in orderData:
-            if reserved is None:
-                if (quote == order[:(len(quote))]): # at start of order
-                    if (quote != order and quote == order[-(len(quote)):]):
-                        # at start and end
-                        order = order.replace(quote, "")
-                        orderInfo.append(order)
-                    else: # only at start
-                        order = order.replace(quote, "")
-                        reserved = order
-                else: # quote not in order
-                    orderInfo.append(order)
-            else: # some reserved order string
-                if (quote == order[-(len(quote)):]): # at end of order
-                    order = " " + order.replace(quote, "")
-                    reserved += order
-                    orderInfo.append(reserved)
-                    reserved = None
-                else:
-                    order = " " + order
-                    reserved += order
-        order = dict()
-        if (len(orderInfo) <= 0): # nothing
-            return order
-        order['type'] = orderInfo[0]
-        if (len(orderInfo) <= 1): # just a order type
-            return order
-        order['orders'] = tuple(orderInfo[1:])
+        orderInfo, order = self.getOrderInfo(orderText), dict()
+        for i in xrange(min(len(orderInfo), 2)):
+            if i == 0: order['type'] = orderInfo[i]
+            else: order['orders'] = tuple(orderInfo[i:])
         return order
 
     ## _getValueFromBetween
@@ -67,6 +53,11 @@ class OrderParser(ForumThreadParser):
         value = value[:afterLoc]
         return value
 
+    ## isIgnoreOrder
+    @staticmethod
+    def isIgnoreOrder(order):
+        return ('type' in order and order['type'].lower() == '!bot_ignore')
+
     ## parsePost
     def parsePost(self, post):
         """
@@ -78,26 +69,18 @@ class OrderParser(ForumThreadParser):
         orders, postText = list(), post['message']
         postAuthor = post['author']['ID']
         cmdMarker, cmdEnd = '<pre class="prettyprint">', '</pre>'
-        ignoreOrders = False
-        while (cmdEnd in postText and ignoreOrders is False):
-            orderText = self._getValueFromBetween(postText,
-                                           cmdMarker, cmdEnd)
+        while (cmdEnd in postText):
+            orderText = self._getValueFromBetween(postText, cmdMarker, cmdEnd)
             if "<br>" in orderText:
-                replaceText = orderText.replace("<br>",
-                              (cmdEnd + cmdMarker))
-                postText = postText.replace(orderText,
-                                            replaceText)
+                replaceText = orderText.replace("<br>", (cmdEnd + cmdMarker))
+                postText = postText.replace(orderText, replaceText)
                 orderText = orderText[:orderText.find("<br>")]
             orderData = self.parseOrderData(orderText)
-            if ('type' in orderData and
-                orderData['type'].lower() == "!bot_ignore"):
-                ignoreOrders = True
-                break
+            if self.isIgnoreOrder(orderData): break
             else:
                 orderData['author'] = postAuthor
                 orders.append(orderData)
-                postText = postText[(postText.find(cmdEnd) +
-                                    len(cmdEnd)):]
+                postText = postText[(postText.find(cmdEnd) + len(cmdEnd)):]
         return orders
 
     ## getorders
