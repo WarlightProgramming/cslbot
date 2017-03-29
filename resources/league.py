@@ -679,8 +679,7 @@ class League(object):
     def leagueFull(self):
         cap = self.leagueCapacity
         if cap is None: return False
-        allTeams = self.getExtantEntities(self.teams)
-        return (len(allTeams) >= cap)
+        return (len(self.allTeams) >= cap)
 
     @staticmethod
     def getDateTimeProperty(val):
@@ -1026,28 +1025,33 @@ class League(object):
                                                   'type': 'positive'}},
                                           {'Drops': drops})
 
-    def checkTeam(self, members, teamID=None):
-        badTemplates = set()
-        for member in members:
-            if self.banned(member):
-                raise ImproperInput(str(member) +
-                                    " is banned from this league")
-            else:
-                tempAccess = self.checkTemplateAccess(member)
-                badTemplates = badTemplates.union(tempAccess)
-        if (self.autodrop and
-            len(badTemplates) <= self.dropLimit):
+    def checkTeamMember(self, member, badTemps):
+        if self.banned(member):
+            raise ImproperInput(str(member) + " is banned from this league")
+        tempAccess = self.checkTemplateAccess(member)
+        for temp in tempAccess:
+            badTemplates.add(temp)
+
+    def autodropEligible(self, badTemps):
+        return (self.autodrop and (len(badTemps) <= self.dropLimit))
+
+    def handleTeamAutodrop(self, teamID, badTemps):
+        if self.autodropEligible(badTemps):
             if teamID is None:
-                forcedDrops = (self.SEP_DROPS).join([str(t) for
-                                                    t in badTemplates])
+                forcedDrops = (self.SEP_DROPS).join([str(t) for t in badTemps])
                 return forcedDrops
             else:
-                self.handleAutodrop(teamID, badTemplates)
+                self.handleAutodrop(teamID, badTemps)
                 return ""
         else:
             memberStr = (self.SEP_PLYR).join([str(m) for m in members])
             raise ImproperInput("Team with %s cannot play on enough templates"
                                 % (memberStr))
+
+    def checkTeam(self, members, teamID=None):
+        badTemplates = set()
+        for member in members: self.checkTeamMember(member, badTemplates)
+        return self.handleTeamAutodrop(teamID, badTemplates)
 
     def checkLimit(self, limit):
         if not self.limitInRange(limit):
@@ -1085,26 +1089,41 @@ class League(object):
 
     @property
     def teamPlayers(self):
-        return self.teams.findValue({'ID': {'value': '',
-                                            'type': 'negative'}}, 'Players')
+        result = list()
+        for team in self.allTeams:
+            result[team['Players']] = team['Name']
+        return result
 
-    def addTeam(self, order):
+    def checkJoins(self):
         if not self.joinsAllowed:
             raise ImproperInput("This league is not open to new teams")
-        teamName = order['orders'][1]
-        gameLimit = int(order['orders'][2])
-        members = [int(member) for member in order['orders'][3:]]
+
+    def checkAuthorAndMembers(self, order):
         author = int(order['author'])
+        members = [int(member) for member in order['orders'][3:]]
         self.checkTeamCreator(author, members)
-        forcedDrops = self.checkTeam(members)
-        gameLimit = self.checkLimit(gameLimit)
-        members.sort()
         confirms = [(m == author) for m in members]
+        return self.checkTeam(members), members, confirms
+
+    def checkTeamDuplication(self, members, teamName):
+        if members in self.teamPlayers:
+            orig = self.teamPlayers[members]
+            raise ImproperInput("Team %s is a duplicate of existing team %s" %
+                                (teamName, orig))
+
+    def checkEligible(self, order):
+        gameLimit = int(order['orders'][2])
+        forcedDrops, members, confirms = self.checkAuthorAndMembers(order)
+        return self.checkLimit(gameLimit), forcedDrops, members, confirms
+
+    def addTeam(self, order):
+        self.checkJoins()
+        teamName = order['orders'][1]
+        gameLimit, forcedDrops, members, confirms = self.checkEligible(order)
+        members.sort()
         members = (self.SEP_PLYR).join([str(m) for m in members])
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
-        if members in self.teamPlayers:
-            raise ImproperInput("Team %s is a duplicate of an existing team." %
-                                (teamName))
+        self.checkTeamDuplication(members, teamName)
         self.teams.addEntity({'ID': self.currentID,
                               'Name': teamName,
                               'Limit': gameLimit,
@@ -1115,21 +1134,24 @@ class League(object):
                               'Rating': self.defaultRating})
         self.currentID += 1
 
+    def retrieveTeamWithName(self, name):
+        matches = self.teams.findEntities({'Name': {'value': name,
+                                                    'type': 'positive'}})
+        if len(matches) < 1:
+            raise NonexistentItem("Nonexistent team: " + str(name))
+        return matches[0]
+
+    def authorInTeam(self, author, team, allowMods=True):
+        if (allowMods and (author in self.mods)): return True
+        return (str(author) in matchingTeam['Players'].split(self.SEP_PLYR))
+
     def fetchMatchingTeam(self, order, checkAuthor=True,
                           allowMod=True):
-        name = order['orders'][1]
-        author = int(order['author'])
-        matchingTeam = self.teams.findEntities({'Name': {'value': name,
-                                                         'type': 'positive'}})
-        if len(matchingTeam) < 1:
-            raise NonexistentItem("Nonexistent team: " + str(name))
-        matchingTeam = matchingTeam[0]
-        index = None
-        if (checkAuthor and (author not in self.mods or not allowMod)
-            and str(author) not in
-            matchingTeam['Players'].split(self.SEP_PLYR)):
-            raise ImproperInput(str(author) + " not in " +
-                                str(name))
+        name, author, index = order['orders'][1], int(order['author']), None
+        matchingTeam = self.retrieveTeamWithName(name)
+        if (checkAuthor and
+            not self.authorInTeam(author, matchingTeam, allowMod)):
+            raise ImproperInput(str(author) + " not in " + str(name))
         try:
             index = (matchingTeam['Players'].
                      split(self.SEP_PLYR).
@@ -1280,14 +1302,17 @@ class League(object):
             raise ImproperInput("Not enough active templates to deactivate")
         self.toggleActivity(order, 'FALSE')
 
+    @property
+    def allTeams(self):
+        return self.getExtantEntities(self.teams)
+
     def quitLeague(self, order):
         author = order['author']
         if (author in self.mods and len(order['orders']) > 1):
             players = set(order['orders'][1:])
         else:
             players = set([author,])
-        allTeams = self.getExtantEntities(self.teams)
-        for team in allTeams:
+        for team in self.allTeams:
             members = team['Players'].split(self.SEP_PLYR)
             confirms = team['Confirmations'].split(self.SEP_CONF)
             for player in players:
@@ -1452,22 +1477,28 @@ class League(object):
             rating += self.getEloRating(team)
         return rating
 
+    def makeOpps(self, sides, i, winningSide):
+        opps = list()
+        for j in xrange(len(sides)):
+            if i == j: continue
+            other = sides[j]
+            otherRtg = self.getSideEloRating(other)
+            event = self.getEvent(i, j, winningSide)
+            opps.append((event, otherRtg))
+        return opps
+
+    @staticmethod
+    def applyEloDiff(side, diff, diffs):
+        for team in side: diffs[team] = diff
+
     def getNewEloRatings(self, sides, winningSide):
         results, diffs = dict(), dict()
         for i in xrange(len(sides)):
             side = sides[i]
             sideRtg = self.getSideEloRating(side)
-            opps = list()
-            for j in xrange(len(sides)):
-                if i == j: continue
-                other = sides[j]
-                otherRtg = self.getSideEloRating(other)
-                event = self.getEvent(i, j, winningSide)
-                opps.append((event, otherRtg))
+            opps = self.makeOpps(sides, i, winningSide)
             diff = self.getEloDiff(sideRtg, opps)
-            for team in side:
-                if team not in diffs: diffs[team] = 0
-                diffs[team] += diff
+            self.applyEloDiff(side, diff, diffs)
         for side in sides:
             for team in side:
                 results[team] = str(self.getEloRating(team) +
@@ -1947,9 +1978,8 @@ class League(object):
          'ABANDONED': self.updateVeto(gameID)}.get([status[0]])
 
     def updateRanks(self):
-        allTeams = self.getExtantEntities(self, teams)
         teamRatings = list()
-        for team in allTeams:
+        for team in self.allTeams:
             if ((int(team['Finished']) < self.minToRank or
                  int(team['Limit']) < self.minLimitToRank) and
                 team['Rank'] is not ''):
@@ -2011,26 +2041,25 @@ class League(object):
     def startProbation(self, teamID):
         self.setProbation(teamID, datetime.now())
 
-    def checkTeamRating(self, teamID):
-        teamData = self.fetchTeamData(teamID)
+    def meetsRetention(self, teamData):
         teamFinished = int(teamData['Finished'])
-        if (teamFinished < self.minToCull):
-            if teamData['Probation Start'] is not '':
-                self.wipeProbation(teamID)
-            return
         teamRating = int(self.prettifyRating(teamData['Rating']))
         teamRank = int(teamData['Rank'])
-        start = self.fetchTeamData(teamID)['Probation Start']
-        if (teamRating >= self.minRating and (self.maxRank is None or
-            teamRank <= self.maxRank)): # no longer meets probation criteria
-            if len(start) > 0:
-                self.wipeProbation(teamID)
+        return (teamFinished < self.minToCull or
+                (self.valueInRange(teamRating, self.minRating, None) and
+                 self.valueInRange(teamRank, None, self.maxRank)))
+
+    def checkTeamRating(self, teamID):
+        teamData = self.fetchTeamData(teamID)
+        start = teamData['Probation Start']
+        if self.meetsRetention(teamData):
+            if len(start) > 0: self.wipeProbation(teamID)
         elif len(start) == 0:
             self.startProbation(teamID)
-        else:
+        else: # already on probation
             start = datetime.strptime(start, self.TIMEFORMAT)
-        if (datetime.now() - start).days >= self.gracePeriod:
-            raise ImproperInput("Team %s rating is too low" % (str(teamID)))
+            if (datetime.now() - start).days >= self.gracePeriod:
+                raise ImproperInput("Team %s has been culled" % (str(teamID)))
 
     def validateTeam(self, teamID, players):
         try:
@@ -2053,8 +2082,7 @@ class League(object):
 
     @runPhase
     def validatePlayers(self):
-        allTeams = self.teams.findEntities(self.teams)
-        playerCounts = dict()
+        playerCounts, allTeams = dict(), self.allTeams
         for i in xrange(len(allTeams)):
             team, dropped = allTeams[i], False
             confirmations = team['Confirmations']
