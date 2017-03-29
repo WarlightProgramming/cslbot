@@ -1666,7 +1666,7 @@ class League(object):
                 break
         self.updateResults(gameID, sides, winningSide)
 
-    def handleSpecialDeclines(losingTeams, template):
+    def handleSpecialDeclines(self, losingTeams, template):
         if self.countDeclinesAsVetos:
             self.updateGameVetos(losingTeams, template)
         if self.removeDeclines:
@@ -2292,8 +2292,7 @@ class League(object):
         result = dict()
         for side in sides:
             teams = side.split(self.SEP_TEAMS)
-            for team in teams:
-                self.addToSetWithinDict(result, team, side)
+            for team in teams: self.addToSetWithinDict(result, team, side)
         return result
 
     def getSideConflicts(self, side, teamsDict, teamsToSides):
@@ -2342,14 +2341,15 @@ class League(object):
             else: result[temp]['count'] += 1
         return result
 
-    def updateScoresAndConflicts(self, team, scores, conflicts):
-        teamData = self.fetchTeamData(team)
-        drops = teamData['Drops'].split(self.SEP_DROPS)
+    def updateScores(self, teamData, scores):
         vetos = teamData['Vetos'].split(self.SEP_VETOS)
-        for drop in drops: conflicts.add(drop)
         for veto in vetos:
             if veto not in scores: scores[veto] = 1
             else: scores[veto] += 1
+
+    def updateConflicts(self, teamData, conflicts):
+        drops = teamData['Drops'].split(self.SEP_DROPS)
+        for drop in drops: conflicts.add(drop)
 
     def getScoresAndConflicts(self, matching):
         scores, conflicts = dict(), set()
@@ -2357,7 +2357,9 @@ class League(object):
         for side in sides:
             teams = side.split(self.SEP_TEAMS)
             for team in teams:
-                self.updateScoresAndConflicts(team, scores, conflicts)
+                teamData = self.fetchTeamData(team)
+                self.updateScores(teamData, scores)
+                self.updateConflicts(teamData, conflicts)
         return scores, conflicts
 
     def makeMatchingsDict(self, matchings):
