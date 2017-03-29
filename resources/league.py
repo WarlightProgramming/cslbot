@@ -199,7 +199,6 @@ class League(object):
     SEP_SIDES = "/"
     SEP_RTG = "/"
     SEP_TEMP = ","
-    SEP_WIN = ","
     SEP_VETOCT = "."
     SEP_VETOS = "/"
     SEP_DROPS = "/"
@@ -1170,10 +1169,7 @@ class League(object):
             raise ImproperInput(str(player) + " not in " + str(team))
         confirms = matchingTeam['Confirmations'].split(self.SEP_CONF)
         confirms[index] = "TRUE" if confirm else "FALSE"
-        confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
-        self.teams.updateMatchingEntities({'Name': {'value': teamName,
-                                                    'type': 'positive'}},
-                                          {'Confirmations': confirms})
+        self.updateConfirms(teamName, confirms, identifier='Name')
 
     def confirmTeam(self, order):
         if (author in self.mods and len(order['orders']) > 2):
@@ -1308,12 +1304,19 @@ class League(object):
     def allTeams(self):
         return self.getExtantEntities(self.teams)
 
-    def quitLeague(self, order):
-        author = order['author']
+    def getPlayersFromOrder(self, order):
+        author = int(order['author'])
         if (author in self.mods and len(order['orders']) > 1):
-            players = set(order['orders'][1:])
-        else:
-            players = set([author,])
+            return set(order['orders'][1:])
+        return set([str(author),])
+
+    def updateConfirms(self, teamID, confirms, identifier='ID'):
+        confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
+        self.updateEntityValue(self.teams, teamID, identifier=identifier,
+                               Confirmations=confirms)
+
+    def quitLeague(self, order):
+        players = self.getPlayersFromOrder(order)
         for team in self.allTeams:
             members = team['Players'].split(self.SEP_PLYR)
             confirms = team['Confirmations'].split(self.SEP_CONF)
@@ -1321,10 +1324,7 @@ class League(object):
                 if player in members:
                     index = members.index(player)
                     confirms[index] = "FALSE"
-            confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
-            self.teams.updateMatchingEntities({'ID': {'value': team['ID'],
-                                                      'type': 'positive'}},
-                                              {'Confirmations': confirms})
+            self.updateConfirms(team['ID'], confirms)
 
     @runPhase
     def executeOrders(self):
@@ -1444,7 +1444,7 @@ class League(object):
 
     def setWinners(self, gameID, winningSide):
         sortedWinners = sorted(team for team in winningSide)
-        winStr = (self.SEP_WIN).join(str(team) for team in sortedWinners)
+        winStr = (self.SEP_TEAMS).join(str(team) for team in sortedWinners)
         self.games.updateMatchingEntities({'ID': {'value': gameID,
                                                   'type': 'positive'}},
                                           {'Winners': winStr})
@@ -1539,15 +1539,21 @@ class League(object):
         side2.update_player([side1.rating], [side1.rd],
                             [self.getEvent(j, i, winner)])
 
-    def getNewGlickoRatings(self, sides, winningSide):
-        results, players = dict(), list()
+    def makeGlickoPlayersFromSides(self, sides):
+        players = list()
         for side in sides:
             sideRtg, sideRd = self.getSideGlickoRating(side)
             sidePlayer = Player(rating=sideRtg, rd=sideRd)
-            player.append(sidePlayer)
+            players.append(sidePlayer)
+        return players
+
+    def updateGlickoMatchups(self, sides, players, winningSide):
         for i in xrange(len(sides)):
             for j in xrange(len(sides[(i+1):])):
                 self.updateGlickoMatchup(players, i, j, winningSide)
+
+    def getGlickoResultsFromPlayers(self, sides, players):
+        results = dict()
         for i in xrange(len(sides)):
             newRtg, newRd = players[i].rating, players[i].rd
             oldRtg, oldRd = self.getSideGlickoRating(side)
@@ -1560,6 +1566,11 @@ class League(object):
                 rd = origRd + int(round(rdDiff))
                 results[team] = (self.SEP_RTG).join([str(rtg), str(rd)])
         return results
+
+    def getNewGlickoRatings(self, sides, winningSide):
+        players = self.makeGlickoPlayersFromSides(sides)
+        self.updateGlickoMatchups(sides, players, winningSide)
+        return self.getGlickoResultsFromPlayers(sides, players)
 
     def getTrueSkillRating(self, teamID):
         mu, sigma = self.getTeamRating(teamID).split(self.SEP_RTG)
@@ -1622,8 +1633,9 @@ class League(object):
         return self.sysDict[self.ratingSystem]['update'](sides, winningSide)
 
     @staticmethod
-    def updateEntityValue(table, ID, **values):
-        table.updateMatchingEntities({'ID': {'value': ID, 'type': 'positive'}},
+    def updateEntityValue(table, ID, identifier='ID', **values):
+        table.updateMatchingEntities({identifier: {'value': ID,
+                                                   'type': 'positive'}},
                                      values)
 
     def updateTeamRating(self, teamID, rating):
@@ -1654,23 +1666,31 @@ class League(object):
                 break
         self.updateResults(gameID, sides, winningSide)
 
-    def updateDecline(self, gameID, decliners):
-        sides = self.getGameSides(gameID)
-        losingTeams = self.findCorrespondingTeams(gameID, decliners)
-        template = str(self.fetchGameData(gameID)['Template'])
+    def handleSpecialDeclines(losingTeams, template):
         if self.countDeclinesAsVetos:
             self.updateGameVetos(losingTeams, template)
         if self.removeDeclines:
             for team in losingTeams:
                 self.changeLimit(team, 0)
-        winningSide = None
-        for i in xrange(len(sides)):
-            side = sides[i]
-            if len(side - losingTeams) > 0:
-                winningSide = i
-                break
-        if winningSide == None:
-            self.updateVeto(gameID)
+
+    @staticmethod
+    def makeFakeSides(sides, losingTeams):
+        winningSide, results, winningTeams = None, [losingTeams,], set()
+        for side in sides:
+            for team in side:
+                if team not in losingTeams: winningTeams.add(team)
+        if len(winningTeams) > 0:
+            results.append(winningTeams)
+            winningSide = (len(results) - 1)
+        return results, winningSide
+
+    def updateDecline(self, gameID, decliners):
+        sides = self.getGameSides(gameID)
+        losingTeams = self.findCorrespondingTeams(gameID, decliners)
+        template = str(self.fetchGameData(gameID)['Template'])
+        self.handleSpecialDeclines(losingTeams, template)
+        sides, winningSide = self.makeFakeSides(sides, losingTeams)
+        if winningSide == None: self.updateVeto(gameID)
         self.updateResults(gameID, sides, winningSide)
 
     def deleteGame(self, gameID, gameData):
@@ -1747,26 +1767,33 @@ class League(object):
         teamData = self.fetchTeamData(teamID)
         return teamData['Name']
 
+    def getNameInfo(self, side):
+        nameInfo, MAX_NAME_LEN = list(), 10
+        for team in side.split(self.SEP_TEAMS):
+            nameInfo.append("+")
+            teamName = self.fitToMaxLen(self.getTeamName(team), MAX_NAME_LEN)
+            nameInfo.append(teamName)
+        return nameInfo
+
+    @staticmethod
+    def fitToMaxLen(val, maxLen, replace="..."):
+        repLen = len(replace)
+        if len(val) > maxLen:
+            if val[maxLen-repLen:maxLen] != replace:
+                return val[:maxLen-repLen] + replace
+            return val[:maxLen]
+        return val
+
     def getGameName(self, gameData):
-        MAX_NAME_LEN, MAX_DISPLAY_LEN = 10, 50
+        MAX_DISPLAY_LEN = 50
         start = self.leagueAcronym + " | "
         nameData = list()
         for side in gameData['Sides'].split(self.SEP_SIDES):
             nameData.append(" vs ")
-            nameInfo = list()
-            for team in side.split(self.SEP_TEAMS):
-                nameInfo.append("+")
-                teamName = self.getTeamName(team)
-                if len(teamName) > MAX_NAME_LEN:
-                    teamName = teamName[:(MAX_NAME_LEN - 3)]
-                    teamName = teamName + "..."
-                nameInfo.append(teamName)
+            nameInfo = self.getNameInfo(side)
             nameData += nameInfo[1:]
-        name = start + "".join(nameData[1:])
-        if len(name) > MAX_DISPLAY_LEN:
-            name = name[:MAX_DISPLAY_LEN]
-            if name[-3:] != "...":
-                name = name[:-3] + "..."
+        name = self.fitToMaxLen((start + "".join(nameData[1:])),
+                                MAX_DISPLAY_LEN)
         return name
 
     @staticmethod
@@ -1839,21 +1866,29 @@ class League(object):
         msg = self.processMessage(self.leagueMessage, gameData)
         return msg[:MAX_MESSAGE_LEN]
 
-    def updateHistories(self, gameData):
+    def getAllGameTeams(self, gameData):
         allTeams = list()
         for side in gameData['Sides'].split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
                 allTeams.append(team)
+        return allTeams
+
+    @staticmethod
+    def getOtherTeams(teams, team):
+        return [t for t in teams if t != team]
+
+    def updateTeamHistory(self, team, others):
+        oldHistory = self.fetchTeamData(team)['History']
+        newStr = (self.SEP_TEAMS).join(others)
+        newHistory = (oldHistory + (self.SEP_TEAMS if len(oldHistory) else "")
+                      + newStr)
+        self.updateEntityValue(self.teams, team, History=newHistory)
+
+    def updateHistories(self, gameData):
+        allTeams = self.getAllGameTeams(gameData)
         for team in allTeams:
-            otherTeams = [t for t in allTeams if t != team]
-            oldHistory = self.fetchTeamData(team)['History']
-            newStr = (self.SEP_TEAMS).join(otherTeams)
-            if len(oldHistory) != 0:
-                newStr = self.SEP_TEAMS + newStr
-            newHistory = oldHistory + newStr
-            self.teams.updateMatchingEntities({'ID': {'value': team,
-                                                      'type': 'positive'}},
-                                              {'History': newHistory})
+            otherTeams = self.getOtherTeams(allTeams, team)
+            self.updateTeamHistory(team, otherTeams)
 
     def getTempSettings(self, tempID):
         tempData = self.fetchTemplateData(tempID)
@@ -1979,19 +2014,19 @@ class League(object):
          'DECLINED': self.updateDecline(gameID, status[1]),
          'ABANDONED': self.updateVeto(gameID)}.get([status[0]])
 
-    def updateRanks(self):
-        teamRatings = list()
-        for team in self.allTeams:
-            if ((int(team['Finished']) < self.minToRank or
-                 int(team['Limit']) < self.minLimitToRank) and
-                team['Rank'] is not ''):
-                self.teams.updateMatchingEntities({'ID': {'value': team['ID'],
-                                                          'type': 'positive'}},
-                                                  {'Rank': ''})
-            else:
-                teamRatings.append((team['ID'],
-                                    self.getOfficialRating(team['ID'])))
-        teamRatings.sort(key = lambda x: x[1])
+    def wipeRank(self, teamID):
+        self.updateEntityValue(self.teams, teamID, Rank='')
+
+    def eligibleForRank(self, teamData):
+        return (int(teamData['Finished']) >= self.minToRank and
+                int(teamData['Limit']) >= self.minLimitToRank)
+
+    @staticmethod
+    def hasRank(teamData):
+        return (teamData['Rank'] is not '')
+
+    def rankUsingRatings(self, teamRatings):
+        teamRatings.sort(key = lambda x: x[1]) # sort using ratings
         teamRatings.reverse()
         rank, previous, offset = 0, None, 0
         for team in teamRatings:
@@ -1999,11 +2034,17 @@ class League(object):
             if teamRtg != previous:
                 previous = teamRtg
                 rank += offset + 1
-            else:
-                offset += 1
-            self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                      'type': 'positive'}},
-                                              {'Rank': rank})
+            else: offset += 1
+            self.updateEntityValue(self.teams, teamID, Rank=rank)
+
+    def updateRanks(self):
+        teamRatings = list()
+        for team in self.allTeams:
+            if self.eligibleForRank(team):
+                teamRatings.append((team['ID'],
+                                    self.getOfficialRating(team['ID'])))
+            elif self.hasRank(team): self.wipeRank(team['ID'])
+        self.rankUsingRatings(teamRatings)
 
     @runPhase
     def updateGames(self):
@@ -2097,16 +2138,19 @@ class League(object):
                 self.updatePlayerCounts(playerCounts, players)
 
     @classmethod
-    def addRatings(cls, ratings):
+    def splitRating(cls, rating):
+        return [int(x) for x in rating.split(self.SEP_RTG)]
+
+    def updateSums(self, rating, sums):
+        splitRtg = self.getSplitRating(rating)
+        for i in xrange(len(splitRtg)):
+            if i >= len(sums): sums.append(splitRtg[i])
+            else: sums[i] += splitRtg[i]
+
+    def addRatings(self, ratings):
         sums = list()
-        for rating in ratings:
-            splitRtg = [int(x) for x in rating.split(cls.SEP_RTG)]
-            for i in xrange(len(splitRtg)):
-                if i >= len(sums):
-                    sums.append(splitRtg[i])
-                else:
-                    sums[i] += splitRtg[i]
-        return (cls.SEP_RTG).join(str(x) for x in sums)
+        for rating in ratings: self.updateSums(rating, sums)
+        return (self.SEP_RTG).join(str(x) for x in sums)
 
     def getEloPairingParity(self, rtg1, rtg2):
         return self.eloEnv.quality_1vs1(rtg1, rtg2)
@@ -2275,21 +2319,37 @@ class League(object):
     def makeMatchings(self, sidesDict):
         return self.makeGrouping(sidesDict, self.gameSize, self.SEP_SIDES)
 
-    def makeTemplatesDict(self, gameCount, skipTemps=None):
-        if skipTemps is None: skipTemps = set()
-        templateIDs = self.templateIDs
-        times, mod = gameCount / len(templateIDs), gameCount % len(templateIDs)
-        result = dict()
+    @staticmethod
+    def turnNoneIntoMutable(val, mutable):
+        if val is None: return mutable()
+        return val
+
+    @staticmethod
+    def getTemplatesList(templateIDs, skipTemps, times, mod):
         templatesList = [temp for temp in templateIDs if temp not in skipTemps]
         templatesList.sort(key = lambda x: templateIDs[x]['Games'])
-        templatesList *= times
-        templatesList += templatesList[:mod]
+        templatesList = (templatesList * times) + templatesList[:mod]
+        return templatesList
+
+    def makeTemplatesDict(self, gameCount, skipTemps=None):
+        self.turnNoneIntoMutable(skipTemps, set)
+        templateIDs, result = self.templateIDs, dict()
+        times, mod = gameCount / len(templateIDs), gameCount % len(templateIDs)
+        templatesList = self.getTemplatesList(templateIDs, skipTemps,
+                                              times, mod)
         for temp in templatesList:
-            if temp not in result:
-                result[temp] = {'count': 1}
-            else:
-                result[temp]['count'] += 1
+            if temp not in result: result[temp] = {'count': 1}
+            else: result[temp]['count'] += 1
         return result
+
+    def updateScoresAndConflicts(self, team, scores, conflicts):
+        teamData = self.fetchTeamData(team)
+        drops = teamData['Drops'].split(self.SEP_DROPS)
+        vetos = teamData['Vetos'].split(self.SEP_VETOS)
+        for drop in drops: conflicts.add(drop)
+        for veto in vetos:
+            if veto not in scores: scores[veto] = 1
+            else: scores[veto] += 1
 
     def getScoresAndConflicts(self, matching):
         scores, conflicts = dict(), set()
@@ -2297,16 +2357,7 @@ class League(object):
         for side in sides:
             teams = side.split(self.SEP_TEAMS)
             for team in teams:
-                teamData = self.fetchTeamData(team)
-                drops = teamData['Drops'].split(self.SEP_DROPS)
-                vetos = teamData['Vetos'].split(self.SEP_VETOS)
-                for drop in drops:
-                    conflicts.add(drop)
-                for veto in vetos:
-                    if veto not in scores:
-                        scores[veto] = 1
-                    else:
-                        scores[veto] += 1
+                self.updateScoresAndConflicts(team, scores, conflicts)
         return scores, conflicts
 
     def makeMatchingsDict(self, matchings):

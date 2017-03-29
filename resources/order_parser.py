@@ -14,7 +14,7 @@ class OrderParser(ForumThreadParser):
     ## getOrderInfo
     @staticmethod
     def getOrderInfo(orderText):
-        orderInfo, quote, space = list(), '&quot;', " "
+        orderInfo, quote = list(), '&quot;'
         regions = orderText.split(quote)
         for i in xrange(len(regions)):
             region = regions[i]
