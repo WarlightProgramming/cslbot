@@ -669,17 +669,19 @@ class League(object):
     def activeCapacity(self):
         return self.fetchProperty(self.SET_ACTIVE_CAPACITY, None, int)
 
+    @staticmethod
+    def valueBelowCapacity(value, capacity):
+        return self.valueInRange(value, None, capacity-1)
+
     @property
     def activeFull(self):
-        cap = self.activeCapacity
-        if cap is None: return False
-        return (len(self.activeTeams) >= cap)
+        return (not self.valueBelowCapacity(len(self.activeTeams),
+                                            self.activeCapacity))
 
     @property
     def leagueFull(self):
-        cap = self.leagueCapacity
-        if cap is None: return False
-        return (len(self.allTeams) >= cap)
+        return (not self.valueBelowCapacity(len(self.allTeams),
+                                            self.leagueCapacity))
 
     @staticmethod
     def getDateTimeProperty(val):
