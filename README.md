@@ -1,5 +1,6 @@
 # cslbot
 
+[![GitHub Release](https://img.shields.io/github/release/knyte/cslbot.svg)](https://github.com/knyte/cslbot/releases)
 [![Build Status](https://travis-ci.org/knyte/cslbot.svg?branch=master)](https://travis-ci.org/knyte/cslbot)
 [![Code Climate](https://codeclimate.com/github/knyte/cslbot/badges/gpa.svg)](https://codeclimate.com/github/knyte/cslbot/code)
 [![Test Coverage](https://codeclimate.com/github/knyte/cslbot/badges/coverage.svg)](https://codeclimate.com/github/knyte/cslbot/coverage)
