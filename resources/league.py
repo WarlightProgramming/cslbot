@@ -1588,10 +1588,13 @@ class League(object):
         """
         return self.sysDict[self.ratingSystem]['update'](sides, winningSide)
 
+    @staticmethod
+    def updateEntityValue(table, ID, **values):
+        table.updateMatchingEntities({'ID': {'value': ID, 'type': 'positive'}},
+                                     values)
+
     def updateTeamRating(self, teamID, rating):
-        self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                  'type': 'positive'}},
-                                          {'Rating': rating})
+        self.updateEntityValue(self.teams, teamID, Rating=rating)
 
     def updateRatings(self, newRatings):
         for team in newRatings:
@@ -1688,9 +1691,7 @@ class League(object):
         self.adjustTemplateGameCount(gameData['Template'], -1)
 
     def setGameTemplate(self, gameID, tempID):
-        self.games.updateMatchingEntities({'ID': {'value': gameID,
-                                                  'type': 'positive'}},
-                                          {'Template': tempID})
+        self.updateEntityValue(self.games, gameID, Template=tempID)
 
     def getTeamPlayers(self, team):
         teamData = self.fetchTeamData(team)
@@ -1988,9 +1989,7 @@ class League(object):
         return (playerCount > teamLimit)
 
     def changeLimit(self, teamID, limit):
-        self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                  'type': 'positive'}},
-                                          {'Limit': limit})
+        self.updateEntityValue(self.teams, teamID, Limit=limit)
 
     @staticmethod
     def updatePlayerCounts(playerCounts, players):
