@@ -21,6 +21,8 @@ eggs/
 bin/
 include/
 pip-selfcheck.json
+man/
+share/
 lib/
 lib64/
 parts/
