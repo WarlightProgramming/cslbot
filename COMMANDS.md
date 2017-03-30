@@ -229,6 +229,7 @@ Here's a list of all of them, with some basic descriptions:
 * **VETO LIMIT**: This league's veto limit (as declared using **VETO LIMIT**)
 * **\_GAME_SIDES**: The name, rank, and rating for each team on each side of
   the game
+* **\_TEMPLATENAME**: Name of the template used by the game
   
 ___
 

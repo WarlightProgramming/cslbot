@@ -1,4 +1,4 @@
-# co_parser_tests.py
+# order_parser_tests.py
 ## automated tests for the OrderParser class
 
 # imports

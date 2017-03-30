@@ -29,7 +29,7 @@ def runPhase(func):
         try:
             return func(self, *args, **kwargs)
         except Exception as e:
-            failStr = ("Phase %s failed due to %s" % (func.__name__, str(e)))
+            failStr = ("Phase %s failed due to %s" % (func.__name__, repr(e)))
             self.parent.log(failStr, self.name, True)
     return func_wrapper
 
@@ -250,13 +250,13 @@ class League(object):
 
     @staticmethod
     def _makeHandler():
-        credsFile = open("../" + API_CREDS)
+        credsFile = open(API_CREDS)
         creds = json.load(credsFile)
         email, token = creds['E-mail'], creds['APIToken']
         return APIHandler(email, token)
 
     def _getMods(self):
-        mods = self.getIDGroup(self.SET_MODS)
+        mods = self.fetchProperty(self.SET_MODS, set(), self.getIDGroup)
         mods.add(self.admin)
         return mods
 
@@ -858,8 +858,7 @@ class League(object):
     def minAchievementRate(self):
         return self.fetchProperty(self.SET_MIN_ACH, 0, float)
 
-    @staticmethod
-    def getIDGroup(val, process_fn=int):
+    def getIDGroup(self, val, process_fn=int):
         return set([process_fn(x) for x in val.split(self.SEP_CMD)])
 
     @staticmethod
@@ -1844,6 +1843,11 @@ class League(object):
         if '/Forum/' in str(thread): return thread
         return ('https://www.warlight.net/Forum/' + str(thread))
 
+    def getTemplateName(self, gameData):
+        templateID = gameData['Template']
+        tempData = self.fetchTemplateData(templateID)
+        return tempData['Name']
+
     def processMessage(self, message, gameData):
         replaceDict = {'_LEAGUE_NAME': self.name,
                        self.SET_SUPER_NAME: self.clusterName,
@@ -1851,7 +1855,8 @@ class League(object):
                        self.SET_VETO_LIMIT: self.vetoLimit,
                        '_VETOS': gameData['Vetos'],
                        '_LEAGUE_THREAD': self.makeThread(self.thread),
-                       '_GAME_SIDES': self.sideInfo(gameData)}
+                       '_GAME_SIDES': self.sideInfo(gameData),
+                       '_TEMPLATENAME': self.getTemplateName(gameData)}
         for val in replaceDict:
             checkStr = "{{%s}}" % val
             if checkStr in message:

@@ -1,5 +1,5 @@
 ####################
-# main.py
+# cslbot.py
 # handles everything
 ####################
 
