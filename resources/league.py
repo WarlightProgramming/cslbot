@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from wl_parsers import PlayerParser
 from wl_api import APIHandler
 from wl_api.wl_api import APIError
-from sheetDB.errors import *
+from sheetDB import errors as SheetErrors
 from constants import API_CREDS
 
 # decorators
@@ -2059,7 +2059,7 @@ class League(object):
             try:
                 self.updateGame(game, gamesToCheck[game]['ID'],
                                 gamesToCheck[game]['Created'])
-            except (SheetError, DataError):
+            except (SheetErrors.SheetError, SheetErrors.DataError):
                 self.parent.log("Failed to update game: " + str(game),
                                 league=self.name, error=False)
 
@@ -2414,7 +2414,7 @@ class League(object):
                                       'Sides': game['Sides'], 'Vetos': 0,
                                       'Vetoed': '',
                                       'Template': game['Template']})
-            except (DataError, SheetError) as e:
+            except (SheetErrors.DataError, SheetErrors.SheetError) as e:
                 self.parent.log(("Failed to add game to sheet due to %s" %
                                  str(e)), self.name, error=False)
             try:
