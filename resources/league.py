@@ -152,6 +152,7 @@ class League(object):
     SET_MIN_LIMIT_TO_RANK = "MIN LIMIT TO RANK"
     SET_MAX_VACATION = "MAX VACATION LENGTH" # days
     SET_AUTODROP = "AUTODROP"
+    SET_TEAMLESS = "TEAMLESS"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -190,6 +191,7 @@ class League(object):
     # keywords
     KW_ALL = "ALL"
     KW_TEMPSETTING = "SET_"
+    KW_TEMPOVERRIDE = "OVERRIDE_"
 
     # separators
     SEP_CMD = ","
@@ -353,6 +355,12 @@ class League(object):
     def autodrop(self):
         """whether to automatically drop templates players can't use"""
         return self.fetchProperty(self.SET_AUTODROP, (self.dropLimit > 0),
+                                  self.getBoolProperty)
+
+    @property
+    def teamless(self):
+        return self.fetchProperty(self.SET_TEAMLESS, (self.teamSize == 1
+                                  and self.teamsPerSide == 1),
                                   self.getBoolProperty)
 
     @property
@@ -1892,30 +1900,44 @@ class League(object):
             otherTeams = self.getOtherTeams(allTeams, team)
             self.updateTeamHistory(team, otherTeams)
 
+    @staticmethod
+    def strBeginsWith(val, checkStr):
+        return (val[:len(checkStr)] == checkStr)
+
+    def addTempSetting(self, settings, head, data):
+        head = head[len(self.KW_TEMPSETTING):]
+        if (head.count(self.SEP_TEMPSET) == 1):
+            head, name = head.split(self.SEP_TEMPSET)
+            if head not in settings:
+                settings[head] = dict()
+            settings[head][name] = data
+        else: settings[head] = data
+
+    def addTempOverride(self, overrides, head, data):
+        head = head[len(self.KW_TEMPOVERRIDE):]
+        overrides.append((head, int(data)))
+
     def getTempSettings(self, tempID):
         tempData = self.fetchTemplateData(tempID)
         template = tempData['WarlightID']
-        settingsDict, checkLen = dict(), len(self.TEMPSETTING)
+        settingsDict, overrides = dict(), list()
         for head in tempData:
-            if self.TEMPSETTING == head[:checkLen]:
-                settingName = head[checkLen:]
-                if (settingName.count(self.SEP_TEMPSET) == 1):
-                    settingName, sVal = settingName.split(self.SEP_TEMPSET)
-                    if settingName not in settingsDict:
-                        settingsDict[settingName] = dict()
-                    settingsDict[settingName][sVal] = tempData[head]
-                else:
-                    settingsDict[settingName] = tempData[head]
-        return template, settingsDict
+            if self.strBeginsWith(head, self.KW_TEMPSETTING):
+                self.addTempSetting(settingsDict, head, tempData[head])
+            elif self.strBeginsWith(head, self.KW_TEMPOVERRIDE):
+                self.addTempOverride(overrides, head, tempData[head])
+        return template, settingsDict, overrides
 
     def createGame(self, gameID):
         gameData = self.fetchGameData(gameID)
         temp = int(gameData['Template'])
-        tempID, tempSettings = self.getTempSettings(temp)
+        tempID, tempSettings, overrides = self.getTempSettings(temp)
         teams = assembleTeams(gameData)
         try:
             wlID = self.handler.createGame(tempID, self.getGameName(gameData),
                        teams, settingsDict=tempSettings,
+                       overridenBonuses=overrides,
+                       teamless=self.teamless,
                        message=self.getGameMessage(gameData))
             self.adjustTemplateGameCount(temp, 1)
             createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)

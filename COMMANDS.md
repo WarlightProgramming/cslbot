@@ -412,6 +412,21 @@ each competing in every single game.
 
 ___
 
+#### TEAMLESS
+
+Whether to create games with no Team Chat (if possible).
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: True
+
+Set this to False if you want all games- even 1v1's/FFAs to have no team chat.
+That way, you'll be able to provide Team Chat to 1v1/FFA players as a space to
+take private notes about the game (and refresh their memory between turns,
+which can be useful on multi-days).
+
+___
+
 #### RATING SYSTEM
 
 The rating system used by the league.
