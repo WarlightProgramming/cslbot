@@ -1,5 +1,6 @@
 # secrets
 credentials/*
+fake-credentials/*
 resources/constants.py
 
 # Byte-compiled / optimized / DLL files
