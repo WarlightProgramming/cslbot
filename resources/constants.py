@@ -1,13 +1,13 @@
 # imports
- from os.path import normpath
+from os.path import normpath
  
- # functions
- def getOwnDir():
-     baseDir = __file__
-     if baseDir[-3:] == "pyc":
+# functions
+def getOwnDir():
+    baseDir = __file__
+    if baseDir[-3:] == "pyc":
          return baseDir[:-(len("constants.pyc"))]
-     return baseDir[:-(len("constants.py"))]
- 
- BASE_DIR = normpath(getOwnDir() + "..") + "/"
- API_CREDS = (BASE_DIR + "resources/fake-credentials/wl_api.json")
- GOOGLE_CREDS = (BASE_DIR + "resources/fake-credentials/google_creds.json")
+    return baseDir[:-(len("constants.py"))]
+
+BASE_DIR = normpath(getOwnDir() + "..") + "/"
+API_CREDS = (BASE_DIR + "resources/fake-credentials/wl_api.json")
+GOOGLE_CREDS = (BASE_DIR + "resources/fake-credentials/google_creds.json")
