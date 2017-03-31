@@ -1,6 +1,6 @@
 # imports
 from os.path import normpath
- 
+
 # functions
 def getOwnDir():
     baseDir = __file__
