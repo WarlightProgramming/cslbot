@@ -9,5 +9,5 @@ def getOwnDir():
     return baseDir[:-(len("constants.py"))]
 
 BASE_DIR = normpath(getOwnDir() + "..") + "/"
-API_CREDS = (BASE_DIR + "credentials/knyte.json")
-GOOGLE_CREDS = (BASE_DIR + "credentials.optimus.json")
+API_CREDS = (BASE_DIR + "credentials/wl_api.json")
+GOOGLE_CREDS = (BASE_DIR + "credentials/google_creds.json")
