@@ -242,12 +242,12 @@ class League(object):
                                               self.getTrueSkillParity},
                         self.RATE_WINCOUNT: {'default': self.defaultWinCount,
                                              'update': self.getNewWinCounts,
-                                             'prettify': int,
+                                             'prettify': str,
                                              'parity': self.getWinCountParity},
                         self.RATE_WINRATE: {'default': self.defaultWinRate,
                                             'update': self.getNewWinRates,
                                             'prettify': (lambda r:
-                                            int(r.split(self.SEP_RTG)[0])),
+                                            str(r.split(self.SEP_RTG)[0])),
                                             'parity': self.getWinRateParity}}
 
     @staticmethod
@@ -272,9 +272,8 @@ class League(object):
         :param reformat: a boolean determing whether to add labels if
                          they aren't present (raises error otherwise)
         """
-        table_header = table.reverseHeader()
-        for label in table_header:
-            if label not in header:
+        for label in header:
+            if label not in table.reverseHeader:
                 if reformat:
                     table.expandHeader(label)
                 else:
