@@ -342,7 +342,8 @@ class League(object):
 
     @staticmethod
     def getBoolProperty(val):
-        return (val.lower() == 'true')
+        return {'true': True,
+                'false': False}[val.lower()]
 
     @property
     def autoformat(self):
@@ -359,7 +360,7 @@ class League(object):
     @property
     def teamless(self):
         return self.fetchProperty(self.SET_TEAMLESS, (self.teamSize == 1
-                                  and self.teamsPerSide == 1),
+                                  and self.sideSize == 1),
                                   self.getBoolProperty)
 
     @property
@@ -387,12 +388,12 @@ class League(object):
     @property
     def rematchLimit(self):
         process_fn = (lambda val: val if val == self.KW_ALL else
-                      int(val) * self.teamsPerSide * self.gameSize)
+                      int(val) * self.sideSize * self.gameSize)
         return self.fetchProperty(self.SET_REMATCH_LIMIT, 0, process_fn)
 
     @property
     def teamLimit(self):
-        process_fn = lambda x: None if x is None else int(x)
+        process_fn = lambda x: None if (x.lower() in {"none", ""}) else int(x)
         defaultMax = None if self.teamSize > 1 else 1
         return self.fetchProperty(self.SET_MAX_TEAMS, defaultMax, process_fn)
 
@@ -727,7 +728,7 @@ class League(object):
 
     @property
     def minSize(self):
-        return self.fetchProperty(self.SET_MIN_SIZE, (self.teamsPerSide *
+        return self.fetchProperty(self.SET_MIN_SIZE, (self.sideSize *
                                   self.gameSize), int)
 
     @property

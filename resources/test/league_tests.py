@@ -182,6 +182,151 @@ class TestLeague(TestCase):
         failStr = "Couldn't get label due to ValueError, using default of 12"
         self.league.parent.log.assert_called_once_with(failStr, 'NAME')
 
+    def test_getBoolProperty(self):
+        getBool = self.league.getBoolProperty
+        assert_true(getBool("TRUE"))
+        assert_true(getBool("true"))
+        assert_true(getBool("tRUE"))
+        assert_true(getBool("True"))
+        assert_false(getBool("FALSE"))
+        assert_false(getBool("False"))
+        assert_false(getBool("false"))
+        assert_false(getBool("fALSE"))
+        assert_raises(KeyError, getBool, "None")
+        assert_raises(KeyError, getBool, "")
+        assert_raises(KeyError, getBool, "someOtherValue")
+
+    def _propertyTest(self, prop, label, default, values):
+        if label in self.league.settings:
+            self.league.settings.pop(label)
+        evalStr = "self.league." + prop
+        assert_equals(eval(evalStr), default)
+        for value in values:
+            self.league.settings[label] = value
+            assert_equals(eval(evalStr), values[value])
+
+    def _boolPropertyTest(self, prop, label, default):
+        values = {"TRUE": True, "FALSE": False, "": default,
+                  "None": default, "someRandomValue": default,
+                  "True": True, "true": True, "tRuE": True,
+                  "False": False, "false": False, "fALSE": False}
+        self._propertyTest(prop, label, default, values)
+
+    def _strPropertyTest(self, prop, label, default):
+        inputs = {"testString", "other test string", "    spaces   ",
+                  "IPL", "Fizzer Appreciation Infinity League", "",
+                  "\nThis\nIs a multi\nline string"}
+        values = dict()
+        for i in inputs:
+            values[i] = i
+        self._propertyTest(prop, label, default, values)
+
+    def _intPropertyTest(self, prop, label, default):
+        values = {"0": 0, "-1": -1, "490": 490, "": default,
+                  "string": default, "None": default, "r4nd0M!1!": default,
+                  "10": 10, "5": 5, "3334": 3334}
+        self._propertyTest(prop, label, default, values)
+
+    def test_autoformat(self):
+        self._boolPropertyTest("autoformat", self.league.SET_AUTOFORMAT, True)
+
+    def test_autodrop(self):
+        self._boolPropertyTest("autodrop", self.league.SET_AUTODROP,
+                               (self.league.dropLimit > 0))
+
+    def test_teamless(self):
+        self._boolPropertyTest("teamless", self.league.SET_TEAMLESS,
+                               (self.league.teamSize == 1 and
+                                self.league.sideSize == 1))
+
+    def test_leagueAcronym(self):
+        self._strPropertyTest("leagueAcronym", self.league.SET_LEAGUE_ACRONYM,
+                              self.league.clusterName)
+
+    def test_clusterName(self):
+        self._strPropertyTest("clusterName", self.league.SET_SUPER_NAME,
+                              self.league.name)
+
+    def test_leagueMessage(self):
+        self._strPropertyTest("leagueMessage", self.league.SET_LEAGUE_MESSAGE,
+                              self.league.DEFAULT_MSG)
+
+    def test_leagueUrl(self):
+        self._strPropertyTest("leagueUrl", self.league.SET_URL,
+                              self.league.defaultUrl)
+
+    def test_defaultUrl(self):
+        self.league.games.parent.sheet.ID = "ID"
+        assert_equals(self.league.defaultUrl,
+                      "https://docs.google.com/spreadsheets/d/ID")
+
+    def test_rematchLimit(self):
+        mul = self.league.sideSize * self.league.gameSize
+        processVal = lambda val: val * mul
+        values = {self.league.KW_ALL: self.league.KW_ALL,
+                  "10": processVal(10), "40": processVal(40),
+                  "490": processVal(490), "0": 0, "": 0, "Five": 0}
+        self._propertyTest("rematchLimit", self.league.SET_REMATCH_LIMIT,
+                           0, values)
+
+    def test_teamLimit(self):
+        values = {"10": 10, "0": 0, "": None, "None": None, "NONE": None,
+                  "none": None, "1": 1, "90840984": 90840984}
+        self._propertyTest("teamLimit", self.league.SET_MAX_TEAMS,
+                           (None if self.league.teamSize > 1 else 1),
+                           values)
+
+    def test_vetoLimit(self):
+        self._intPropertyTest("vetoLimit", self.league.SET_VETO_LIMIT, 0)
+
+    def test_dropLimit(self):
+        maxVal = len(self.league.templateIDs) - 1
+        processVal = lambda val: min(val, maxVal)
+        values = {"10": processVal(10), "-1": processVal(-1),
+                  "0": processVal(0), "40": processVal(40),
+                  "f": 0, "random": 0, "": 0, "STRING": 0, "tEsT": 0}
+        self._propertyTest("dropLimit", self.league.SET_DROP_LIMIT, 0, values)
+
+    def test_removeDeclines(self):
+        self._boolPropertyTest("removeDeclines",
+                               self.league.SET_REMOVE_DECLINES, True)
+
+    def test_countDeclinesAsVetos(self):
+        self._boolPropertyTest("countDeclinesAsVetos",
+                               self.league.SET_VETO_DECLINES, False)
+
+    def _changeRatingSystem(self, system):
+        self.league.settings[self.league.SET_SYSTEM] = system
+
+    def test_vetoPenalty(self):
+        defaultVals = {"", "string", "random", " ", "NONE", "4chan"}
+        values = {"40": 40, "0": 0, "-10": -10, "2357": 2357}
+        systemsDict = {self.league.RATE_WINCOUNT: 1,
+                       self.league.RATE_WINRATE: 50,
+                       self.league.RATE_ELO: 25}
+        for system in systemsDict:
+            self._changeRatingSystem(system)
+            for val in defaultVals:
+                values[val] = systemsDict[system]
+            self._propertyTest("vetoPenalty", self.league.SET_VETO_PENALTY,
+                               systemsDict[system], values)
+
+    def test_teamSize(self):
+        self._intPropertyTest("teamSize", self.league.SET_TEAM_SIZE, 1)
+
+    def test_gameSize(self):
+        self._intPropertyTest("gameSize", self.league.SET_GAME_SIZE, 2)
+
+    def test_sideSize(self):
+        self._intPropertyTest("sideSize", self.league.SET_TEAMS_PER_SIDE, 1)
+
+    def test_expiryThreshold(self):
+        self._intPropertyTest("expiryThreshold", self.league.SET_EXP_THRESH, 3)
+
+    def test_maxVacation(self):
+        self._intPropertyTest("maxVacation", self.league.SET_MAX_VACATION,
+                              None)
+
 # run tests
 if __name__ == '__main__':
     run_tests()
