@@ -103,6 +103,7 @@ class League(object):
     SET_TRUESKILL_SIGMA = "TRUESKILL SIGMA"
     SET_TRUESKILL_DEFAULT = "TRUESKILL MU"
     SET_REVERSE_PARITY = "PREFER SKEWED MATCHUPS"
+    SET_REVERSE_GROUPING = "PREFER SKEWED GROUPINGS"
     SET_LEAGUE_MESSAGE = "MESSAGE"
     SET_SUPER_NAME = "CLUSTER NAME"
     SET_LEAGUE_ACRONYM = "SHORT NAME"
@@ -568,6 +569,11 @@ class League(object):
     @property
     def reverseParity(self):
         return self.fetchProperty(self.SET_REVERSE_PARITY, False,
+                                  self.getBoolProperty)
+
+    @property
+    def reverseSideParity(self):
+        return self.fetchProperty(self.SET_REVERSE_GROUPING, False,
                                   self.getBoolProperty)
 
     @property
@@ -2297,8 +2303,9 @@ class League(object):
             result[ID] = teamDict
         return result
 
-    def makeGrouping(self, groupingDict, groupSize, groupSep):
-        if self.reverseParity:
+    def makeGrouping(self, groupingDict, groupSize, groupSep,
+                     reverseParity):
+        if reverseParity:
             score_fn = lambda *args: 1.0 - self.getParityScore(args)
         else:
             score_fn = lambda *args: self.getParityScore(args)
@@ -2308,7 +2315,8 @@ class League(object):
                 for group in groups}
 
     def makeSides(self, teamsDict):
-        return self.makeGrouping(teamsDict, self.sideSize, self.SEP_TEAMS)
+        return self.makeGrouping(teamsDict, self.sideSize, self.SEP_TEAMS,
+                                 self.reverseSideParity)
 
     def getSideRating(self, side, teamsDict):
         teams = side.split(self.SEP_TEAMS)
@@ -2344,7 +2352,8 @@ class League(object):
         return result
 
     def makeMatchings(self, sidesDict):
-        return self.makeGrouping(sidesDict, self.gameSize, self.SEP_SIDES)
+        return self.makeGrouping(sidesDict, self.gameSize, self.SEP_SIDES,
+                                 self.reverseParity)
 
     @staticmethod
     def turnNoneIntoMutable(val, mutable):

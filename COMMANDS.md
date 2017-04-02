@@ -1360,7 +1360,7 @@ ___
 
 #### PREFER SKEWED MATCHUPS
 
-Whether to prefer matchups with high skill variation.
+Whether to prefer matchups between sides with high skill variation.
 
 *Possible Args*: "TRUE", "FALSE"
 
@@ -1370,6 +1370,21 @@ If you want to protect high-rated/skilled teams, set this to True. Otherwise,
 games with high parity between teams- i.e., good matches- will be preferred.
 This might be useful for leagues where the rating system is based on win
 count/win rate and you want to avoid regression to the mean.
+
+#### PREFER SKEWED GROUPINGS
+
+Whether to create sides with high skill variation between their constituent
+teams.
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: False
+
+If your league creates sides (i.e., if your value of
+[**TEAMS PER SIDE**](#teams-per-side) is greater than 1), set this to True if
+you want those automatically-created sides to have as much variance in skill as
+possible- i.e., you want to group higher-skilled teams with lower-skilled teams
+instead of having roughly uniform skill within a side grouping.
 
 ___
 
