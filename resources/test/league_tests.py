@@ -6,7 +6,8 @@ from unittest import TestCase, main as run_tests
 from nose.tools import *
 from mock import patch, MagicMock
 from resources.league import *
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+from decimal import Decimal
 
 # tests
 ## decorator tests
@@ -206,8 +207,12 @@ class TestLeague(TestCase):
         evalStr = "self.league." + prop
         assert_equals(eval(evalStr), default)
         for value in values:
-            self.league.settings[label] = value
-            assert_equals(eval(evalStr), values[value])
+            self._setProp(label, value)
+            result = eval(evalStr)
+            if isinstance(result, float):
+                assert_almost_equal(result, values[value])
+            else:
+                assert_equals(result, values[value])
 
     def _boolPropertyTest(self, prop, label, default):
         values = {"TRUE": True, "FALSE": False, "": default,
@@ -508,6 +513,156 @@ class TestLeague(TestCase):
                                False)
         self._setMinMemberAge(1)
         assert_true(self.league.membersOnly)
+
+    def test_meetsMembership(self):
+        player = MagicMock()
+        player.isMember = False
+        self._setMinMemberAge(0)
+        self._setProp(self.league.SET_MEMBERS_ONLY, "FALSE")
+        assert_true(self.league.meetsMembership(player))
+        self._setMinMemberAge(1)
+        assert_false(self.league.meetsMembership(player))
+        self._setProp(self.league.SET_MEMBERS_ONLY, "TRUE")
+        assert_false(self.league.meetsMembership(player))
+        self._setMinMemberAge(0)
+        assert_false(self.league.meetsMembership(player))
+        player.isMember = True
+        player.memberSince = date.today() - timedelta(days=3)
+        self._setMinMemberAge(4)
+        assert_false(self.league.meetsMembership(player))
+        self._setMinMemberAge(3)
+        assert_true(self.league.meetsMembership(player))
+        self._setMinMemberAge(2)
+        assert_true(self.league.meetsMembership(player))
+
+    def test_minPoints(self):
+        self._intPropertyTest('minPoints', self.league.SET_MIN_POINTS, 0)
+
+    def test_minAge(self):
+        self._intPropertyTest('minAge', self.league.SET_MIN_AGE, 0)
+
+    def test_minMemberAge(self):
+        self._intPropertyTest('minMemberAge', self.league.SET_MIN_MEMBER_AGE,
+                              0)
+
+    def test_maxRTSpeed(self):
+        processVal = lambda x: float(Decimal(x) / Decimal(60.0))
+        values= {'5': processVal(5), '0': 0, '10': processVal(10),
+                 '': None, 'lkjasfl': None, '-30.4': processVal(-30.4)}
+        self._propertyTest('maxRTSpeed', self.league.SET_MAX_RT_SPEED, None,
+                           values)
+
+    def test_maxMDSpeed(self):
+        self._floatPropertyTest('maxMDSpeed', self.league.SET_MAX_MD_SPEED,
+                                None)
+
+    def test_minExplicitRating(self):
+        self._intPropertyTest('minExplicitRating', self.league.SET_MIN_RATING,
+                              None)
+
+    def test_findRatingAtPercentile(self):
+        oldPrettify = self.league.prettifyRating
+        self.league.prettifyRating = int
+        assert_equals(self.league.findRatingAtPercentile(0), None)
+        self.teams.findValue.return_value = ["1", "2", "3", "4", "5",
+                                             "6", "7", "8", "9", "10"]
+        assert_equals(self.league.findRatingAtPercentile(0), None)
+        assert_equals(self.league.findRatingAtPercentile(1), 2)
+        assert_equals(self.league.findRatingAtPercentile(10), 2)
+        assert_equals(self.league.findRatingAtPercentile(21), 4)
+        assert_equals(self.league.findRatingAtPercentile(30.5), 5)
+        assert_equals(self.league.findRatingAtPercentile(99.5), 10)
+        assert_equals(self.league.findRatingAtPercentile(1000), 10)
+        assert_equals(self.league.findRatingAtPercentile(50), 6)
+        self.league.prettifyRating = oldPrettify
+
+    @patch('resources.league.League.findRatingAtPercentile')
+    def test_minPercentileRating(self, findRating):
+        values = {"0": findRating.return_value, "": None, "None": None,
+                  "hi": None, "10": findRating.return_value,
+                  "490": findRating.return_value,
+                  "43.5902": findRating.return_value}
+        self._propertyTest('minPercentileRating',
+                           self.league.SET_MIN_PERCENTILE, None, values)
+
+    @patch('resources.league.League.findRatingAtPercentile')
+    def test_minRating(self, findRating):
+        findRating.return_value = None
+        self._setProp(self.league.SET_MIN_RATING, "50")
+        assert_equals(self.league.minRating, 50)
+        self._setProp(self.league.SET_MIN_PERCENTILE, "30")
+        findRating.return_value = 30
+        assert_equals(self.league.minRating, findRating.return_value)
+
+    def test_gracePeriod(self):
+        self._intPropertyTest('gracePeriod', self.league.SET_GRACE_PERIOD, 0)
+
+    def test_restorationPeriod(self):
+        self._setProp(self.league.SET_GRACE_PERIOD, 5)
+        values = {"10": 15, "": None, "None": None, " ": None, "40": 45,
+                  "0": 5}
+        self._propertyTest('restorationPeriod',
+                           self.league.SET_RESTORATION_PERIOD, None, values)
+
+    @patch('resources.league.League.getExtantEntities')
+    def test_restoreTeams(self, getExtant):
+        self._setProp(self.league.SET_RESTORATION_PERIOD, None)
+        self._setProp(self.league.SET_MIN_RATING, None)
+        self._setProp(self.league.SET_MIN_PERCENTILE, None)
+        self.league.restoreTeams()
+        getExtant.assert_not_called()
+        self._setProp(self.league.SET_MIN_RATING, 50)
+        self.league.restoreTeams()
+        getExtant.assert_not_called()
+        self._setProp(self.league.SET_GRACE_PERIOD, 5)
+        self._setProp(self.league.SET_RESTORATION_PERIOD, 10)
+        assert_equals(self.league.restorationPeriod, 15)
+        getExtant.return_value = list()
+        self.league.restoreTeams()
+        assert_equals(getExtant.call_count, 1)
+        self.teams.updateMatchingEntities.assert_not_called()
+        makeProb = lambda x: datetime.strftime(datetime.now() - timedelta(x),
+                                               self.league.TIMEFORMAT)
+        getExtant.return_value = [{'ID': 0, 'Probation Start': makeProb(1)},
+                                  {'ID': 1, 'Probation Start': makeProb(30)},
+                                  {'ID': 2, 'Probation Start': makeProb(0)},
+                                  {'ID': 3, 'Probation Start': makeProb(16)},
+                                  {'ID': 4, 'Probation Start': makeProb(12)}]
+        self.league.restoreTeams()
+        assert_equals(self.teams.updateMatchingEntities.call_count, 2)
+
+    def test_allowJoins(self):
+        self._boolPropertyTest('allowJoins', self.league.SET_ALLOW_JOINS, True)
+
+    def test_leagueCapacity(self):
+        self._intPropertyTest('leagueCapacity',
+                              self.league.SET_LEAGUE_CAPACITY, None)
+
+    def test_activeCapacity(self):
+        self._intPropertyTest('activeCapacity',
+                              self.league.SET_ACTIVE_CAPACITY, None)
+
+    def test_valueBelowCapacity(self):
+        assert_true(self.league.valueBelowCapacity(5, 6))
+        assert_true(self.league.valueBelowCapacity(5, 10))
+        assert_true(self.league.valueBelowCapacity(0, 1))
+        assert_false(self.league.valueBelowCapacity(5, 5))
+        assert_false(self.league.valueBelowCapacity(5, 4))
+        assert_false(self.league.valueBelowCapacity(0, 0))
+
+    @patch('resources.league.League.valueBelowCapacity')
+    def test_activeFull(self, belowCap):
+        belowCap.return_value = False
+        assert_true(self.league.activeFull)
+        belowCap.return_value = True
+        assert_false(self.league.activeFull)
+
+    @patch('resources.league.League.valueBelowCapacity')
+    def test_leagueFull(self, belowCap):
+        belowCap.return_value = False
+        assert_true(self.league.leagueFull)
+        belowCap.return_value = True
+        assert_false(self.league.leagueFull)
 
 # run tests
 if __name__ == '__main__':

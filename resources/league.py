@@ -12,7 +12,7 @@ from pair import group_teams, assign_templates
 from elo import Elo
 from glicko2.glicko2 import Player
 from trueskill import TrueSkill
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from wl_parsers import PlayerParser
 from wl_api import APIHandler
 from wl_api.wl_api import APIError
@@ -590,8 +590,13 @@ class League(object):
                                  self.getBoolProperty)
         return (exp or (self.minMemberAge > 0))
 
+    @staticmethod
+    def memberAge(player):
+        return (date.today() - player.memberSince).days
+
     def meetsMembership(self, player):
-        return (not self.membersOnly or player.isMember)
+        return (not self.membersOnly or (player.isMember and
+                self.memberAge(player) >= self.minMemberAge))
 
     @property
     def minPoints(self):
@@ -624,16 +629,16 @@ class League(object):
                                                'type': 'negative'}},
                                        "Rating")
         for i in xrange(len(ratings)):
-            ratings[i] = int(prettifyRating(ratings[i]))
+            ratings[i] = int(self.prettifyRating(ratings[i]))
         ratings.sort()
         index = len(ratings) * float(Decimal(percentile) / Decimal(100.0))
-        index = int(index) + bool(index % 1)
+        index = min(int(index) + bool(index % 1), len(ratings) - 1)
         return ratings[index]
 
     @property
     def minPercentileRating(self):
         process_fn = lambda x: self.findRatingAtPercentile(float(x))
-        self.fetchProperty(self.SET_MIN_PERCENTILE, None, process_fn)
+        return self.fetchProperty(self.SET_MIN_PERCENTILE, None, process_fn)
 
     @property
     def minRating(self):
@@ -682,9 +687,9 @@ class League(object):
     def activeCapacity(self):
         return self.fetchProperty(self.SET_ACTIVE_CAPACITY, None, int)
 
-    @staticmethod
-    def valueBelowCapacity(value, capacity):
-        return self.valueInRange(value, None, capacity-1)
+    @classmethod
+    def valueBelowCapacity(cls, value, capacity):
+        return cls.valueInRange(value, None, capacity-1)
 
     @property
     def activeFull(self):
@@ -950,7 +955,7 @@ class League(object):
         return ((True in results) or (False not in results))
 
     def meetsAge(self, player):
-        now = datetime.now()
+        now = date.today()
         joinDate = player.joinDate
         return ((now - joinDate).days >= self.minAge)
 
