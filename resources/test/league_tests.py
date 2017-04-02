@@ -6,6 +6,7 @@ from unittest import TestCase, main as run_tests
 from nose.tools import *
 from mock import patch, MagicMock
 from resources.league import *
+from datetime import datetime, timedelta
 
 # tests
 ## decorator tests
@@ -196,6 +197,9 @@ class TestLeague(TestCase):
         assert_raises(KeyError, getBool, "")
         assert_raises(KeyError, getBool, "someOtherValue")
 
+    def _setProp(self, label, value):
+        self.league.settings[label] = value
+
     def _propertyTest(self, prop, label, default, values):
         if label in self.league.settings:
             self.league.settings.pop(label)
@@ -225,6 +229,12 @@ class TestLeague(TestCase):
         values = {"0": 0, "-1": -1, "490": 490, "": default,
                   "string": default, "None": default, "r4nd0M!1!": default,
                   "10": 10, "5": 5, "3334": 3334}
+        self._propertyTest(prop, label, default, values)
+
+    def _floatPropertyTest(self, prop, label, default):
+        values = {"0": 0.0, "-1": -1.0, "-1.0": -1.0, "0.0": 0.0, "210": 210.0,
+                  "string": default, "None": default, "randomLOL": default,
+                  "10.0": 10.0, "10": 10.0, "3334": 3334.0, "042.390": 42.390}
         self._propertyTest(prop, label, default, values)
 
     def test_autoformat(self):
@@ -326,6 +336,178 @@ class TestLeague(TestCase):
     def test_maxVacation(self):
         self._intPropertyTest("maxVacation", self.league.SET_MAX_VACATION,
                               None)
+
+    def _setMaxVacation(self, val):
+        self._setProp(self.league.SET_MAX_VACATION, val)
+
+    def _makeVacationDate(self, delta):
+        return datetime.strftime((datetime.now() + timedelta(days=delta)),
+                                 '%m/%d/%Y %H:%M:%S')
+
+    def test_meetsVacation(self):
+        player = MagicMock()
+        player.ID = "0"
+        self.handler.validateToken.return_value = dict()
+        assert_true(self.league.meetsVacation(player))
+        self._setMaxVacation(1)
+        assert_true(self.league.meetsVacation(player))
+        self._setMaxVacation(0)
+        assert_true(self.league.meetsVacation(player))
+        self.handler.validateToken.return_value = {'onVacationUntil':
+                                                   self._makeVacationDate(1)}
+        assert_false(self.league.meetsVacation(player))
+        self._setMaxVacation(1)
+        assert_true(self.league.meetsVacation(player))
+        self._setMaxVacation(2)
+        assert_true(self.league.meetsVacation(player))
+        self.handler.validateToken.return_value = {'onVacationUntil':
+                                                   self._makeVacationDate(3)}
+        assert_false(self.league.meetsVacation(player))
+        self.handler.validateToken.return_value = dict()
+        assert_true(self.league.meetsVacation(player))
+
+    def test_minLimit(self):
+        values = {"-3": 0, "-5": 0, "0": 0, "10": 10, "204": 204, "None": 0}
+        self._propertyTest('minLimit', self.league.SET_MIN_LIMIT, 0, values)
+
+    def test_maxLimit(self):
+        self._intPropertyTest('maxLimit', self.league.SET_MAX_LIMIT, None)
+
+    def test_constrainLimit(self):
+        self._boolPropertyTest('constrainLimit',
+                               self.league.SET_CONSTRAIN_LIMIT, True)
+
+    def test_valueInRange(self):
+        assert_true(self.league.valueInRange(10, None, None))
+        assert_true(self.league.valueInRange(10, 10, None))
+        assert_true(self.league.valueInRange(10, None, 10))
+        assert_true(self.league.valueInRange(10, 10, 10))
+        assert_true(self.league.valueInRange(5, 0, 30))
+        assert_true(self.league.valueInRange(5, 0, None))
+        assert_true(self.league.valueInRange(5, None, 30))
+        assert_true(self.league.valueInRange(0, -1, 1))
+        assert_false(self.league.valueInRange(0, None, -1))
+        assert_false(self.league.valueInRange(0, 1, -1))
+        assert_false(self.league.valueInRange(0, 1, None))
+        assert_false(self.league.valueInRange(0, 1, 2))
+
+    def _setMinLimit(self, val):
+        self._setProp(self.league.SET_MIN_LIMIT, val)
+
+    def _setMaxLimit(self, val):
+        self._setProp(self.league.SET_MAX_LIMIT, val)
+
+    def test_limitInRange(self):
+        self._setMinLimit(4)
+        self._setMaxLimit(20)
+        assert_true(self.league.limitInRange(20))
+        assert_false(self.league.limitInRange(3))
+        assert_false(self.league.limitInRange(21))
+
+    def _setSystem(self, val):
+        self._setProp(self.league.SET_SYSTEM, val)
+
+    def test_ratingSystem(self):
+        self._setSystem(self.league.RATE_ELO)
+        assert_equals(self.league.ratingSystem, self.league.RATE_ELO)
+        self._setSystem("elo")
+        assert_equals(self.league.ratingSystem, self.league.RATE_ELO)
+        self._setSystem(self.league.RATE_WINRATE)
+        assert_equals(self.league.ratingSystem, self.league.RATE_WINRATE)
+        self._setSystem("dr. wondertainment's magic rating system v3.5")
+        fetchSys = lambda: self.league.ratingSystem
+        assert_raises(ImproperInput, fetchSys)
+
+    def test_kFactor(self):
+        processVal = lambda x: x * self.league.sideSize
+        values = {"32": processVal(32), "": processVal(32),
+                  "None": processVal(32), "40": processVal(40),
+                  "0": 0, "10": processVal(10)}
+        self._propertyTest('kFactor', self.league.SET_ELO_K, 32, values)
+
+    def test_defaultElo(self):
+        self._intPropertyTest("defaultElo", self.league.SET_ELO_DEFAULT, 1500)
+
+    @patch('resources.league.Elo')
+    def test_eloEnv(self, eloFn):
+        fetchVal = lambda: self.league.eloEnv
+        assert_equals(fetchVal(), eloFn.return_value)
+        eloFn.assert_called_once_with(initial=self.league.defaultElo,
+                                      k_factor=self.league.kFactor)
+
+    def test_glickoRd(self):
+        self._intPropertyTest('glickoRd', self.league.SET_GLICKO_RD, 350)
+
+    def test_glickoRating(self):
+        self._intPropertyTest('glickoRating', self.league.SET_GLICKO_DEFAULT,
+                              1500)
+
+    def test_defaultGlicko(self):
+        expVal = (str(self.league.glickoRating) + self.league.SEP_RTG +
+                  str(self.league.glickoRd))
+        assert_equals(self.league.defaultGlicko, expVal)
+
+    def test_trueSkillSigma(self):
+        self._intPropertyTest('trueSkillSigma',
+                              self.league.SET_TRUESKILL_SIGMA, 500)
+
+    def test_trueSkillMu(self):
+        self._intPropertyTest('trueSkillMu',
+                              self.league.SET_TRUESKILL_DEFAULT, 1500)
+
+    def test_trueSkillBeta(self):
+        assert_equals(self.league.trueSkillBeta,
+                      (self.league.trueSkillSigma / 2.0))
+
+    def test_trueSkillTau(self):
+        assert_equals(self.league.trueSkillTau,
+                      (self.league.trueSkillSigma / 100.0))
+
+    @patch('resources.league.TrueSkill')
+    def test_trueSkillEnv(self, trueSkillFn):
+        assert_equals(self.league.trueSkillEnv, trueSkillFn.return_value)
+        trueSkillFn.assert_called_once_with(mu = self.league.trueSkillMu,
+                                            sigma = self.league.trueSkillSigma,
+                                            beta = self.league.trueSkillBeta,
+                                            tau = self.league.trueSkillTau,
+                                            draw_probability = 0.0,
+                                            backend = 'mpmath')
+
+    def test_defaultTrueSkill(self):
+        expVal = (str(self.league.trueSkillMu) + self.league.SEP_RTG +
+                  str(self.league.trueSkillSigma))
+        assert_equals(self.league.defaultTrueSkill, expVal)
+
+    def test_defaultWinCount(self):
+        assert_equals(self.league.defaultWinCount, str(0))
+
+    def test_defaultWinRate(self):
+        assert_equals(self.league.defaultWinRate, "0" + self.league.SEP_RTG +
+                      "0")
+
+    def test_reverseParity(self):
+        self._boolPropertyTest('reverseParity', self.league.SET_REVERSE_PARITY,
+                               False)
+
+    def test_reverseSideParity(self):
+        self._boolPropertyTest('reverseSideParity',
+                               self.league.SET_REVERSE_GROUPING, False)
+
+    def test_maxBoot(self):
+        self._floatPropertyTest('maxBoot', self.league.SET_MAX_BOOT, 100.0)
+
+    def test_minLevel(self):
+        self._intPropertyTest('minLevel', self.league.SET_MIN_LEVEL, 0)
+
+    def _setMinMemberAge(self, val):
+        self._setProp(self.league.SET_MIN_MEMBER_AGE, val)
+
+    def test_membersOnly(self):
+        self._setMinMemberAge(0)
+        self._boolPropertyTest('membersOnly', self.league.SET_MEMBERS_ONLY,
+                               False)
+        self._setMinMemberAge(1)
+        assert_true(self.league.membersOnly)
 
 # run tests
 if __name__ == '__main__':
