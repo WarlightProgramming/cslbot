@@ -4,7 +4,6 @@
 ########################
 
 # imports
-import string
 import datetime
 from errors import *
 from utility import *
@@ -139,20 +138,21 @@ class LeagueManager(object):
             except ThreadError as err:
                 self.log(str(err), error=False)
 
+    def _handleSpecifiedAdmin(self, found):
+        if len(found) > 0:
+            return found[0][TITLE_ARG]
+        else:
+            self.log("Unable to find admin", error=True)
+
     def _getAdmin(self):
         """fetches the league admin's ID"""
         found = self.commands.findEntities({TITLE_CMD: 'ADMIN'})
         parser = self._fetchLeagueThread()
         if ((len(found) == 0 or not isInteger(found[0][TITLE_ARG])) and
             parser is not None):
-            try:
-                return parser.getPosts()[0]['author']['ID']
-            except Exception:
-                self.logThreadFailure(thread)
-        elif len(found) > 0:
-            return found[0][TITLE_ARG]
-        else:
-            self.log("Unable to find admin", error=True)
+            try: return parser.getPosts()[0]['author']['ID']
+            except Exception: self.logThreadFailure(thread)
+        else: return self._handleSpecifiedAdmin(found)
 
     def log(self, description, league="", error=False):
         """logs an entry onto the sheet"""
@@ -193,7 +193,6 @@ class LeagueManager(object):
         return results
 
     def fetchThreadOrderData(self, thread, offset):
-        startMarker = 'Forum/'
         thread = self._getThreadName([{TITLE_ARG: thread},])
         threadParser = OrderParser(thread)
         self._validateThread(threadParser)
@@ -273,16 +272,19 @@ class LeagueManager(object):
             return 0
         return found[0][TITLE_ARG]
 
-    def _getInterfaceName(thread, league):
-        if (isinstance(thread, int) or (isinstance(thread, str) and
-            isInteger(thread))):
-            return 'https://www.warlight.net/Forum/' + str(threadID)
-        interfaces = self.commands.findEntities({TITLE_CMD: 'INTERFACE'})
+    def _handleInterfaces(self, interfaces):
         if len(interfaces) == 0: return "(no league interface specified)"
         elif len(interfaces) > 1:
             return self.fetchLeagueCommands(league).get('INTERFACE',
                                                         interfaces[0])
         return interfaces[0]
+
+    def _getInterfaceName(self, thread, league):
+        if (isinstance(thread, int) or (isinstance(thread, str) and
+            isInteger(thread))):
+            return 'https://www.warlight.net/Forum/' + str(threadID)
+        interfaces = self.commands.findEntities({TITLE_CMD: 'INTERFACE'})
+        return self._handleInterfaces(interfaces)
 
     def run(self):
         """runs leagues and updates"""
