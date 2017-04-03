@@ -977,6 +977,191 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_ALLOWED_LOCATIONS, "ALL")
         assert_true(self.league.checkLocation("California"))
 
+    def test_locationAllowed(self):
+        player = MagicMock()
+        player.location = "United States of Australia: Texas: Earth"
+        self._setProp(self.league.SET_BANNED_LOCATIONS, "ALL")
+        self._setProp(self.league.SET_ALLOWED_LOCATIONS, "")
+        assert_false(self.league.locationAllowed(player))
+        self._setProp(self.league.SET_ALLOWED_LOCATIONS, "Texas")
+        assert_true(self.league.locationAllowed(player))
+        self._setProp(self.league.SET_ALLOWED_LOCATIONS, "")
+        self._setProp(self.league.SET_BANNED_LOCATIONS, "")
+        assert_true(self.league.locationAllowed(player))
+        self._setProp(self.league.SET_BANNED_LOCATIONS, "United States")
+        assert_true(self.league.locationAllowed(player))
+        self._setProp(self.league.SET_BANNED_LOCATIONS, "Earth")
+        assert_false(self.league.locationAllowed(player))
+        self._setProp(self.league.SET_ALLOWED_LOCATIONS,
+                      "United States of Australia")
+        assert_true(self.league.locationAllowed(player))
+        player.location = "United States of Australia"
+        self._setProp(self.league.SET_BANNED_LOCATIONS, "ALL")
+        assert_true(self.league.locationAllowed(player))
+        player.location = ""
+        assert_false(self.league.locationAllowed(player))
+
+    def test_meetsAge(self):
+        player = MagicMock()
+        player.joinDate = date.today() - timedelta(30)
+        self._setProp(self.league.SET_MIN_AGE, 30)
+        assert_true(self.league.meetsAge(player))
+        player.joinDate = date.today()
+        assert_false(self.league.meetsAge(player))
+        player.joinDate = date.today() - timedelta(400)
+        assert_true(self.league.meetsAge(player))
+
+    def test_meetsSpeed(self):
+        player = MagicMock()
+        player.playSpeed = {'Real-Time Games': 1,
+                            'Multi-Day Games': 38}
+        self._setProp(self.league.SET_MAX_RT_SPEED, 30)
+        self._setProp(self.league.SET_MAX_MD_SPEED, 40)
+        assert_false(self.league.meetsSpeed(player))
+        self._setProp(self.league.SET_MAX_RT_SPEED, 60)
+        assert_true(self.league.meetsSpeed(player))
+
+    def test_meetsLastSeen(self):
+        player = MagicMock()
+        player.lastSeen = 30
+        self._setProp(self.league.SET_MAX_LAST_SEEN, 40)
+        assert_true(self.league.meetsLastSeen(player))
+        player.lastSeen = 40
+        assert_true(self.league.meetsLastSeen(player))
+        player.lastSeen = 50
+        assert_false(self.league.meetsLastSeen(player))
+        self._setProp(self.league.SET_MAX_LAST_SEEN, "None")
+        assert_true(self.league.meetsLastSeen(player))
+
+    @patch('resources.league.League.meetsMinRanked')
+    @patch('resources.league.League.meetsLastSeen')
+    @patch('resources.league.League.RTPercentInRange')
+    @patch('resources.league.League.gameCountInRange')
+    @patch('resources.league.League.meetsSpeed')
+    @patch('resources.league.League.meetsAge')
+    @patch('resources.league.League.meetsVacation')
+    def test_checkPrereqs(self, vacationCheck, ageCheck, speedCheck,
+                          gameCountCheck, rtPercentCheck, lastSeenCheck,
+                          minRankedCheck):
+        player = MagicMock()
+        player.clanID = 45
+        self._setProp(self.league.SET_BANNED_CLANS, "43")
+        self._setProp(self.league.SET_ALLOWED_CLANS, "")
+        player.location = "United States"
+        self._setProp(self.league.SET_BANNED_LOCATIONS, "Azerbaijan")
+        self._setProp(self.league.SET_ALLOWED_LOCATIONS,
+                      "Arizona,New Mexico,Texas")
+        player.bootRate = 30
+        self._setProp(self.league.SET_MAX_BOOT, "35")
+        player.level = 20
+        self._setProp(self.league.SET_MIN_LEVEL, "19")
+        self._setProp(self.league.SET_MIN_MEMBER_AGE, "0")
+        self._setProp(self.league.SET_MEMBERS_ONLY, "FALSE")
+        player.isMember = False
+        vacationCheck.return_value = True
+        player.points = 4000
+        self._setProp(self.league.SET_MIN_POINTS, "0")
+        ageCheck.return_value = True
+        speedCheck.return_value = True
+        gameCountCheck.return_value = True
+        rtPercentCheck.return_value = True
+        lastSeenCheck.return_value = True
+        minRankedCheck.return_value = True
+        player.playedGames = 30
+        self._setProp(self.league.SET_MIN_GAMES, 30)
+        self._setProp(self.league.SET_MIN_ACH, 20)
+        player.achievementRate = 25
+        assert_true(self.league.checkPrereqs(player))
+        player.playedGames = 10
+        assert_false(self.league.checkPrereqs(player))
+
+    @patch('resources.league.League.checkPrereqs')
+    def test_allowed(self, check):
+        check.return_value = True
+        self._setProp(self.league.SET_ALLOWED_PLAYERS, "40")
+        self._setProp(self.league.SET_BANNED_PLAYERS, "40")
+        assert_true(self.league.allowed(40))
+        check.return_value = False
+        assert_true(self.league.allowed(40))
+        assert_false(self.league.allowed(43))
+        check.return_value = True
+        assert_true(self.league.allowed(43))
+        self._setProp(self.league.SET_BANNED_PLAYERS, "40,ALL")
+        assert_false(self.league.allowed(43))
+        self._setProp(self.league.SET_ALLOWED_PLAYERS, "ALL,40")
+        assert_true(self.league.allowed(43))
+
+    @patch('resources.league.League.allowed')
+    def test_banned(self, allowed):
+        allowed.return_value = False
+        assert_true(self.league.banned(40))
+        allowed.return_value = True
+        assert_false(self.league.banned(40))
+
+    def test_logFailedOrder(self):
+        order = {'type': 'OrderType', 'author': 3940430, 'orders': ['12','13']}
+        self.league.logFailedOrder(order)
+        expDesc = "Failed to process OrderType order by 3940430 for league 12"
+        self.parent.log.assert_called_once_with(expDesc,
+                                                league=self.league.name)
+
+    def test_checkTeamCreator(self):
+        self.league.mods = {12,}
+        assert_raises(ImproperInput, self.league.checkTeamCreator,
+                      43, {44, 45, 46})
+        assert_equals(self.league.checkTeamCreator(43, {43,44,45}), None)
+        self.league.mods = {43,12}
+        assert_equals(self.league.checkTeamCreator(43, {44,45,46}), None)
+
+    def test_checkTemplateAccess(self):
+        self.templates.findEntities.return_value = {14: {'WarlightID': 41},
+                                                    23: {'WarlightID': 32},
+                                                    24: {'WarlightID': 32},
+                                                    5: {'WarlightID': 50}}
+        self.handler.validateToken.return_value = {'template41': {'result':
+                'A'},
+                'template32': {'result': "CannotUseTemplate"},
+                'template50': {'result': 'B'}}
+        assert_equals(self.league.checkTemplateAccess(12), {23,24})
+
+    def test_handleAutodrop(self):
+        self.templates.findEntities.return_value = {14: {'WarlightID': 41},
+                                                    23: {'WarlightID': 32},
+                                                    32: {'WarlightID': 23},
+                                                    41: {'WarlightID': 14},
+                                                    50: {'WarlightID': 5},
+                                                    5: {'WarligtID': 50}}
+        self.teams.findEntities.return_value = list()
+        assert_raises(ImproperInput, self.league.handleAutodrop, 40, [12, 13])
+        self.teams.findEntities.return_value = [{"ID": 2, "Drops": "10/11/12"}]
+        self._setProp(self.league.SET_DROP_LIMIT, 4)
+        assert_raises(ImproperInput, self.league.handleAutodrop, 2, [13,14])
+        self.league.handleAutodrop(2, [12,13])
+        self.teams.updateMatchingEntities.assert_called_once_with({'ID':
+            {'value': 2, 'type': 'positive'}}, {'Drops': '11/10/13/12'})
+
+    @patch('resources.league.League.checkTemplateAccess')
+    @patch('resources.league.League.banned')
+    def test_checkTeamMember(self, banCheck, checkTemp):
+        banCheck.return_value = True
+        assert_raises(ImproperInput, self.league.checkTeamMember, 12, {1,2,3})
+        banCheck.return_value = False
+        checkTemp.return_value = {40,12,31}
+        badTemps = {1, 2, 3}
+        self.league.checkTeamMember(12, badTemps)
+        assert_equals(badTemps, {1, 2, 3, 12, 31, 40})
+
+    def test_autodropEligible(self):
+        self._setProp(self.league.SET_AUTODROP, "FALSE")
+        assert_false(self.league.autodropEligible({1,2,3}))
+        self._setProp(self.league.SET_AUTODROP, "TRUE")
+        self.templates.findEntities.return_value = {10: {'WarlightID': 1},
+                                                    11: {'WarlightID': 12},
+                                                    12: {'WarlightID': 13}}
+        self._setProp(self.league.SET_DROP_LIMIT, "1")
+        assert_false(self.league.autodropEligible({1,2,3,4,5}))
+        assert_true(self.league.autodropEligible({2,}))
+
 # run tests
 if __name__ == '__main__':
     run_tests()

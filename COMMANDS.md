@@ -902,9 +902,9 @@ ___
 
 #### MAX LAST SEEN
 
-Maximum number of days since the player was last online.
+Maximum number of hours since the player was last online.
 
-*Sample Args*: "3", "5", "10"
+*Sample Args*: "3", "24", "100"
 
 *Default*: no maximum
 
@@ -1268,6 +1268,9 @@ that they're unable to play on and drop another template to take its place they
 run the risk of hitting their drop limit and not being able to accommodate the
 forced drops- i.e., becoming unable to compete. Teams with forced drops should
 use the drop feature very carefullly.
+
+**CAVEAT**: Autodrop may not work properly if you manipulate template settings
+using keywords in the template data sheet.
 
 ### Rating System Configuration
 

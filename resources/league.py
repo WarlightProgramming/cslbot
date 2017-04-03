@@ -130,7 +130,7 @@ class League(object):
     SET_MAX_ONGOING_GAMES = "MAX ONGOING GAMES"
     SET_MIN_RT_PERCENT = "MIN RT PERCENT"
     SET_MAX_RT_PERCENT = "MAX RT PERCENT"
-    SET_MAX_LAST_SEEN = "MAX LAST SEEN" # days
+    SET_MAX_LAST_SEEN = "MAX LAST SEEN" # hours
     SET_MIN_1v1_PCT = "MIN 1v1 PERCENT"
     SET_MIN_2v2_PCT = "MIN 2v2 PERCENT"
     SET_MIN_3v3_PCT = "MIN 3v3 PERCENT"
@@ -1000,10 +1000,14 @@ class League(object):
             if prereq is not True: return False
         return True
 
+    def _playerExplicitlyAllowed(self, player):
+        return (str(player) in self.allowedPlayers or
+                self.KW_ALL in self.allowedPlayers)
+
     def allowed(self, playerID):
         """returns True if a player is allowed to join the league"""
         player = int(playerID)
-        if str(player) in self.allowedPlayers: return True
+        if self._playerExplicitlyAllowed(player): return True
         parser = PlayerParser(player)
         if not self.checkPrereqs(parser):
             return False
@@ -1016,7 +1020,7 @@ class League(object):
 
     def logFailedOrder(self, order):
         desc = ("Failed to process %s order by %d for league %s" %
-                (order['type'], order['author'], order['orders'][0]))
+                (order['type'], int(order['author']), str(order['orders'][0])))
         self.parent.log(desc, league=self.name)
 
     def checkTeamCreator(self, creator, members):
@@ -1030,13 +1034,13 @@ class League(object):
         tempIDs = self.templateIDs
         tempWLIDs, unusables = dict(), set()
         for ID in tempIDs:
-            tempWLIDs[tempIDs[ID]['WarlightID']] = ID
+            self.addToSetWithinDict(tempWLIDs, tempIDs[ID]['WarlightID'], ID)
         tempResults = self.handler.validateToken(int(playerID),
                                                  *tempWLIDs)
         for temp in tempWLIDs:
             tempName = "template" + str(temp)
-            if tempResults[tempName]['result'] != 'CannotUseTemplate':
-                unusables.add(tempWLIDs[temp])
+            if tempResults[tempName]['result'] == 'CannotUseTemplate':
+                unusables = unusables.union(tempWLIDs[temp])
         return unusables
 
     def handleAutodrop(self, teamID, templates):
@@ -1047,21 +1051,19 @@ class League(object):
                                 (str(teamID)))
         team = teams[0]
         existingDrops = set(team['Drops'].split(self.SEP_DROPS))
-        if (len(existingDrops) + len(templates)) > self.dropLimit:
+        existingDrops = existingDrops.union(str(t) for t in templates)
+        if (len(existingDrops) > self.dropLimit):
             raise ImproperInput("Team %s has already reached its drop limit" %
                                 (str(teamID)))
-        existingDrops = existingDrops.union(str(t) for t in templates)
         drops = (self.SEP_DROPS).join(str(d) for d in existingDrops)
-        self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                  'type': 'positive'}},
-                                          {'Drops': drops})
+        self.updateEntityValue(self.teams, teamID, Drops=drops)
 
     def checkTeamMember(self, member, badTemps):
         if self.banned(member):
             raise ImproperInput(str(member) + " is banned from this league")
         tempAccess = self.checkTemplateAccess(member)
         for temp in tempAccess:
-            badTemplates.add(temp)
+            badTemps.add(temp)
 
     def autodropEligible(self, badTemps):
         return (self.autodrop and (len(badTemps) <= self.dropLimit))
@@ -1246,10 +1248,11 @@ class League(object):
 
     @property
     def templateIDs(self):
-        return self.templates.findValue({'ID': {'value': '',
-                                                'type': 'negative'},
-                                         'Active': {'value': ['TRUE', True],
-                                                    'type': 'positive'}}, "ID")
+        return self.templates.findEntities({'ID': {'value': '',
+                                                   'type': 'negative'},
+                                           'Active': {'values': ['TRUE', True],
+                                                    'type': 'positive'}},
+                                           keyLabel="ID")
 
     @property
     def gameIDs(self):
