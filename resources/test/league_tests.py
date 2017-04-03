@@ -242,6 +242,23 @@ class TestLeague(TestCase):
                   "10.0": 10.0, "10": 10.0, "3334": 3334.0, "042.390": 42.390}
         self._propertyTest(prop, label, default, values)
 
+    def _dateTimePropertyTest(self, prop, label, default):
+        values = {"0": default, "": default, "none": default,
+                  "2010-4-20": default,
+                  "2010-04-20 10:30:50": datetime(2010, 4, 20, 10, 30, 50)}
+        self._propertyTest(prop, label, default, values)
+
+    def _IDGroupPropertyTest(self, prop, label, default):
+        values = {"": set(), ",": set(), "1,2,3,4,5": {1, 2, 3, 4, 5},
+                  "1,2,3,4,5,": {1, 2, 3, 4, 5}, "lkfalf": default,
+                  "slakfjaflkjas;l,falksjf;aslfkj": default}
+        self._propertyTest(prop, label, default, values)
+
+    def _groupPropertyTest(self, prop, label, default):
+        values = {"": set(), ",": set(), "a,b,c,d,e": {"a","b","c","d","e"},
+                  "ab,cde,fg,": {"ab", "cde", "fg"}}
+        self._propertyTest(prop, label, default, values)
+
     def test_autoformat(self):
         self._boolPropertyTest("autoformat", self.league.SET_AUTOFORMAT, True)
 
@@ -649,6 +666,7 @@ class TestLeague(TestCase):
         assert_false(self.league.valueBelowCapacity(5, 5))
         assert_false(self.league.valueBelowCapacity(5, 4))
         assert_false(self.league.valueBelowCapacity(0, 0))
+        assert_true(self.league.valueBelowCapacity(109303838, None))
 
     @patch('resources.league.League.valueBelowCapacity')
     def test_activeFull(self, belowCap):
@@ -663,6 +681,280 @@ class TestLeague(TestCase):
         assert_true(self.league.leagueFull)
         belowCap.return_value = True
         assert_false(self.league.leagueFull)
+
+    def test_getDateTimeProperty(self):
+        getProp = self.league.getDateTimeProperty
+        assert_equals(getProp(datetime(2000, 4, 20, 10, 30, 50)),
+                      datetime(2000, 4, 20, 10, 30, 50))
+        assert_equals(getProp(datetime.strftime(datetime(2000, 4, 20, 10, 30,
+                                                         50),
+                                                self.league.TIMEFORMAT)),
+                      datetime(2000, 4, 20, 10, 30, 50))
+
+    def test_joinPeriodStart(self):
+        self._dateTimePropertyTest('joinPeriodStart',
+                                   self.league.SET_JOIN_PERIOD_START, None)
+
+    def test_joinPeriodEnd(self):
+        self._dateTimePropertyTest('joinPeriodEnd',
+                                   self.league.SET_JOIN_PERIOD_END, None)
+
+    def test_currentTimeWithinRange(self):
+        assert_true(self.league.currentTimeWithinRange(None, None))
+        start = datetime.now() - timedelta(days=1)
+        end = datetime.now() + timedelta(days=1)
+        assert_true(self.league.currentTimeWithinRange(start, end))
+        assert_true(self.league.currentTimeWithinRange(None, end))
+        assert_true(self.league.currentTimeWithinRange(start, None))
+        assert_true(self.league.currentTimeWithinRange(None, None))
+        assert_false(self.league.currentTimeWithinRange(None, start))
+        assert_false(self.league.currentTimeWithinRange(end, None))
+        assert_false(self.league.currentTimeWithinRange(end, start))
+
+    @patch('resources.league.League.currentTimeWithinRange')
+    @patch('resources.league.League.valueBelowCapacity')
+    def test_joinsAllowed(self, belowCap, rangeCheck):
+        self._setProp(self.league.SET_ALLOW_JOINS, "TRUE")
+        belowCap.return_value = False
+        assert_false(self.league.joinsAllowed)
+        belowCap.return_value = True
+        rangeCheck.return_value = False
+        assert_false(self.league.joinsAllowed)
+        rangeCheck.return_value = True
+        assert_true(self.league.joinsAllowed)
+        self._setProp(self.league.SET_ALLOW_JOINS, "FALSE")
+        assert_false(self.league.joinsAllowed)
+
+    def test_leagueActive(self):
+        self._boolPropertyTest('leagueActive', self.league.SET_ACTIVE, True)
+
+    def test_minSize(self):
+        self._intPropertyTest('minSize', self.league.SET_MIN_SIZE,
+                              (self.league.sideSize * self.league.gameSize))
+
+    def test_minToCull(self):
+        self._intPropertyTest('minToCull', self.league.SET_MIN_TO_CULL, 0)
+
+    def test_minToRank(self):
+        self._intPropertyTest('minToRank', self.league.SET_MIN_TO_RANK, 0)
+
+    def test_maxRank(self):
+        self._intPropertyTest('maxRank', self.league.SET_MAX_RANK, None)
+
+    def test_minLimitToRank(self):
+        self._intPropertyTest('minLimitToRank',
+                              self.league.SET_MIN_LIMIT_TO_RANK, 1)
+
+    def test_getExtantEntities(self):
+        table = MagicMock()
+        assert_equals(self.league.getExtantEntities(table),
+                      table.findEntities.return_value)
+        assert_equals(self.league.getExtantEntities(table,
+                      {'Ra Ra': {'value': "Rasputin", 'type': 'positive'}}),
+                      table.findEntities.return_value)
+        table.findEntities.assert_called_with({'ID': {'value': '',
+                                                      'type': 'negative'},
+                                               'Ra Ra': {'value': 'Rasputin',
+                                                         'type': 'positive'}})
+
+    @patch('resources.league.League.getExtantEntities')
+    def test_activityCounts(self, getExtant):
+        assert_equals(self.league.activeTeams, getExtant.return_value)
+        assert_equals(self.league.activeTemplates, getExtant.return_value)
+        getExtant.return_value = list()
+        assert_equals(self.league.size, 0)
+        assert_equals(self.league.templateCount, 0)
+
+    def test_minTemplates(self):
+        self._intPropertyTest('minTemplates', self.league.SET_MIN_TEMPLATES, 1)
+
+    def test_activityStart(self):
+        self._dateTimePropertyTest('activityStart', self.league.SET_START_DATE,
+                                   None)
+
+    def test_activityEnd(self):
+        self._dateTimePropertyTest('activityEnd', self.league.SET_END_DATE,
+                                   None)
+
+    @patch('resources.league.League.currentTimeWithinRange')
+    @patch('resources.league.League.getExtantEntities')
+    def test_active(self, getExtant, rangeCheck):
+        getExtant.return_value = list()
+        self._setProp(self.league.SET_MIN_TEMPLATES, 10)
+        assert_false(self.league.active)
+        getExtant.return_value = range(9)
+        assert_false(self.league.active)
+        self._setProp(self.league.SET_MIN_TEMPLATES, 9)
+        self._setProp(self.league.SET_MIN_SIZE, 10)
+        assert_false(self.league.active)
+        self._setProp(self.league.SET_MIN_SIZE, 3)
+        rangeCheck.return_value = False
+        assert_false(self.league.active)
+        rangeCheck.return_value = True
+        self._setProp(self.league.SET_ACTIVE, "FALSE")
+        assert_false(self.league.active)
+        self._setProp(self.league.SET_ACTIVE, "TRUE")
+        assert_true(self.league.active)
+
+    def test_allowRemoval(self):
+        self._boolPropertyTest('allowRemoval', self.league.SET_ALLOW_REMOVAL,
+                               False)
+
+    def test_minOngoingGames(self):
+        self._intPropertyTest('minOngoingGames',
+                              self.league.SET_MIN_ONGOING_GAMES, 0)
+
+    def test_maxOngoingGames(self):
+        self._intPropertyTest('maxOngoingGames',
+                              self.league.SET_MAX_ONGOING_GAMES, None)
+
+    def test_gameCountInRange(self):
+        self._setProp(self.league.SET_MAX_ONGOING_GAMES, 3)
+        self._setProp(self.league.SET_MIN_ONGOING_GAMES, 1)
+        player = MagicMock()
+        for i in xrange(1, 4):
+            player.currentGames = i
+            assert_true(self.league.gameCountInRange(player))
+        player.currentGames = 0
+        assert_false(self.league.gameCountInRange(player))
+        player.currentGames = 5
+        assert_false(self.league.gameCountInRange(player))
+        self._setProp(self.league.SET_MIN_ONGOING_GAMES, 0)
+        self._setProp(self.league.SET_MAX_ONGOING_GAMES, None)
+        assert_true(self.league.gameCountInRange(player))
+
+    def test_minRTPercent(self):
+        self._floatPropertyTest('minRTPercent', self.league.SET_MIN_RT_PERCENT,
+                                0.0)
+
+    def test_maxRTPercent(self):
+        self._floatPropertyTest('maxRTPercent', self.league.SET_MAX_RT_PERCENT,
+                                100.0)
+
+    def test_RTPercentInRange(self):
+        player = MagicMock()
+        player.percentRT = 34
+        self._setProp(self.league.SET_MIN_RT_PERCENT, 34)
+        self._setProp(self.league.SET_MAX_RT_PERCENT, 34)
+        assert_true(self.league.RTPercentInRange(player))
+        self._setProp(self.league.SET_MIN_RT_PERCENT, 30)
+        self._setProp(self.league.SET_MAX_RT_PERCENT, 35)
+        assert_true(self.league.RTPercentInRange(player))
+        player.percentRT = 35
+        assert_true(self.league.RTPercentInRange(player))
+        player.percentRT = 30
+        assert_true(self.league.RTPercentInRange(player))
+        player.percentRT = 29.9999
+        assert_false(self.league.RTPercentInRange(player))
+        player.percentRT = 100
+        assert_false(self.league.RTPercentInRange(player))
+        self._setProp(self.league.SET_MIN_RT_PERCENT, 40)
+        player.percentRT = 35
+        assert_false(self.league.RTPercentInRange(player))
+
+    def test_maxLastSeen(self):
+        self._floatPropertyTest('maxLastSeen', self.league.SET_MAX_LAST_SEEN,
+                                None)
+
+    def test_min1v1Pct(self):
+        self._floatPropertyTest('min1v1Pct', self.league.SET_MIN_1v1_PCT, 0.0)
+
+    def test_min2v2Pct(self):
+        self._floatPropertyTest('min2v2Pct', self.league.SET_MIN_2v2_PCT, 0.0)
+
+    def test_min3v3Pct(self):
+        self._floatPropertyTest('min3v3Pct', self.league.SET_MIN_3v3_PCT, 0.0)
+
+    def test_minRanked(self):
+        self._intPropertyTest('minRanked', self.league.SET_MIN_RANKED, 0)
+
+    def test_meetsMinRanked(self):
+        player = MagicMock()
+        player.rankedGames = {'data': {'1v1': 40, '2v2': 30, '3v3': 14},
+                              'games': 404}
+        self._setProp(self.league.SET_MIN_RANKED, 403)
+        self._setProp(self.league.SET_MIN_1v1_PCT, 39)
+        self._setProp(self.league.SET_MIN_2v2_PCT, 30)
+        self._setProp(self.league.SET_MIN_3v3_PCT, 30)
+        assert_false(self.league.meetsMinRanked(player))
+        self._setProp(self.league.SET_MIN_3v3_PCT, 5)
+        assert_true(self.league.meetsMinRanked(player))
+        self._setProp(self.league.SET_MIN_RANKED, 500)
+        assert_false(self.league.meetsMinRanked(player))
+        self._setProp(self.league.SET_MIN_RANKED, 400)
+        self._setProp(self.league.SET_MIN_1v1_PCT, 50)
+        assert_false(self.league.meetsMinRanked(player))
+        self._setProp(self.league.SET_MIN_1v1_PCT, 30)
+        self._setProp(self.league.SET_MIN_2v2_PCT, 40)
+        assert_false(self.league.meetsMinRanked(player))
+
+    def test_minGames(self):
+        self._intPropertyTest('minGames', self.league.SET_MIN_GAMES, 0)
+
+    def test_minAchievementRate(self):
+        self._floatPropertyTest('minAchievementRate',
+                                self.league.SET_MIN_ACH, 0.0)
+
+    def test_getIDGroup(self):
+        assert_equals(self.league.getIDGroup("1,2,3,4"), {1, 2, 3, 4})
+        assert_equals(self.league.getIDGroup("", str), set())
+        assert_equals(self.league.getIDGroup("5.0, 4.0", float), {4.0, 5.0})
+        assert_equals(self.league.getIDGroup("4.0", float), {4.0,})
+
+    def test_getGroup(self):
+        assert_equals(self.league.getGroup("a,b,c,d"), {"a","b","c","d"})
+        assert_equals(self.league.getGroup("a"), {"a",})
+        assert_equals(self.league.getGroup("b,"), {"b",})
+
+    def test_bannedPlayers(self):
+        self._groupPropertyTest('bannedPlayers',
+                                  self.league.SET_BANNED_PLAYERS, set())
+
+    def test_bannedClans(self):
+        self._groupPropertyTest('bannedClans',
+                                  self.league.SET_BANNED_CLANS, set())
+
+    def test_bannedLocations(self):
+        self._groupPropertyTest('bannedLocations',
+                                self.league.SET_BANNED_LOCATIONS, set())
+
+    def test_allowedPlayers(self):
+        self._groupPropertyTest('allowedPlayers',
+                                  self.league.SET_ALLOWED_PLAYERS, set())
+
+    def test_allowedClans(self):
+        self._groupPropertyTest('allowedClans',
+                                  self.league.SET_ALLOWED_CLANS, set())
+
+    def test_allowedLocations(self):
+        self._groupPropertyTest('allowedLocations',
+                                self.league.SET_ALLOWED_LOCATIONS, set())
+
+    def test_requireClan(self):
+        self._setProp(self.league.SET_BANNED_CLANS, "")
+        self._boolPropertyTest('requireClan', self.league.SET_REQUIRE_CLAN,
+                               False)
+        self._setProp(self.league.SET_BANNED_CLANS, "ALL")
+        self._boolPropertyTest('requireClan', self.league.SET_REQUIRE_CLAN,
+                               True)
+
+    def test_clanAllowed(self):
+        player = MagicMock()
+        self._setProp(self.league.SET_BANNED_CLANS, "ALL")
+        player.clanID = None
+        assert_false(self.league.clanAllowed(player))
+        player.clanID = 30
+        self._setProp(self.league.SET_ALLOWED_CLANS, "30,40,50")
+        assert_true(self.league.clanAllowed(player))
+        self._setProp(self.league.SET_ALLOWED_CLANS, "ALL")
+        assert_true(self.league.clanAllowed(player))
+        self._setProp(self.league.SET_ALLOWED_CLANS, "")
+        self._setProp(self.league.SET_BANNED_CLANS, "12,13,14")
+        assert_true(self.league.clanAllowed(player))
+        self._setProp(self.league.SET_BANNED_CLANS, "30,40,50")
+        assert_false(self.league.clanAllowed(player))
+        self._setProp(self.league.SET_BANNED_CLANS, "ALL")
+        assert_false(self.league.clanAllowed(player))
 
 # run tests
 if __name__ == '__main__':

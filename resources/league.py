@@ -689,7 +689,9 @@ class League(object):
 
     @classmethod
     def valueBelowCapacity(cls, value, capacity):
-        return cls.valueInRange(value, None, capacity-1)
+        return cls.valueInRange(value, None,
+                                (capacity-1 if isinstance(capacity, int)
+                                 else capacity))
 
     @property
     def activeFull(self):
@@ -701,10 +703,10 @@ class League(object):
         return (not self.valueBelowCapacity(len(self.allTeams),
                                             self.leagueCapacity))
 
-    @staticmethod
-    def getDateTimeProperty(val):
+    @classmethod
+    def getDateTimeProperty(cls, val):
         if isinstance(val, datetime): return val
-        return datetime.strptime(val, self.TIMEFORMAT)
+        return datetime.strptime(val, cls.TIMEFORMAT)
 
     @property
     def joinPeriodStart(self):
@@ -721,7 +723,7 @@ class League(object):
         now = datetime.now()
         if (start is not None and
             now < start): return False
-        if (end is not None and
+        elif (end is not None and
             now > end): return False
         return True
 
@@ -729,7 +731,7 @@ class League(object):
     def joinsAllowed(self):
         if (self.leagueFull or self.activeFull): return False
         start, end = self.joinPeriodStart, self.joinPeriodEnd
-        if self.currentDateWithinRange(start, end):
+        if self.currentTimeWithinRange(start, end):
             return self.allowJoins
         return False
 
@@ -760,6 +762,14 @@ class League(object):
 
     @staticmethod
     def getExtantEntities(table, restrictions=None):
+        """
+        :param table: table to fetch entities from
+        :param restrictions: dictionary matching elements to
+                             sheetDB match check dict
+                             (e.g.: {'value': 'x', 'type': 'positive'})
+        :rtype list[dict]:
+        :retval: matching entities in table
+        """
         matchDict = {'ID': {'value': '', 'type': 'negative'}}
         if restrictions is not None:
             for restriction in restrictions:
@@ -783,7 +793,7 @@ class League(object):
         return len(self.activeTeams)
 
     @property
-    def templateSize(self):
+    def templateCount(self):
         return len(self.activeTemplates)
 
     @property
@@ -802,10 +812,10 @@ class League(object):
 
     @property
     def active(self):
-        if self.templateSize < self.minTemplates: return False
+        if self.templateCount < self.minTemplates: return False
         if self.size < self.minSize: return False
         start, end = self.activityStart, self.activityEnd
-        if self.currentDateWithinRange(start, end):
+        if self.currentTimeWithinRange(start, end):
             return self.leagueActive
         return False
 
@@ -853,7 +863,7 @@ class League(object):
 
     @property
     def min3v3Pct(self):
-        return self.fetchProperty(self.SET_MIN_3v3_PCT, 0.0. float)
+        return self.fetchProperty(self.SET_MIN_3v3_PCT, 0.0, float)
 
     @property
     def minRanked(self):
@@ -875,26 +885,28 @@ class League(object):
 
     @property
     def minAchievementRate(self):
-        return self.fetchProperty(self.SET_MIN_ACH, 0, float)
+        return self.fetchProperty(self.SET_MIN_ACH, 0.0, float)
 
-    def getIDGroup(self, val, process_fn=int):
-        return set([process_fn(x) for x in val.split(self.SEP_CMD)])
+    @classmethod
+    def getIDGroup(cls, val, process_fn=int):
+        return set([process_fn(x) for x in val.split(cls.SEP_CMD)
+                    if x is not ""])
 
-    @staticmethod
-    def getGroup(val):
-        return self.getIDGroup(val, process_fn=str)
+    @classmethod
+    def getGroup(cls, val):
+        return cls.getIDGroup(val, process_fn=str)
 
     @property
     def bannedPlayers(self):
         """set containing IDs of banned players"""
         return self.fetchProperty(self.SET_BANNED_PLAYERS, set(),
-                                  self.getIDGroup)
+                                  self.getGroup)
 
     @property
     def bannedClans(self):
         """set containing IDs of banned clans"""
         return self.fetchProperty(self.SET_BANNED_CLANS, set(),
-                                  self.getIDGroup)
+                                  self.getGroup)
 
     @property
     def bannedLocations(self):
@@ -905,13 +917,13 @@ class League(object):
     def allowedPlayers(self):
         """set containing IDs of allowed players"""
         return self.fetchProperty(self.SET_ALLOWED_PLAYERS, set(),
-                                  self.getIDGroup)
+                                  self.getGroup)
 
     @property
     def allowedClans(self):
         """set containing IDs of allowed clans"""
         return self.fetchProperty(self.SET_ALLOWED_CLANS, set(),
-                                  self.getIDGroup)
+                                  self.getGroup)
 
     @property
     def allowedLocations(self):
@@ -928,7 +940,7 @@ class League(object):
         clan = player.clanID
         if clan is None:
             return (not self.requireClan)
-        clan = int(clan)
+        clan = str(clan)
         return ((clan in self.allowedClans or
                  (self.KW_ALL in self.allowedClans))
                  or (clan not in self.bannedClans
@@ -991,11 +1003,11 @@ class League(object):
     def allowed(self, playerID):
         """returns True if a player is allowed to join the league"""
         player = int(playerID)
-        if player in self.allowedPlayers: return True
+        if str(player) in self.allowedPlayers: return True
         parser = PlayerParser(player)
         if not self.checkPrereqs(parser):
             return False
-        return (player not in self.bannedPlayers and
+        return (str(player) not in self.bannedPlayers and
                 self.KW_ALL not in self.bannedPlayers)
 
     def banned(self, playerID):
@@ -1314,7 +1326,7 @@ class League(object):
         self.toggleActivity(order, 'TRUE')
 
     def deactivateTemplate(self, order):
-        if self.templateSize <= self.minTemplates:
+        if self.templateCount <= self.minTemplates:
             raise ImproperInput("Not enough active templates to deactivate")
         self.toggleActivity(order, 'FALSE')
 
