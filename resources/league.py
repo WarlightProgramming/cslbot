@@ -1875,7 +1875,8 @@ class League(object):
         return ('https://www.warlight.net/Forum/' + str(thread))
 
     def makeInterface(self, interface):
-        if isinstance(interface, str) and '/Forum/' not in interface:
+        if (isinstance(interface, str) and
+            'warlight.net/Forum/' not in interface):
             return interface
         return self.makeThread(interface)
 

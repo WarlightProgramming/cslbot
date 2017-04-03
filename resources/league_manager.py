@@ -275,7 +275,7 @@ class LeagueManager(object):
 
     def _getInterfaceName(thread, league):
         if (isinstance(thread, int) or (isinstance(thread, str) and
-            isInteger(thread))
+            isInteger(thread))):
             return 'https://www.warlight.net/Forum/' + str(threadID)
         interfaces = self.commands.findEntities({TITLE_CMD: 'INTERFACE'})
         if len(interfaces) == 0: return "(no league interface specified)"

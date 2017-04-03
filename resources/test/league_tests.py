@@ -956,6 +956,27 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_BANNED_CLANS, "ALL")
         assert_false(self.league.clanAllowed(player))
 
+    def test_processLoc(self):
+        assert_equals(self.league.processLoc("    Micronesia    "),
+                                             "Micronesia")
+        assert_equals(self.league.processLoc(" United Haitian  Republic   \n"),
+                                             "United Haitian Republic")
+
+    def test_checkLocation(self):
+        self._setProp(self.league.SET_BANNED_LOCATIONS, "")
+        self._setProp(self.league.SET_ALLOWED_LOCATIONS, "")
+        assert_equals(self.league.checkLocation("Texas"), None)
+        self._setProp(self.league.SET_BANNED_LOCATIONS, "Texas")
+        assert_false(self.league.checkLocation("Texas"))
+        self._setProp(self.league.SET_ALLOWED_LOCATIONS, "Texas")
+        assert_true(self.league.checkLocation("Texas"))
+        self._setProp(self.league.SET_BANNED_LOCATIONS, "ALL")
+        assert_false(self.league.checkLocation("California"))
+        self._setProp(self.league.SET_BANNED_LOCATIONS, "")
+        assert_equals(self.league.checkLocation("California"), None)
+        self._setProp(self.league.SET_ALLOWED_LOCATIONS, "ALL")
+        assert_true(self.league.checkLocation("California"))
+
 # run tests
 if __name__ == '__main__':
     run_tests()
