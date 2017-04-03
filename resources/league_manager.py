@@ -87,7 +87,7 @@ class LeagueManager(object):
             authors.add(author)
         return authors
 
-    def _validateThread(self, thread):
+    def _validateThread(self, parser):
         posts = parser.getPosts()
         authorCount = len(self._getUniqueAuthors(posts))
         if authorCount < ABUSE_THRESHOLD:
@@ -118,22 +118,41 @@ class LeagueManager(object):
                 self.logThreadFailure(thread)
             return ForumThreadParser(int(thread[start:end]))
 
+    @staticmethod
+    def _getThreadName(thread):
+        arg = thread[0][TITLE_ARG]
+        if isInteger(arg):
+            return int(arg)
+        else:
+            arg = arg.split('/Forum/')[1]
+            arg = arg.split('-')[0]
+            return int(arg)
+
+    def _fetchLeagueThread(self, offset=0):
+        thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
+        if len(thread) > 0:
+            try:
+                threadName = self._getThreadName(thread)
+                parser = self._makeForumThreaParser(threadName, offset)
+                self._validateThread(parser)
+                return parser
+            except ThreadError as err:
+                self.log(str(err), error=False)
+
     def _getAdmin(self):
         """fetches the league admin's ID"""
         found = self.commands.findEntities({TITLE_CMD: 'ADMIN'})
-        thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
-        parser = self._makeForumThreadParser(thread)
-        try:
-            self._validateThread(parser)
-        except ThreadError as err:
-            self.log(str(err), error=True)
-        if (len(found) == 0 or not isInteger(found[0][TITLE_ARG])):
+        parser = self._fetchLeagueThread()
+        if ((len(found) == 0 or not isInteger(found[0][TITLE_ARG])) and
+            parser is not None):
             try:
                 return parser.getPosts()[0]['author']['ID']
             except Exception:
                 self.logThreadFailure(thread)
-        else:
+        elif len(found) > 0:
             return found[0][TITLE_ARG]
+        else:
+            self.log("Unable to find admin", error=True)
 
     def log(self, description, league="", error=False):
         """logs an entry onto the sheet"""
@@ -173,25 +192,27 @@ class LeagueManager(object):
                 self.addArgToResults(results, commands, command)
         return results
 
-    @staticmethod
-    def fetchThreadOrders(thread, offset):
-        """
-        given a thread ID/URL (string), fetches a list of
-        orders since the last offset (int)
-        """
+    def fetchThreadOrderData(self, thread, offset):
         startMarker = 'Forum/'
-        if startMarker in thread:
-            thread = thread[thread.find(startMarker):]
-            x = 0
-            while thread[x] in string.digits:
-                x += 1
-            thread = thread[:x]
+        thread = self._getThreadName([{TITLE_ARG: thread},])
         threadParser = OrderParser(thread)
+        self._validateThread(threadParser)
         try:
             return threadParser.getOrders(offset)
         except:
             raise ThreadError("Unable to parse thread: %s; with offset: %s"
                               % (thread, offset))
+
+    def fetchThreadOrders(self, thread, offset):
+        """
+        given a thread ID/URL (string), fetches a list of
+        orders since the last offset (int)
+        """
+        try:
+            return self.fetchThreadOrderData(thread, offset)
+        except ThreadError as e:
+            self.log(str(e), error=False)
+            return set()
 
     @staticmethod
     def _narrowOrders(orders, league):
@@ -246,22 +267,38 @@ class LeagueManager(object):
         templatesSheet = self.databse.fetchTable(templatesTitle)
         return gamesSheet, teamsSheet, templatesSheet
 
+    @staticmethod
+    def _retrieveOffset(found):
+        if len(found) == 0:
+            return 0
+        return found[0][TITLE_ARG]
+
+    def _getInterfaceName(thread, league):
+        if (isinstance(thread, int) or (isinstance(thread, str) and
+            isInteger(thread))
+            return 'https://www.warlight.net/Forum/' + str(threadID)
+        interfaces = self.commands.findEntities({TITLE_CMD: 'INTERFACE'})
+        if len(interfaces) == 0: return "(no league interface specified)"
+        elif len(interfaces) > 1:
+            return self.fetchLeagueCommands(league).get('INTERFACE',
+                                                        interfaces[0])
+        return interfaces[0]
+
     def run(self):
         """runs leagues and updates"""
         thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
         offset = self.commands.findEntities({TITLE_CMD: 'OFFSET'})
-        if (len(offset) == 0 or len(thread) == 0):
-            raise ThreadError("Improper thread link or offset!")
-        thread, offset = thread[0][TITLE_ARG], offset[0][TITLE_ARG]
-        orders = self.fetchThreadOrders(thread, offset)
-        self._runOrders(self._getNonSpecificOrders(orders, self.leagues))
+        orders = set()
+        if (len(thread) > 0):
+            thread, offset = (self._getThreadName(thread),
+                              self._retrieveOffset(offset))
+            orders = self.fetchThreadOrders(thread, offset)
+            self._runOrders(self._getNonSpecificOrders(orders, self.leagues))
         for league in self.leagues:
             games, teams, templates = self.getLeagueSheets(league)
             orders = self._narrowOrders(orders, league)
             commands = self.fetchLeagueCommands(league)
-            threadID = thread = self.commands.findEntities({TITLE_CMD:
-                                                            'THREAD'})
-            threadName = 'https://www.warlight.net/Forum/' + str(threadID)
+            threadName = self._getInterfaceName(thread, league)
             lgRunner = League(games, teams, templates, commands, orders,
                               self.admin, self, league, threadName)
             try:

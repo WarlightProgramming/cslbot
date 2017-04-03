@@ -65,13 +65,40 @@ the sheet.)
 ## Commands List
 
 This is a comprehensive list of all commands supported by the CSL framework,
-their argument types. Outside the "LEAGUES", "ADMIN", and "THREAD" commands,
+their argument types. Outside the "LEAGUES", "ADMIN", "INTERFACE", and "THREAD" commands,
 any command can specify any league it applies to, including all leagues using
 the "ALL" keyword.
 
 ### Required Commands
 
 ### Basic Setup
+
+___
+
+#### LEAGUES
+
+A comma-separated list of all the leagues tied to this sheet.
+
+*This command does not require a League to be specified*
+
+*Sample Args*: "1v1", "PR,ELIM,CRAZY", "a,whole,bunch,of,leagues"
+
+As part of the league cluster, all of these leagues will share the same thread
+and workbook (but not necessarily the same configuration- i.e., you can have an
+Elo-rated elimination ladder and a TrueSkill-rated seasonal ladder with
+completely different settings running from the same workbook). Each league will
+be identified by a unique name; these are the names you can specify under
+"LEAGUE" title for other commands.
+
+Each league will have its own "Game Data", "Team Data", and "Template Data"
+worksheets- named after the league. For a league named "1v1", the game data
+sheet would be named "Game Data (1v1)".
+
+___
+
+### Optional Commands
+
+### Cluster/Interface Setup
 
 ___
 
@@ -104,32 +131,22 @@ you want to start rechecking at the Nth post, you want the offset to be N-1.
 
 ___
 
-#### LEAGUES
+#### INTERFACE
 
-A comma-separated list of all the leagues tied to this sheet.
+The URL of the league cluster's interface.
 
-*This command does not require a League to be specified*
+*This command does not require a League to be specified.*
 
-*Sample Args*: "1v1", "PR,ELIM,CRAZY", "a,whole,bunch,of,leagues"
+*Sample Args*: "https://tinyurl.com/your-league-interface", "www.ladder.com"
 
-As part of the league cluster, all of these leagues will share the same thread
-and workbook (but not necessarily the same configuration- i.e., you can have an
-Elo-rated elimination ladder and a TrueSkill-rated seasonal ladder with
-completely different settings running from the same workbook). Each league will
-be identified by a unique name; these are the names you can specify under
-"LEAGUE" title for other commands.
+This command will only be used if you do not supply a league
+[**THREAD**](#thread) and will just be passed on to each league.
 
-Each league will have its own "Game Data", "Team Data", and "Template Data"
-worksheets- named after the league. For a league named "1v1", the game data
-sheet would be named "Game Data (1v1)".
-
-___
-
-### Optional Commands
-
-### Admin Specification
-
-___
+You can specify separate interfaces for each league if you'd like. If you want
+a catch-all and only specify special interfaces for *some* leagues, use the
+"ALL" keyword. Keep in mind that cslbot will not even look at your interface
+and you'll have to process the orders from it yourself (manually or
+automatically).
 
 #### ADMIN
 
@@ -138,6 +155,8 @@ The Warlight ID of the owner of this league cluster.
 *This command does not require a League to be specified*
 
 *Sample Args*: "3022124041"
+
+*Default*: Creator of the league clusters' thread (if thread provided)
 
 Only one admin can be specified for the league. Ideally should be same as the owner of the workbook where the league data is
 stored. Admin is the highest level of authorization for thread
@@ -202,7 +221,7 @@ This is a game for the {{\_LEAGUE\_NAME}} league, part of {{CLUSTER NAME}}.
 
 To view information about the league, head to {{URL}}.
 To change your limit, add/confirm a team, etc.,
-head to the league thread at {{\_LEAGUE\_THREAD}}.
+head to the league thread at {{\_LEAGUE\_INTERFACE}}.
 
 Vetos so far: {{\_VETOS}}; Max: {{VETO LIMIT}}
 
@@ -224,7 +243,7 @@ Here's a list of all of them, with some basic descriptions:
 * **\_LEAGUE\_NAME**: The name of the league (as declared in **LEAGUES**)
 * **CLUSTER NAME**: The name for the cluster (as declared using **CLUSTER
   NAME**)
-* **\_LEAGUE\_THREAD**: The URL for the league thread
+* **\_LEAGUE\_INTERFACE**: The URL for the league thread (or other interface)
 * **\_VETOS**: Vetos so far for this game
 * **VETO LIMIT**: This league's veto limit (as declared using **VETO LIMIT**)
 * **\_GAME_SIDES**: The name, rank, and rating for each team on each side of

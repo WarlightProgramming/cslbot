@@ -186,7 +186,7 @@ class League(object):
                      If you never signed up for this game or suspect abuse,
                      message knyte - tinyurl.com/mail-knyte
                      """ % ("_LEAGUE_NAME", SET_SUPER_NAME, SET_URL,
-                            "_LEAGUE_THREAD", "_VETOS",
+                            "_LEAGUE_INTERFACE", "_VETOS",
                             SET_VETO_LIMIT, "_GAME_SIDES")
 
     # keywords
@@ -1874,6 +1874,11 @@ class League(object):
         if '/Forum/' in str(thread): return thread
         return ('https://www.warlight.net/Forum/' + str(thread))
 
+    def makeInterface(self, interface):
+        if isinstance(interface, str) and '/Forum/' not in interface:
+            return interface
+        return self.makeThread(interface)
+
     def getTemplateName(self, gameData):
         templateID = gameData['Template']
         tempData = self.fetchTemplateData(templateID)
@@ -1885,7 +1890,7 @@ class League(object):
                        self.SET_URL: self.leagueUrl,
                        self.SET_VETO_LIMIT: self.vetoLimit,
                        '_VETOS': gameData['Vetos'],
-                       '_LEAGUE_THREAD': self.makeThread(self.thread),
+                       '_LEAGUE_INTERFACE': self.makeInterface(self.thread),
                        '_GAME_SIDES': self.sideInfo(gameData),
                        '_TEMPLATENAME': self.getTemplateName(gameData)}
         for val in replaceDict:
