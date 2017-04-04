@@ -1212,6 +1212,77 @@ class TestLeague(TestCase):
         assert_equals(self.league.defaultRating,
                       self.league.sysDict[self.league.RATE_WINRATE]['default'])
 
+    def test_teamPlayers(self):
+        self.teams.findEntities.return_value = [{'Name': "A",
+                                                 'Players': "1,2"},
+                                               {'Name': "b", 'Players': "3,4"},
+                                               {'Name': "C D", 'Players': "5"}]
+        assert_equals(self.league.allTeams,
+                      self.teams.findEntities.return_value)
+        assert_equals(self.league.teamPlayers, {'1,2': 'A', '3,4': 'b',
+                                                '5': 'C D'})
+
+    def test_checkJoins(self):
+        self._setProp(self.league.SET_ALLOW_JOINS, "TRUE")
+        self._setProp(self.league.SET_JOIN_PERIOD_START,
+                      date.today() - timedelta(1))
+        self._setProp(self.league.SET_JOIN_PERIOD_END,
+                      date.today() + timedelta(1))
+        self._setProp(self.league.SET_LEAGUE_CAPACITY, None)
+        self._setProp(self.league.SET_ACTIVE_CAPACITY, None)
+        assert_equals(self.league.checkJoins(), None)
+        self._setProp(self.league.SET_ALLOW_JOINS, "FALSE")
+        assert_raises(ImproperInput, self.league.checkJoins)
+
+    @patch('resources.league.League.checkTeam')
+    def test_checkAuthorAndMembers(self, check):
+        order = {'author': 1403, 'orders': ['1v1', 'teamName', '3', '40', '2']}
+        self.league.mods = {1403,}
+        assert_equals(self.league.checkAuthorAndMembers(order),
+                      (check.return_value, [40, 2], [False, False]))
+        self.league.mods = set()
+        assert_raises(ImproperInput, self.league.checkAuthorAndMembers, order)
+
+    def test_checkTeamDuplication(self):
+        self.teams.findEntities.return_value = [
+                                          {'Name': 'A', 'Players': '1,2,3'},
+                                          {'Name': '402v', 'Players': '4,9'}]
+        assert_equals(None, self.league.checkTeamDuplication('4,5', 'B'))
+        assert_equals(None, self.league.checkTeamDuplication('6,7,8', 'D 4'))
+        assert_raises(ImproperInput, self.league.checkTeamDuplication, '4,9',
+                      'F')
+
+    @patch('resources.league.League.checkLimit')
+    @patch('resources.league.League.checkAuthorAndMembers')
+    def test_checkEligible(self, check, limCheck):
+        order = {'author': 1403, 'orders': ['1v1', 'teamName', '3', '40', '2']}
+        check.return_value = [1, 2, 3]
+        assert_equals(self.league.checkEligible(order),
+                      (limCheck.return_value, 1, 2, 3))
+        limCheck.assert_called_once_with(3)
+
+    @patch('resources.league.League.checkTeamDuplication')
+    @patch('resources.league.League.checkEligible')
+    @patch('resources.league.League.checkJoins')
+    def test_addTeam(self, joinCheck, eligible, checkDup):
+        order = {'author': 1403, 'type': 'add_team',
+                 'orders': ['1v1', 'name', '3', '41', '4042', '3905', '12']}
+        eligible.return_value = (5, "", [41, 4042, 3905, 12], [False,
+                                 True, False, True])
+        oldCurr = self.league.currentID
+        self.league.addTeam(order)
+        self.teams.addEntity.assert_called_with({'ID': oldCurr,
+                                                 'Name': 'name',
+                                                 'Limit': 5,
+                                                 'Players': '12,41,3905,4042',
+                                                 'Confirmations':
+                                                 'TRUE,FALSE,FALSE,TRUE',
+                                                 'Vetos': "", 'Drops': "",
+                                                 'Count': 0, 'Finished': 0,
+                                                 'Rating':
+                                                 self.league.defaultRating})
+        assert_equals(self.league.currentID, oldCurr + 1)
+
 # run tests
 if __name__ == '__main__':
     run_tests()

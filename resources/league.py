@@ -177,17 +177,18 @@ class League(object):
 
                      {{%s}}
 
+                     Got questions about the league?
+                     Contact the league admin {{%s}}.
+
                      This league is run using the CSL framework,
                      an open-source project maintained by knyte.
 
-                     To view the source code, head to:
-                         https://github.com/knyte/cslbot
-
-                     If you never signed up for this game or suspect abuse,
+                     If you never signed up for this league or suspect abuse,
                      message knyte - tinyurl.com/mail-knyte
                      """ % ("_LEAGUE_NAME", SET_SUPER_NAME, SET_URL,
                             "_LEAGUE_INTERFACE", "_VETOS",
-                            SET_VETO_LIMIT, "_GAME_SIDES")
+                            SET_VETO_LIMIT, "_GAME_SIDES",
+                            "_LEAGUE_ADMIN")
 
     # keywords
     KW_ALL = "ALL"
@@ -223,6 +224,7 @@ class League(object):
         self.handler = self._makeHandler()
         self.checkFormat()
         self.makeRateSysDict()
+        self._currentID = None
 
     def makeRateSysDict(self):
         self.sysDict = {self.RATE_ELO: {'default': self.defaultElo,
@@ -1109,12 +1111,18 @@ class League(object):
             unofficialIDs.add(int(ID))
         return unofficialIDs
 
+    @property
+    def currentID(self):
+        if self._currentID is None:
+            self.setCurrentID()
+        return self._currentID
+
     def setCurrentID(self):
         existingIDs = self.existingIDs
         if len(existingIDs) == 0:
-            self.currentID = 0
+            self._currentID = 0
         else:
-            self.currentID = max(existingIDs) + 1
+            self._currentID = max(existingIDs) + 1
 
     @property
     def defaultRating(self):
@@ -1122,7 +1130,7 @@ class League(object):
 
     @property
     def teamPlayers(self):
-        result = list()
+        result = dict()
         for team in self.allTeams:
             result[team['Players']] = team['Name']
         return result
@@ -1153,7 +1161,8 @@ class League(object):
         self.checkJoins()
         teamName = order['orders'][1]
         gameLimit, forcedDrops, members, confirms = self.checkEligible(order)
-        members.sort()
+        temp = sorted(zip(members, confirms))
+        members, confirms = [x for (x,y) in temp], [y for (x,y) in temp]
         members = (self.SEP_PLYR).join([str(m) for m in members])
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
         self.checkTeamDuplication(members, teamName)
@@ -1165,7 +1174,7 @@ class League(object):
                               'Vetos': "", 'Drops': forcedDrops,
                               'Count': 0, 'Finished': 0,
                               'Rating': self.defaultRating})
-        self.currentID += 1
+        self._currentID += 1
 
     def retrieveTeamWithName(self, name):
         matches = self.teams.findEntities({'Name': {'value': name,
@@ -1361,7 +1370,6 @@ class League(object):
 
     @runPhase
     def executeOrders(self):
-        self.setCurrentID()
         for order in self.orders:
             orderType = order['type'].lower()
             try:
@@ -1888,6 +1896,11 @@ class League(object):
         tempData = self.fetchTemplateData(templateID)
         return tempData['Name']
 
+    @property
+    def adminName(self):
+        parser = PlayerParser(self.admin)
+        return str(parser.name)
+
     def processMessage(self, message, gameData):
         replaceDict = {'_LEAGUE_NAME': self.name,
                        self.SET_SUPER_NAME: self.clusterName,
@@ -1896,7 +1909,8 @@ class League(object):
                        '_VETOS': gameData['Vetos'],
                        '_LEAGUE_INTERFACE': self.makeInterface(self.thread),
                        '_GAME_SIDES': self.sideInfo(gameData),
-                       '_TEMPLATENAME': self.getTemplateName(gameData)}
+                       '_TEMPLATENAME': self.getTemplateName(gameData),
+                       '_LEAGUE_ADMIN': self.adminName}
         for val in replaceDict:
             checkStr = "{{%s}}" % val
             if checkStr in message:

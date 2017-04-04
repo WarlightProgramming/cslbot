@@ -227,13 +227,13 @@ Vetos so far: {{\_VETOS}}; Max: {{VETO LIMIT}}
 
 {{\_GAME\_SIDES}}
 
+Got questions about the league?
+Contact the league admin {{\_LEAGUE\_ADMIN}}.
+
 This league is run using the CSL framework,
 an open-source project maintained by knyte.
 
-To view the source code, head to:
-https://github.com/knyte/cslbot
-
-If you never signed up for this game or suspect abuse,
+If you never signed up for this league or suspect abuse,
 message knyte - tinyurl.com/mail-knyte
 """
 
@@ -249,6 +249,7 @@ Here's a list of all of them, with some basic descriptions:
 * **\_GAME_SIDES**: The name, rank, and rating for each team on each side of
   the game
 * **\_TEMPLATENAME**: Name of the template used by the game
+* **\_LEAGUE\_ADMIN**: Username of league's stated admin
   
 ___
 
