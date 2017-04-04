@@ -1185,7 +1185,7 @@ class League(object):
 
     def authorInTeam(self, author, team, allowMods=True):
         if (allowMods and (author in self.mods)): return True
-        return (str(author) in matchingTeam['Players'].split(self.SEP_PLYR))
+        return (str(author) in team['Players'].split(self.SEP_PLYR))
 
     def fetchMatchingTeam(self, order, checkAuthor=True,
                           allowMod=True):
@@ -1197,30 +1197,27 @@ class League(object):
         try:
             index = (matchingTeam['Players'].
                      split(self.SEP_PLYR).
-                     index(author))
+                     index(str(author)))
         except ValueError: pass
         return matchingTeam, index
 
     def toggleConfirm(self, order, confirm=True):
-        try:
-            matchingTeam, index = self.fetchMatchingTeam(order, True, False)
-        except ImproperInput:
-            raise ImproperInput(str(player) + " not in " + str(team))
-        if index is None:
-            raise ImproperInput(str(player) + " not in " + str(team))
+        matchingTeam, index = self.fetchMatchingTeam(order, True, False)
         confirms = matchingTeam['Confirmations'].split(self.SEP_CONF)
         confirms[index] = "TRUE" if confirm else "FALSE"
-        self.updateConfirms(teamName, confirms, identifier='Name')
+        self.updateConfirms(matchingTeam['ID'], confirms)
+
+    def toggleTeamConfirm(self, order, confirm=True):
+        author = int(order['author'])
+        if (author in self.mods and len(order['orders']) > 2):
+            self.toggleConfirms(order, confirm=confirm)
+        else: self.toggleConfirm(order, confirm=confirm)
 
     def confirmTeam(self, order):
-        if (author in self.mods and len(order['orders']) > 2):
-            self.toggleConfirms(order)
-        self.toggleConfirm(order)
+        self.toggleTeamConfirm(order)
 
     def unconfirmTeam(self, order):
-        if (author in self.mods and len(order['orders']) > 2):
-            self.toggleConfirms(order, False)
-        self.toggleConfirm(order, False)
+        self.toggleTeamConfirm(order, confirm=False)
 
     def toggleConfirms(self, order, confirm=True):
         players = order['orders'][2:]
@@ -1232,20 +1229,20 @@ class League(object):
     def removeTeam(self, order):
         if not self.allowRemoval:
             raise ImproperInput("Team removal has been disabled.")
-        matchingTeam = self.fetchMatchingTeam(order)[0]
+        matchingTeam = self.fetchMatchingTeam(order)
         self.teams.removeMatchingEntities({'ID':
                                            matchingTeam['ID']})
 
     def checkLimitChange(self, teamID, newLimit):
         if int(newLimit) <= 0: return
-        if self.activeCapacity is None: return
-        if not self.activeFull: return
+        elif self.activeCapacity is None: return
+        elif not self.activeFull: return
         oldLimit = int(self.fetchTeamData(teamID)['Limit'])
         if oldLimit == 0:
             raise ImproperInput("League has reached max active teams.")
 
     def setLimit(self, order):
-        matchingTeam = self.fetchMatchingTeam(order, False)[0]
+        matchingTeam = self.fetchMatchingTeam(order, False)
         players = matchingTeam['Players'].split(self.SEP_PLYR)
         if (str(order['author']) not in players and
             order['author'] not in self.mods):
@@ -2136,6 +2133,8 @@ class League(object):
         return (playerCount > teamLimit)
 
     def changeLimit(self, teamID, limit):
+        limit = int(limit)
+        limit = self.checkLimit(limit) if limit != 0 else 0
         self.updateEntityValue(self.teams, teamID, Limit=limit)
 
     @staticmethod

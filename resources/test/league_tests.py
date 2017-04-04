@@ -1283,6 +1283,71 @@ class TestLeague(TestCase):
                                                  self.league.defaultRating})
         assert_equals(self.league.currentID, oldCurr + 1)
 
+    def test_retrieveTeamWithName(self):
+        self.teams.findEntities.return_value = list()
+        assert_raises(NonexistentItem, self.league.retrieveTeamWithName,
+                      'Lugia')
+        self.teams.findEntities.return_value = [{'ID': 4, 'Name': 'ho oh'},]
+        assert_equals(self.league.retrieveTeamWithName('ho oh'),
+                      {'ID': 4, 'Name': 'ho oh'})
+
+    def test_authorInTeam(self):
+        self.league.mods = {1,2,3}
+        team = {'ID': 4, 'Players': '49,50,54'}
+        assert_true(self.league.authorInTeam(2, team))
+        assert_false(self.league.authorInTeam(2, team, False))
+        assert_true(self.league.authorInTeam(50, team))
+        assert_true(self.league.authorInTeam(50, team, False))
+
+    @patch('resources.league.League.retrieveTeamWithName')
+    def test_fetchMatchingTeam(self, retrieve):
+        retrieve.return_value = {'Players': '11,13,14'}
+        order = {'author': 12, 'orders': 'teamName'}
+        self.league.mods = {12,}
+        assert_raises(ImproperInput, self.league.fetchMatchingTeam, order,
+                      True, False)
+        assert_equals(self.league.fetchMatchingTeam(order),
+                      ({'Players': '11,13,14'}, None))
+        order['author'] = 11
+        assert_equals(self.league.fetchMatchingTeam(order),
+                      ({'Players': '11,13,14'}, 0))
+
+    @patch('resources.league.League.updateConfirms')
+    @patch('resources.league.League.fetchMatchingTeam')
+    def test_toggleConfirm(self, fetch, update):
+        fetch.return_value = ({'Players': '11,13,14', 'ID': 24,
+                               'Confirmations': 'TRUE,FALSE,FALSE'}, 0)
+        self.league.toggleConfirm('order')
+        update.assert_called_once_with(24, ["TRUE", "FALSE", "FALSE"])
+        self.league.toggleConfirm('order', False)
+        update.assert_called_with(24, ["FALSE", "FALSE" , "FALSE"])
+
+    @patch('resources.league.League.toggleConfirms')
+    @patch('resources.league.League.toggleConfirm')
+    def test_toggleTeamConfirm(self, toggle, toggles):
+        self.league.mods = {1,2,3}
+        order = {'author': "1", 'orders': ('1', '2', '3')}
+        self.league.confirmTeam(order)
+        toggles.assert_called_once_with(order, confirm=True)
+        self.league.unconfirmTeam(order)
+        toggles.assert_called_with(order, confirm=False)
+        order['author'] = '12'
+        self.league.confirmTeam(order)
+        toggle.assert_called_once_with(order, confirm=True)
+        self.league.unconfirmTeam(order)
+        toggle.assert_called_with(order, confirm=False)
+
+    @patch('resources.league.League.fetchMatchingTeam')
+    def test_removeTeam(self, fetch):
+        self._setProp(self.league.SET_ALLOW_REMOVAL, "FALSE")
+        order = {'type': 'remove_team', 'author': '30',
+                 'orders': ('1v1', 'The Harambes')}
+        assert_raises(ImproperInput, self.league.removeTeam, order)
+        self._setProp(self.league.SET_ALLOW_REMOVAL, "TRUE")
+        self.league.removeTeam(order)
+        self.teams.removeMatchingEntities.assert_called_once_with({'ID':
+            fetch.return_value['ID']})
+
 # run tests
 if __name__ == '__main__':
     run_tests()
