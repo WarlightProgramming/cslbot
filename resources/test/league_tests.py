@@ -1162,6 +1162,56 @@ class TestLeague(TestCase):
         assert_false(self.league.autodropEligible({1,2,3,4,5}))
         assert_true(self.league.autodropEligible({2,}))
 
+    @patch('resources.league.League.handleAutodrop')
+    @patch('resources.league.League.autodropEligible')
+    def test_handleTeamAutodrop(self, eligible, handle):
+        eligible.return_value = False
+        assert_raises(ImproperInput, self.league.handleTeamAutodrop, 12,
+                      {1,2,3}, {1,2})
+        eligible.return_value = True
+        assert_equals(self.league.handleTeamAutodrop(None, {1}, {1,2}), "1/2")
+        assert_equals(self.league.handleTeamAutodrop(12, {1,2,3}, {1,2}), "")
+        handle.assert_called_once_with(12, {1,2})
+
+    @patch('resources.league.League.handleTeamAutodrop')
+    @patch('resources.league.League.checkTeamMember')
+    def test_checkTeam(self, check, handle):
+        assert_equals(self.league.checkTeam({49,94,20,38}),
+                      handle.return_value)
+        assert_equals(check.call_count, 4)
+
+    def test_checkLimit(self):
+        self._setProp(self.league.SET_MIN_LIMIT, 8)
+        self._setProp(self.league.SET_MAX_LIMIT, 12)
+        self._setProp(self.league.SET_CONSTRAIN_LIMIT, False)
+        assert_equals(self.league.checkLimit(10), 10)
+        assert_raises(ImproperInput, self.league.checkLimit, 13)
+        assert_raises(ImproperInput, self.league.checkLimit, 4)
+        self._setProp(self.league.SET_CONSTRAIN_LIMIT, True)
+        assert_equals(self.league.checkLimit(13), 12)
+        assert_equals(self.league.checkLimit(4), 8)
+        assert_equals(self.league.checkLimit(10), 10)
+
+    def test_existingIDs(self):
+        self.teams.findValue.return_value = ["1","2","3","4","5"]
+        self.games.findValue.return_value = ["12,13/1,2", "3,4/5"]
+        assert_equals(self.league.existingIDs, {1, 2, 3, 4, 5, 12, 13})
+        self.league.setCurrentID()
+        assert_equals(self.league.currentID, 14)
+        self.teams.findValue.return_value = list()
+        self.games.findValue.return_value = list()
+        assert_equals(self.league.existingIDs, set())
+        self.league.setCurrentID()
+        assert_equals(self.league.currentID, 0)
+
+    def test_defaultRating(self):
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
+        assert_equals(self.league.defaultRating,
+                      self.league.sysDict[self.league.RATE_ELO]['default'])
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_WINRATE)
+        assert_equals(self.league.defaultRating,
+                      self.league.sysDict[self.league.RATE_WINRATE]['default'])
+
 # run tests
 if __name__ == '__main__':
     run_tests()

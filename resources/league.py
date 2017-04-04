@@ -344,7 +344,7 @@ class League(object):
     @staticmethod
     def getBoolProperty(val):
         return {'true': True,
-                'false': False}[val.lower()]
+                'false': False}[str(val).lower()]
 
     @property
     def autoformat(self):
@@ -1068,7 +1068,7 @@ class League(object):
     def autodropEligible(self, badTemps):
         return (self.autodrop and (len(badTemps) <= self.dropLimit))
 
-    def handleTeamAutodrop(self, teamID, badTemps):
+    def handleTeamAutodrop(self, teamID, members, badTemps):
         if self.autodropEligible(badTemps):
             if teamID is None:
                 forcedDrops = (self.SEP_DROPS).join([str(t) for t in badTemps])
@@ -1077,21 +1077,21 @@ class League(object):
                 self.handleAutodrop(teamID, badTemps)
                 return ""
         else:
-            memberStr = (self.SEP_PLYR).join([str(m) for m in members])
+            memberStr = (self.SEP_PLYR).join(str(m) for m in members)
             raise ImproperInput("Team with %s cannot play on enough templates"
                                 % (memberStr))
 
     def checkTeam(self, members, teamID=None):
         badTemplates = set()
         for member in members: self.checkTeamMember(member, badTemplates)
-        return self.handleTeamAutodrop(teamID, badTemplates)
+        return self.handleTeamAutodrop(teamID, members, badTemplates)
 
     def checkLimit(self, limit):
         if not self.limitInRange(limit):
             if self.constrainLimit:
                 if limit < self.minLimit: return self.minLimit
                 return self.maxLimit
-            else: raise ImproperInput()
+            else: raise ImproperInput("Limit out of range")
         return limit
 
     @property
