@@ -209,6 +209,7 @@ class League(object):
     SEP_DROPS = "/"
     SEP_MODS = ","
     SEP_TEMPSET = "#"
+    SEP_SCHEMES = ","
 
     def __init__(self, games, teams, templates, settings, orders,
                  admin, parent, name, thread):
@@ -323,7 +324,7 @@ class League(object):
                                 'WarlightID': 'INT',
                                 'Active': 'BOOL',
                                 'Games': 'INT'}
-        if self.multischeme: templatesConstraints['Scheme'] = 'STRING'
+        if self.multischeme: templatesConstraints['Schemes'] = 'STRING'
         self.checkSheet(self.templates, set(templatesConstraints),
                         templatesConstraints, self.autoformat)
 
@@ -1291,11 +1292,22 @@ class League(object):
                                                     'type': 'positive'}},
                                            keyLabel="ID")
 
+    def validScheme(self, tempData):
+        schemes = set(tempData['Schemes'].split(self.SEP_SCHEMES))
+        return (len(schemes.union({self.scheme, self.KW_ALL})) > 0)
+
+    def narrowToValidSchemes(self, templates):
+        results = dict()
+        for template in templates:
+            if self.validScheme(templates[template]):
+                results[template] = templates[template]
+        return results
+
     @property
     def usableTemplateIDs(self):
         retvals = self.templateIDs
         if self.multischeme:
-            retvals = [r for r in retvals if r['Scheme'] == self.scheme]
+            return self.narrowToValidSchemes(retvals)
         return retvals
 
     @property

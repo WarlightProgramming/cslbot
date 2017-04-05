@@ -1557,6 +1557,12 @@ deal in terms of numbers of teams- so a REMATCH HORIZON of 3 will now cause
 teams to not get new games with the last 3 *teams* they've played with, not
 teams from their last 3 games.
 
+The template data sheet must also be altered to accommodate a multischeme
+ladder- each template must now specify **Schemes** (e.g., "3v3,2v2",
+"4v4v4v4,5v5v5") encoding the combinations of game size and the number of players per side that it's
+designed to support. The "ALL" keyword may be used for templates meant to be
+used with any scheme. Schemes must be supplied as a comma-separated list.
+
 ___
 
 #### GAME SIZE
