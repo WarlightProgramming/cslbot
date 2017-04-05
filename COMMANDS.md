@@ -27,6 +27,7 @@
       * [TrueSkill](#trueskill)
       * [All Rating Systems](#all-rating-systems)
     * [Elimination Ladders](#elimination-ladders)
+    * [Multischeme Ladders](#multischeme-ladders)
 
 ## Introduction
 
@@ -416,6 +417,9 @@ league where people join and compete in teams of 4, this would be 2.
 Or in other words, this is the number of players on each side of a game divided
 by the number of players on each side.
 
+This command has special behavior for 
+[multischeme ladders](#multischeme-ladders).
+
 ___
 
 #### GAME SIZE
@@ -429,6 +433,9 @@ The number of sides to a game. (This must be an integer.)
 In an XvXv....XvX game, this is the number of v's + 1. So in a 2v2 league, this
 would be 2. In a 5v5v5 league, this would be 3- there's 3 sides of 5 players
 each competing in every single game.
+
+This command has special behavior for 
+[multischeme ladders](#multischeme-ladders).
 
 ___
 
@@ -596,6 +603,9 @@ created in the same batch.
 
 If you set this to ALL, teams will never be matched with/against any team
 they've played with before- so you can set up round robins this way.
+
+This command has special behavior for 
+[multischeme ladders](#multischeme-ladders).
 
 ___
 
@@ -1531,3 +1541,50 @@ risk of probation. This reduces the impact of random early rating fluctuations
 and makes the league less hectic for teams just starting out. If you want to
 set the minimum *number of days* before a team has to worry about elimination,
 use the [**GRACE PERIOD**](#grace-period).
+
+___
+
+### MULTISCHEME LADDERS
+
+Some of the documentation above (specifically with [**GAME SIZE**](#game-size)
+and [**TEAMS PER SIDE**](#teams-per-side)) is actually not quite accurate.
+Instead of just providing single integer values for these, you can actually
+supply comma-separated lists containing possible values among which cslbot will
+randomly pick one each time it runs a league.
+
+Note that the [**REMATCH HORIZON**](#rematch-horizon) will now purely just
+deal in terms of numbers of teams- so a REMATCH HORIZON of 3 will now cause
+teams to not get new games with the last 3 *teams* they've played with, not
+teams from their last 3 games.
+
+___
+
+#### GAME SIZE
+
+A comma-separated list of possible game sizes (in terms of number of sides).
+
+*Sample Args*: "1,2,4", "1,3,5", "5", "1,1,1,2,2"
+
+*Default*: 1
+
+Each time the cslbot runs a league, it will randomly pick one of these values
+and stick with it. So you can have a batch where 3v3v3 games are created and
+another batch with 2v2's- within the same league.
+
+If you want to have some weighting, just enter values multiple times- each
+extra entry will increase its chances of being the value selected for that
+batch. So if you want a ladder that's got 3 sides per game 80% of the time but
+just 1 20% of the time, you'd enter "1,3,3,3,3" for GAME SIZE.
+
+___
+
+#### TEAMS PER SIDE
+
+A comma-separated list of possible numbers of teams per side.
+
+*Sample Args*: "1,2", "1,2,3,4", "2", "1,1,1,2,2"
+
+*Default*: 1
+
+As with [**GAME SIZE**](#game-size) above, cslbot will randomly pick one of
+these values and run with it for the entirety of a batch.
