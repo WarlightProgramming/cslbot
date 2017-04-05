@@ -7,6 +7,7 @@
 import copy
 import json
 import math
+import random
 from decimal import Decimal
 from pair import group_teams, assign_templates
 from elo import Elo
@@ -224,7 +225,7 @@ class League(object):
         self.handler = self._makeHandler()
         self.checkFormat()
         self.makeRateSysDict()
-        self._currentID = None
+        self._currentID, self._gameSize, self._sideSize = None, list(), list()
 
     def makeRateSysDict(self):
         self.sysDict = {self.RATE_ELO: {'default': self.defaultElo,
@@ -322,6 +323,7 @@ class League(object):
                                 'WarlightID': 'INT',
                                 'Active': 'BOOL',
                                 'Games': 'INT'}
+        if self.multischeme: templatesConstraints['Scheme'] = 'STRING'
         self.checkSheet(self.templates, set(templatesConstraints),
                         templatesConstraints, self.autoformat)
 
@@ -391,7 +393,8 @@ class League(object):
     @property
     def rematchLimit(self):
         process_fn = (lambda val: val if val == self.KW_ALL else
-                      int(val) * self.sideSize * self.gameSize)
+                      int(val) if self.multischeme else
+                      (int(val) * self.sideSize * self.gameSize))
         return self.fetchProperty(self.SET_REMATCH_LIMIT, 0, process_fn)
 
     @property
@@ -429,20 +432,50 @@ class League(object):
         else: default = 25
         return self.fetchProperty(self.SET_VETO_PENALTY, default, int)
 
+    @classmethod
+    def shuffleVal(cls, vals):
+        print vals
+        vals = [int(v) for v in vals.split(cls.SEP_CMD)]
+        random.shuffle(vals)
+        return vals[0]
+
     @property
     def teamSize(self):
         """number of players per team"""
         return self.fetchProperty(self.SET_TEAM_SIZE, 1, int)
 
+    @staticmethod
+    def setIfEmpty(prop, fn):
+        if len(prop) == 0: prop.append(fn())
+        return prop[0]
+
     @property
     def gameSize(self):
         """number of sides per game"""
-        return self.fetchProperty(self.SET_GAME_SIZE, 2, int)
+        return self.setIfEmpty(self._gameSize, self.statedGameSize)
+
+    def statedGameSize(self):
+        return self.fetchProperty(self.SET_GAME_SIZE, 2, self.shuffleVal)
 
     @property
     def sideSize(self):
         """number of teams per side"""
-        return self.fetchProperty(self.SET_TEAMS_PER_SIDE, 1, int)
+        return self.setIfEmpty(self._sideSize, self.statedSideSize)
+
+    def statedSideSize(self):
+        return self.fetchProperty(self.SET_TEAMS_PER_SIDE, 1, self.shuffleVal)
+
+    @property
+    def multischeme(self):
+        gameSpec = self.fetchProperty(self.SET_GAME_SIZE, "1")
+        sideSpec = self.fetchProperty(self.SET_TEAMS_PER_SIDE, "1")
+        return (self.SEP_CMD in gameSpec or self.SEP_CMD in sideSpec)
+
+    @property
+    def scheme(self):
+        playerSize = self.sideSize * self.teamSize
+        return ''.join('v' + str(playerSize)
+                       for x in xrange(self.gameSize))[1:]
 
     @property
     def expiryThreshold(self):
@@ -1113,8 +1146,7 @@ class League(object):
 
     @property
     def currentID(self):
-        if self._currentID is None:
-            self.setCurrentID()
+        if self._currentID is None: self.setCurrentID()
         return self._currentID
 
     def setCurrentID(self):
@@ -1259,6 +1291,13 @@ class League(object):
                                            'Active': {'values': ['TRUE', True],
                                                     'type': 'positive'}},
                                            keyLabel="ID")
+
+    @property
+    def usableTemplateIDs(self):
+        retvals = self.templateIDs
+        if self.multischeme:
+            retvals = [r for r in retvals if r['Scheme'] == self.scheme]
+        return retvals
 
     @property
     def gameIDs(self):
@@ -2408,7 +2447,7 @@ class League(object):
 
     def makeTemplatesDict(self, gameCount, skipTemps=None):
         self.turnNoneIntoMutable(skipTemps, set)
-        templateIDs, result = self.templateIDs, dict()
+        templateIDs, result = self.usableTemplateIDs, dict()
         times, mod = gameCount / len(templateIDs), gameCount % len(templateIDs)
         templatesList = self.getTemplatesList(templateIDs, skipTemps,
                                               times, mod)
@@ -2439,7 +2478,7 @@ class League(object):
         return scores, conflicts
 
     def makeMatchingsDict(self, matchings):
-        result, numTemps = dict(), len(self.templateIDs)
+        result, numTemps = dict(), len(self.usableTemplateIDs)
         for matching in matchings:
             matchDict = {'count': 1}
             scores, conflicts = self.getScoresAndConflicts(matching)
