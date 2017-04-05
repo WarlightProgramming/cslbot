@@ -169,15 +169,15 @@ class LeagueManager(object):
 
     @staticmethod
     def getCommandArgs(commands, command):
-        args = commands[command][TITLE_ARG]
+        args = commands[command][TITLE_ARG].upper()
         if len(args):
             if SEP_CMD in args: return args.split(SEP_CMD)
             return args
 
     def addArgToResults(self, results, commands, command):
         args = self.getCommandArgs(commands, command)
-        if args is not None:
-            results[command] = args
+        if args is not "":
+            results[command.upper()] = args
 
     def fetchLeagueCommands(self, league):
         """

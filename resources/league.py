@@ -437,12 +437,13 @@ class League(object):
     def shuffleVal(cls, vals):
         vals = [int(v) for v in vals.split(cls.SEP_CMD)]
         random.shuffle(vals)
-        return vals[0]
+        return max(vals[0], 1)
 
     @property
     def teamSize(self):
         """number of players per team"""
-        return self.fetchProperty(self.SET_TEAM_SIZE, 1, int)
+        process_fn = lambda x: max(1, int(x))
+        return self.fetchProperty(self.SET_TEAM_SIZE, 1, process_fn)
 
     @staticmethod
     def setIfEmpty(prop, fn):
@@ -1294,7 +1295,7 @@ class League(object):
 
     def validScheme(self, tempData):
         schemes = set(tempData['Schemes'].split(self.SEP_SCHEMES))
-        return (len(schemes.union({self.scheme, self.KW_ALL})) > 0)
+        return (len(schemes.intersection({self.scheme, self.KW_ALL})) > 0)
 
     def narrowToValidSchemes(self, templates):
         results = dict()
@@ -1318,9 +1319,9 @@ class League(object):
     @property
     def templateRanks(self):
         tempData = self.activeTemplates
-        tempInfo = [(int(tempData[temp]['ID']), int(tempData[temp]['Games']))
-                    for temp in tempData]
+        tempInfo = [(int(temp['ID']), int(temp['Games'])) for temp in tempData]
         tempInfo.sort(key = lambda x: x[1])
+        return tempInfo
 
     def findMatchingTemplate(self, templateName):
         IDs = self.templates.findValue({'ID': {'value': '',
@@ -1333,16 +1334,15 @@ class League(object):
 
     def getExistingDrops(self, order):
         teamData = self.fetchMatchingTeam(order)
-        existingDrops = teamData['Drops']
+        existingDrops = teamData.get('Drops')
         existingDrops = existingDrops.split(self.SEP_DROPS)
-        teamID = teamData['ID']
+        teamID = teamData.get('ID')
         return teamID, existingDrops
 
     def updateTeamDrops(self, teamID, drops):
-        dropStr = (self.SEP_DROPS).join(set(drops))
-        self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                  'type': 'positive'}},
-                                          {'Drops': dropStr})
+        dropStr = (self.SEP_DROPS).join(str(d) for d in
+                   set(int(x) for x in drops))
+        self.updateEntityValue(self.teams, teamID, Drops=dropStr)
 
     def dropTemplates(self, order):
         templateNames = order['orders'][2:]
@@ -1353,7 +1353,7 @@ class League(object):
             raise ImproperInput("Team %s already reached its drop limit" %
                                 (teamName))
         elif remainingDrops < len(templateNames):
-            dataStr = ("Too many drops attempted by team %s, dropping first %d"
+            dataStr = ("Too many drops by team %s, dropping only first %d"
                        % (teamName, remainingDrops))
             self.parent.log(dataStr, self.name)
             templateNames = templateNames[:remainingDrops]
@@ -1368,8 +1368,8 @@ class League(object):
         teamID, existingDrops = self.getExistingDrops(order)
         for templateName in templateNames:
             temp = self.findMatchingTemplate(templateName)
-            if (temp is not None and temp in existingDrops):
-                existingDrops.remove(temp)
+            if (temp is not None and str(temp) in existingDrops):
+                existingDrops.remove(str(temp))
         self.updateTeamDrops(teamID, existingDrops)
 
     def toggleActivity(self, order, setTo):

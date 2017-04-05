@@ -236,6 +236,12 @@ class TestLeague(TestCase):
                   "10": 10, "5": 5, "3334": 3334}
         self._propertyTest(prop, label, default, values)
 
+    def _posPropertyTest(self, prop, label, default):
+        values = {"0": 1, "-1": 1, "490": 490, "": default,
+                  "string": default, "None": default, "r4nd0M!1!": default,
+                  "10": 10, "5": 5, "3334": 3334}
+        self._propertyTest(prop, label, default, values)
+
     def _floatPropertyTest(self, prop, label, default):
         values = {"0": 0.0, "-1": -1.0, "-1.0": -1.0, "0.0": 0.0, "210": 210.0,
                   "string": default, "None": default, "randomLOL": default,
@@ -344,20 +350,20 @@ class TestLeague(TestCase):
                                systemsDict[system], values)
 
     def test_teamSize(self):
-        self._intPropertyTest("teamSize", self.league.SET_TEAM_SIZE, 1)
+        self._posPropertyTest("teamSize", self.league.SET_TEAM_SIZE, 1)
 
     def test_gameSize(self):
         self._setProp(self.league.SET_GAME_SIZE, "3,4,5")
         assert_true(self.league.gameSize in {3,4,5})
         oldSize = self.league.gameSize
-        self._intPropertyTest("statedGameSize()", self.league.SET_GAME_SIZE, 2)
+        self._posPropertyTest("statedGameSize()", self.league.SET_GAME_SIZE, 2)
         assert_equals(self.league.gameSize, oldSize)
 
     def test_sideSize(self):
         self._setProp(self.league.SET_TEAMS_PER_SIDE, "1,50,100")
         assert_true(self.league.sideSize in {1,50,100})
         oldSize = self.league.sideSize
-        self._intPropertyTest("statedSideSize()",
+        self._posPropertyTest("statedSideSize()",
                               self.league.SET_TEAMS_PER_SIDE, 1)
         assert_equals(self.league.sideSize, oldSize)
 
@@ -368,6 +374,14 @@ class TestLeague(TestCase):
         scheme = self.league.scheme
         assert_equals(scheme.count(str(teamSize * sideSize)), gameSize)
         assert_equals(scheme.count("v"), gameSize - 1)
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, "1,50,100")
+        assert_true(self.league.multischeme)
+        self._setProp(self.league.SET_GAME_SIZE, "2,3,4")
+        assert_true(self.league.multischeme)
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, "5")
+        assert_true(self.league.multischeme)
+        self._setProp(self.league.SET_GAME_SIZE, "2")
+        assert_false(self.league.multischeme)
 
     def test_expiryThreshold(self):
         self._intPropertyTest("expiryThreshold", self.league.SET_EXP_THRESH, 3)
@@ -1354,6 +1368,15 @@ class TestLeague(TestCase):
         self.league.unconfirmTeam(order)
         toggle.assert_called_with(order, confirm=False)
 
+    @patch('resources.league.League.toggleConfirm')
+    def test_toggleConfirms(self, toggle):
+        order = {'type': 'confirm_team', 'author': 3022124041,
+                 'orders': ['1v1', 'St. Louis Blues', '12', '13', '14']}
+        self.league.toggleConfirms(order)
+        assert_equals(toggle.call_count, 3)
+        toggle.assert_called_with({'author': 14, 'orders': ['NAME',
+                                   'St. Louis Blues']}, confirm=True)
+
     @patch('resources.league.League.fetchMatchingTeam')
     def test_removeTeam(self, fetch):
         self._setProp(self.league.SET_ALLOW_REMOVAL, "FALSE")
@@ -1364,6 +1387,158 @@ class TestLeague(TestCase):
         self.league.removeTeam(order)
         self.teams.removeMatchingEntities.assert_called_once_with({'ID':
             fetch.return_value.get('ID')})
+
+    @patch('resources.league.League.fetchTeamData')
+    def test_checkLimitChange(self, fetch):
+        assert_equals(self.league.checkLimitChange(400, -3), None)
+        assert_equals(self.league.checkLimitChange(100, 0), None)
+        self._setProp(self.league.SET_ACTIVE_CAPACITY, "")
+        assert_equals(self.league.checkLimitChange(100, 3), None)
+        self._setProp(self.league.SET_ACTIVE_CAPACITY, 2)
+        self.teams.findEntities.return_value = [{'ID': 1},]
+        assert_equals(self.league.checkLimitChange(42, 20), None)
+        self.teams.findEntities.return_value = [{'ID': 1}, {'ID': 2}]
+        fetch.return_value = {'Limit': 3}
+        assert_equals(self.league.checkLimitChange(42, 20), None)
+        fetch.return_value = {'Limit': 0}
+        assert_raises(ImproperInput, self.league.checkLimitChange, 2, 2)
+        assert_equals(self.league.checkLimitChange(42, 0), None)
+        self.teams.findEntities.return_value = [{'ID': 1}, {'ID': 2},
+                                                {'ID': 3}]
+        assert_raises(ImproperInput, self.league.checkLimitChange, 24, 2)
+
+    @patch('resources.league.League.changeLimit')
+    @patch('resources.league.League.checkLimitChange')
+    @patch('resources.league.League.fetchMatchingTeam')
+    def test_setLimit(self, fetch, check, change):
+        order = {'type': 'set_limit', 'author': 3022124041,
+                 'orders': ['1v1', 'The Harambes', '3']}
+        fetch.return_value = {'Players': '12,14,15', 'ID': 4}
+        self.league.mods = set()
+        assert_raises(ImproperInput, self.league.setLimit, order)
+        self.league.mods = {3022124041,}
+        assert_equals(self.league.setLimit(order), None)
+        check.assert_called_once_with(4, '3')
+        change.assert_called_once_with(4, '3')
+
+    def test_templateIDs(self):
+        self.templates.findEntities.return_value = "retval"
+        assert_equals(self.league.templateIDs, "retval")
+
+    def test_validScheme(self):
+        tempData = {'Schemes': '1v1,2v2,4v4'}
+        self.league._gameSize = list()
+        self.league._sideSize = list()
+        self._setProp(self.league.SET_GAME_SIZE, '5')
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, '2')
+        self._setProp(self.league.SET_TEAM_SIZE, '2')
+        assert_false(self.league.validScheme(tempData))
+        self.league._gameSize = list()
+        self._setProp(self.league.SET_GAME_SIZE, '2')
+        assert_true(self.league.validScheme(tempData))
+        self.league._gameSize = list()
+        self.league._sideSize = list()
+        self._setProp(self.league.SET_GAME_SIZE, '3')
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, '3')
+        self._setProp(self.league.SET_TEAM_SIZE, '4')
+        assert_false(self.league.validScheme(tempData))
+        tempData['Schemes'] = '1v1,2v2,3v3,4v4,12v12v12'
+        assert_true(self.league.validScheme(tempData))
+        tempData['Schemes'] = '1v1,2v2,ALL'
+        assert_true(self.league.validScheme(tempData))
+
+    def test_narrowToValidSchemes(self):
+        templates = {1: {'Schemes': '1v1,2v2,ALL'}, 2: {'Schemes': '3v3'},
+                3: {'Schemes': '1v1,ALL'}, 4: {'Schemes': '2v2,4v4'},
+                5: {'Schemes': '2v2'}, 6: {'Schemes': '3v3v3v3v3,4v4v4v4v4'}}
+        self.league._gameSize, self.league._sideSize = list(), list()
+        self._setProp(self.league.SET_GAME_SIZE, '2,2,2,2,2')
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, '1,1')
+        self._setProp(self.league.SET_TEAM_SIZE, '2')
+        assert_equals(self.league.scheme, '2v2')
+        assert_true(self.league.multischeme)
+        assert_equals(len(self.league.narrowToValidSchemes(templates)), 4)
+        self.templates.findEntities.return_value = templates
+        assert_equals(len(self.league.usableTemplateIDs), 4)
+        self.league._gameSize, self.league._sideSize = list(), list()
+        self._setProp(self.league.SET_GAME_SIZE, '2')
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, '1')
+        assert_equals(self.league.usableTemplateIDs, templates)
+
+    def test_gameIDs(self):
+        assert_equals(self.league.gameIDs, self.games.findValue.return_value)
+
+    def test_templateRanks(self):
+        self.templates.findEntities.return_value = [{'ID': 3, 'Games': 3},
+                                                    {'ID': 4, 'Games': 4},
+                                                    {'ID': 5, 'Games': 2},
+                                                    {'ID': 1, 'Games': 0}]
+        assert_equals(self.league.templateRanks, [(1,0), (5,2), (3,3), (4,4)])
+
+    def test_findMatchingTemplate(self):
+        self.templates.findValue.return_value = list()
+        assert_equals(self.league.findMatchingTemplate('name'), None)
+        self.templates.findValue.return_value = [1, 2, 3, 4, 5]
+        assert_equals(self.league.findMatchingTemplate('name'), 1)
+
+    @patch('resources.league.League.fetchMatchingTeam')
+    def test_getExistingDrops(self, fetch):
+        fetch.return_value = {'Drops': '12/13/14', 'ID': 43}
+        assert_equals(self.league.getExistingDrops('order'),
+                      (43, ['12','13','14']))
+
+    @patch('resources.league.League.updateEntityValue')
+    def test_updateTeamDrops(self, update):
+        drops = [12, 14, 23, '12', '43', 4053]
+        self.league.updateTeamDrops(1249, drops)
+        update.assert_called_once_with(self.teams, 1249,
+                                       Drops='43/12/4053/14/23')
+
+    @patch('resources.league.League.updateTeamDrops')
+    @patch('resources.league.League.findMatchingTemplate')
+    @patch('resources.league.League.getExistingDrops')
+    def test_dropTemplates(self, getExisting, find, update):
+        order = {'type': 'drop_templates', 'author': 3022124041,
+                 'orders': ['1v1', 'The Harambes', 'North Korea 1v1',
+                            'Sanctuary 3v3', 'Cincinnati Zoo FFA']}
+        getExisting.return_value = 4032, ['12', '13', '14']
+        self.templates.findEntities.return_value = xrange(200)
+        self._setProp(self.league.SET_DROP_LIMIT, 3)
+        assert_raises(ImproperInput, self.league.dropTemplates, order)
+        self._setProp(self.league.SET_DROP_LIMIT, 4)
+        assert_equals(self.league.dropLimit, 4)
+        find.return_value = 3
+        self.league.dropTemplates(order)
+        dataStr = "Too many drops by team The Harambes, dropping only first 1"
+        self.parent.log.assert_called_with(dataStr, 'NAME')
+        update.assert_called_once_with(4032, ['12', '13', '14', 3])
+        self._setProp(self.league.SET_DROP_LIMIT, 40)
+        assert_equals(self.league.dropLimit, 40)
+        oldCount = self.parent.log.call_count
+        getExisting.return_value = 4033, ['12', '13', '14', '15']
+        self.league.dropTemplates(order)
+        assert_equals(self.parent.log.call_count, oldCount)
+        update.assert_called_with(4033, ['12', '13', '14', '15', 3, 3, 3])
+        find.return_value = None
+        getExisting.return_value = 4033, ['12', '13', '14', '15']
+        self.league.dropTemplates(order)
+        update.assert_called_with(4033, ['12', '13', '14', '15'])
+
+    @patch('resources.league.League.updateTeamDrops')
+    @patch('resources.league.League.findMatchingTemplate')
+    @patch('resources.league.League.getExistingDrops')
+    def test_undropTemplates(self, getExisting, find, update):
+        order = {'type': 'undrop_templates', 'author': 3022124041,
+                 'orders': ['1v1', 'The Harambes', 'North Korea 1v1',
+                           'Sanctuary 3v3', 'Cincinnati Zoo FFA']}
+        getExisting.return_value = 4032, ['12', '13', '14']
+        find.return_value = 12
+        self.league.undropTemplates(order)
+        update.assert_called_once_with(4032, ['13', '14'])
+        find.return_value = None
+        getExisting.return_value = 4032, ['12', '13', '14']
+        self.league.undropTemplates(order)
+        update.assert_called_with(4032, ['12', '13', '14'])
 
 # run tests
 if __name__ == '__main__':
