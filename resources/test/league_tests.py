@@ -347,11 +347,27 @@ class TestLeague(TestCase):
         self._intPropertyTest("teamSize", self.league.SET_TEAM_SIZE, 1)
 
     def test_gameSize(self):
+        self._setProp(self.league.SET_GAME_SIZE, "3,4,5")
+        assert_true(self.league.gameSize in {3,4,5})
+        oldSize = self.league.gameSize
         self._intPropertyTest("statedGameSize()", self.league.SET_GAME_SIZE, 2)
+        assert_equals(self.league.gameSize, oldSize)
 
     def test_sideSize(self):
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, "1,50,100")
+        assert_true(self.league.sideSize in {1,50,100})
+        oldSize = self.league.sideSize
         self._intPropertyTest("statedSideSize()",
                               self.league.SET_TEAMS_PER_SIDE, 1)
+        assert_equals(self.league.sideSize, oldSize)
+
+    def test_scheme(self):
+        teamSize = self.league.teamSize
+        sideSize = self.league.sideSize
+        gameSize = self.league.gameSize
+        scheme = self.league.scheme
+        assert_equals(scheme.count(str(teamSize * sideSize)), gameSize)
+        assert_equals(scheme.count("v"), gameSize - 1)
 
     def test_expiryThreshold(self):
         self._intPropertyTest("expiryThreshold", self.league.SET_EXP_THRESH, 3)
