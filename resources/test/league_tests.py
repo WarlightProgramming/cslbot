@@ -1347,7 +1347,7 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_ALLOW_REMOVAL, "TRUE")
         self.league.removeTeam(order)
         self.teams.removeMatchingEntities.assert_called_once_with({'ID':
-            fetch.return_value['ID']})
+            fetch.return_value.get('ID')})
 
 # run tests
 if __name__ == '__main__':
