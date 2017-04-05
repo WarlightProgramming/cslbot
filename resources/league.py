@@ -434,7 +434,6 @@ class League(object):
 
     @classmethod
     def shuffleVal(cls, vals):
-        print vals
         vals = [int(v) for v in vals.split(cls.SEP_CMD)]
         random.shuffle(vals)
         return vals[0]
