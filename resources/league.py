@@ -1263,7 +1263,7 @@ class League(object):
             raise ImproperInput("Team removal has been disabled.")
         matchingTeam = self.fetchMatchingTeam(order)
         self.teams.removeMatchingEntities({'ID':
-                                           matchingTeam['ID']})
+                                           matchingTeam.get('ID')})
 
     def checkLimitChange(self, teamID, newLimit):
         if int(newLimit) <= 0: return
@@ -1275,14 +1275,14 @@ class League(object):
 
     def setLimit(self, order):
         matchingTeam = self.fetchMatchingTeam(order, False)
-        players = matchingTeam['Players'].split(self.SEP_PLYR)
+        players = (matchingTeam.get('Players')).split(self.SEP_PLYR)
         if (str(order['author']) not in players and
             order['author'] not in self.mods):
             raise ImproperInput(str(order['author']) +
                                 " can't set the limit for team " +
                                 str(order['orders'][1]))
-        self.checkLimitChange(matchingTeam['ID'], order['orders'][2])
-        self.changeLimit(matchingTeam['ID'], order['orders'][2])
+        self.checkLimitChange(matchingTeam.get('ID'), order['orders'][2])
+        self.changeLimit(matchingTeam.get('ID'), order['orders'][2])
 
     @property
     def templateIDs(self):
