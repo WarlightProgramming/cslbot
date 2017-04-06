@@ -310,6 +310,7 @@ class League(object):
         gamesConstraints = {'ID': 'UNIQUE INT',
                             'WarlightID': 'UNIQUE INT',
                             'Created': 'STRING',
+                            'Finished': 'STRING',
                             'Sides': 'STRING',
                             'Winners': 'STRING',
                             'Vetos': 'INT',
@@ -1055,8 +1056,8 @@ class League(object):
         return not(self.allowed(playerID))
 
     def logFailedOrder(self, order):
-        desc = ("Failed to process %s order by %d for league %s" %
-                (order['type'], int(order['author']), str(order['orders'][0])))
+        desc = ("Failed to process %s order by %d" %
+                (order['type'], int(order['author'])))
         self.parent.log(desc, league=self.name)
 
     def checkTeamCreator(self, creator, members):
@@ -1434,7 +1435,7 @@ class League(object):
                  self.ORD_QUIT_LEAGUE: self.quitLeague
                 }[orderType](order)
             except Exception as e:
-                if len(str(e)) > 0:
+                if len(str(e)): # exception has some description string
                     self.parent.log(str(e), self.name)
                 else:
                     self.logFailedOrder(order)
@@ -1444,8 +1445,8 @@ class League(object):
     def unfinishedGames(self):
         return self.games.findEntities({'ID': {'value': '',
                                                'type': 'negative'},
-                                        'Winner': {'value': '',
-                                                   'type': 'positive'}},
+                                        'Finished': {'value': '',
+                                                     'type': 'positive'}},
                                         keyLabel='WarlightID')
 
     @staticmethod
@@ -1477,7 +1478,7 @@ class League(object):
 
     def handleFinished(self, gameData):
         if self.isAbandoned(gameData['players']):
-            return 'ABANDONED', None, None
+            return 'ABANDONED', [int(p.get('id')) for p in gameData['players']]
         else:
             return 'FINISHED', self.findWinners(gameData['players'])
 
@@ -1533,9 +1534,9 @@ class League(object):
     def setWinners(self, gameID, winningSide):
         sortedWinners = sorted(team for team in winningSide)
         winStr = (self.SEP_TEAMS).join(str(team) for team in sortedWinners)
-        self.games.updateMatchingEntities({'ID': {'value': gameID,
-                                                  'type': 'positive'}},
-                                          {'Winners': winStr})
+        finStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
+        self.updateEntityValue(self.games, gameID, identifier='ID',
+                               Winners=winStr, Finished=finStr)
 
     def adjustTeamGameCount(self, teamID, adj, totalAdj=0):
         teamData = self.fetchTeamData(teamID)
@@ -2119,7 +2120,7 @@ class League(object):
 
     def updateVeto(self, gameID):
         gameData = self.fetchGameData(gameID)
-        if int(gameData['Vetoes']) >= self.vetoLimit:
+        if int(gameData['Vetos']) >= self.vetoLimit:
             self.penalizeVeto(gameID)
             self.deleteGame(gameID, gameData)
         else:
@@ -2128,12 +2129,18 @@ class League(object):
             self.updateGameVetos(self.getTeams(gameData), template)
             self.updateTemplate(gameID, gameData)
 
+    @staticmethod
+    def getOneArgFunc(fun, *args):
+        return lambda x: fun(x, *args)
+
     def updateGame(self, warlightID, gameID, createdTime):
         created = datetime.strptime(createdTime, self.TIMEFORMAT)
         status = self.fetchGameStatus(warlightID, created)
-        {'FINISHED': self.updateWinners(gameID, status[1]),
-         'DECLINED': self.updateDecline(gameID, status[1]),
-         'ABANDONED': self.updateVeto(gameID)}.get([status[0]])
+        if status is not None:
+            updateWin = self.getOneArgFunc(self.updateWinners, status[1])
+            updateDecline = self.getOneArgFunc(self.updateDecline, status[1])
+            {'FINISHED': self.updateWinners, 'DECLINED': self.updateDecline,
+             'ABANDONED': self.updateVeto}.get([status[0]])(gameID)
 
     def wipeRank(self, teamID):
         self.updateEntityValue(self.teams, teamID, Rank='')

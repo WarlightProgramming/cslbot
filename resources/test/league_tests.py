@@ -141,6 +141,7 @@ class TestLeague(TestCase):
         expectedConstraints = {'ID': 'UNIQUE INT',
                                'WarlightID': 'UNIQUE INT',
                                'Created': 'STRING',
+                               'Finished': 'STRING',
                                'Sides': 'STRING',
                                'Winners': 'STRING',
                                'Vetos': 'INT',
@@ -1132,7 +1133,7 @@ class TestLeague(TestCase):
     def test_logFailedOrder(self):
         order = {'type': 'OrderType', 'author': 3940430, 'orders': ['12','13']}
         self.league.logFailedOrder(order)
-        expDesc = "Failed to process OrderType order by 3940430 for league 12"
+        expDesc = "Failed to process OrderType order by 3940430"
         self.parent.log.assert_called_once_with(expDesc,
                                                 league=self.league.name)
 
@@ -1582,6 +1583,107 @@ class TestLeague(TestCase):
         self.league.quitLeague('order')
         assert_equals(update.call_count, 2)
         update.assert_called_with(3, ['FALSE', 'FALSE'])
+
+    @patch('resources.league.League.updateRanks')
+    @patch('resources.league.League.logFailedOrder')
+    @patch('resources.league.League.quitLeague')
+    @patch('resources.league.League.deactivateTemplate')
+    @patch('resources.league.League.activateTemplate')
+    @patch('resources.league.League.undropTemplates')
+    @patch('resources.league.League.dropTemplates')
+    @patch('resources.league.League.removeTeam')
+    @patch('resources.league.League.setLimit')
+    @patch('resources.league.League.unconfirmTeam')
+    @patch('resources.league.League.confirmTeam')
+    @patch('resources.league.League.addTeam')
+    def test_executeOrders(self, addTeam, confirmTeam, unconfirmTeam,
+                           setLimit, removeTeam, dropTemplates,
+                           undropTemplates, activateTemplate,
+                           deactivateTemplate, quitLeague, logFailedOrder,
+                           updateRanks):
+        existingLogs = self.parent.log.call_count
+        self.league.orders = [{'type': 'ADD_team'}, {'type': 'add_team'},
+            {'type': 'confirm_team'}, {'type': 'CONFIRM_TEAM'},
+            {'type': 'unconfirm_team'}, {'type': 'sEt_lImIt'},
+            {'type': 'remove_team'}, {'type': 'drop_templates'},
+            {'type': 'drop_template'}, {'type': 'undrop_template'},
+            {'type': 'undrop_templates'}, {'type': 'activate_template'},
+            {'type': 'deactivate_template'}, {'type': 'quit_league'},
+            {'type': 'subtract_team'}]
+        self.league.executeOrders()
+        updateRanks.assert_called_once_with()
+        assert_equals(self.parent.log.call_count, existingLogs+1)
+        quitLeague.side_effect = IOError
+        self.league.executeOrders()
+        logFailedOrder.assert_called_once_with({'type': 'quit_league'})
+
+    def test_unfinishedGames(self):
+        assert_equals(self.league.unfinishedGames,
+                      self.games.findEntities.return_value)
+
+    def test_isAbandoned(self):
+        players = [{'state': 'VotedToEnd'}, {'state': 'Waiting'},
+                   {'state': 'Declined'}, {'state': 'Wyoming'}]
+        assert_true(self.league.isAbandoned(players))
+        players = [{'state': 'Declined'}, {'state': 'Won'},
+                   {'state': 'Declined'}, {'state': 'Wyoming'}]
+        assert_false(self.league.isAbandoned(players))
+        players = list()
+        assert_false(self.league.isAbandoned(players))
+        players = [{'state': 'Duck'}, {'state': 'Duck'},
+                   {'state': 'Duck'}, {'state': 'Goose'}]
+        assert_false(self.league.isAbandoned(players))
+
+    def test_findMatchingPlayers(self):
+        players = [{'id': 4, 'state': 'VotedToEnd'},
+            {'id': 12, 'state': 'Velociraptor'}, {'id': 1, 'state': 'Won'},
+            {'id': 39, 'state': 'Velociraptor'}, {'id': 5, 'state': 'Wyoming'},
+            {'id': 40, 'state': 'Won'}, {'id': 3, 'state': 'Velociraptor'}]
+        assert_equals(self.league.findMatchingPlayers(players), list())
+        assert_equals(self.league.findMatchingPlayers(players, 'Won'), [1, 40])
+        assert_equals(self.league.findMatchingPlayers(players, 'Velociraptor'),
+                      [3, 12, 39])
+        assert_equals(self.league.findMatchingPlayers(players, 'Won',
+                      'Wyoming'), [1, 5, 40])
+        assert_equals(self.league.findWinners(players), [1, 40])
+        assert_equals(self.league.findDecliners(players), list())
+        assert_equals(self.league.findWaiting(players), list())
+
+    @patch('resources.league.League.findWinners')
+    @patch('resources.league.League.isAbandoned')
+    def test_handleFinished(self, abandon, find):
+        abandon.return_value = True
+        gameData = {'players': [{'id': 5}, {'id': 10}, {'id': 15}]}
+        assert_equals(self.league.handleFinished(gameData),
+                      ('ABANDONED', [5, 10, 15]))
+        abandon.return_value = False
+        assert_equals(self.league.handleFinished(gameData),
+                      ('FINISHED', find.return_value))
+
+    @patch('resources.league.League.findWaiting')
+    @patch('resources.league.League.findDecliners')
+    def test_handleWaiting(self, decliners, waiting):
+        self._setProp(self.league.SET_EXP_THRESH, 3)
+        assert_equals(self.league.expiryThreshold, 3)
+        gameData = {'players': [1, 2, 3, 4, 5]}
+        created = datetime.now() - timedelta(5)
+        decliners.return_value = range(3)
+        assert_equals(self.league.handleWaiting(gameData, created),
+                      ('DECLINED', range(3)))
+        decliners.return_value = xrange(1, 6)
+        assert_equals(self.league.handleWaiting(gameData, created),
+                      ('ABANDONED', None))
+        waiting.return_value = xrange(3)
+        decliners.return_value = list()
+        assert_false(len(waiting.return_value) == len(gameData['players']))
+        assert_equals(self.league.handleWaiting(gameData, created), None)
+        waiting.return_value = xrange(1, 6)
+        assert_equals(self.league.handleWaiting(gameData, created),
+                      ('ABANDONED', None))
+        created = datetime.now() - timedelta(1)
+        assert_false((datetime.now() - created).days >
+                     self.league.expiryThreshold)
+        assert_equals(self.league.handleWaiting(gameData, created), None)
 
 # run tests
 if __name__ == '__main__':
