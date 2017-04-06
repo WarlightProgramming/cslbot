@@ -290,7 +290,7 @@ class LeagueManager(object):
         """runs leagues and updates"""
         thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
         offset = self.commands.findEntities({TITLE_CMD: 'OFFSET'})
-        orders = set()
+        orders, offset = set(), 0
         if (len(thread) > 0):
             thread, offset = (self._getThreadName(thread),
                               self._retrieveOffset(offset))
@@ -309,3 +309,7 @@ class LeagueManager(object):
                 errStr = str(e)
                 failStr = "Failed to run league %s: %s" % (str(league), errStr)
                 self.log(failStr, league=league, error=True)
+        newOffset = offset + len(orders)
+        self.commands.updateMatchingEntities({TITLE_CMD: {'value': 'OFFSET',
+                                                          'type': 'positive'}},
+                                             {TITLE_ARG: str(newOffset)})

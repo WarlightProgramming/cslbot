@@ -68,6 +68,15 @@ structure their order like this:
 confirm_team "The Thunderdome" "Mad Max"
 ```
 
+Note that a player could also target *all* leagues (within the cluster)
+simultaneously by specifying ALL as the league name. So if a player wanted to
+confirm the "Mad Max" team in every league within the cluster, they could use
+the order:
+
+```
+confirm_team ALL "Mad Max"
+```
+
 ___
 
 ### Access Levels
@@ -366,3 +375,7 @@ multiple teams in the same league and are planning on taking a vacation/etc.
 As with confirm\_team and unconfirm\_team, mods can use this command on behalf
 of other players by simply adding a space-separated list of player names at the
 end of the order.
+
+If a player is in multiple leagues within the cluster, they can use the ALL
+keyword for the league name so as to not have to specify each league
+individually.

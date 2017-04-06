@@ -1377,9 +1377,8 @@ class League(object):
         if author not in self.mods:
             raise ImproperInput("Only mods can toggle template active status")
         tempName = order['orders'][1]
-        self.templates.updateMatchingEntities({'Name': {'value': tempName,
-                                                        'type': 'positive'}},
-                                              {'Active': setTo})
+        self.updateEntityValue(self.templates, tempName, identifier='Name',
+                               Active=setTo)
 
     def activateTemplate(self, order):
         self.toggleActivity(order, 'TRUE')
@@ -1409,11 +1408,12 @@ class League(object):
         for team in self.allTeams:
             members = team['Players'].split(self.SEP_PLYR)
             confirms = team['Confirmations'].split(self.SEP_CONF)
+            hit = False
             for player in players:
                 if player in members:
-                    index = members.index(player)
+                    hit, index = True, members.index(player)
                     confirms[index] = "FALSE"
-            self.updateConfirms(team['ID'], confirms)
+            if hit: self.updateConfirms(team['ID'], confirms)
 
     @runPhase
     def executeOrders(self):

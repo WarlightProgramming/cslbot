@@ -1540,6 +1540,49 @@ class TestLeague(TestCase):
         self.league.undropTemplates(order)
         update.assert_called_with(4032, ['12', '13', '14'])
 
+    def test_toggleActivity(self):
+        order = {'author': 12, 'orders': ['1v1', 'tempName',]}
+        self.league.mods = {10, 11}
+        assert_raises(ImproperInput, self.league.activateTemplate, order)
+        self.league.mods.add(12)
+        self.league.templates.findEntities.return_value = xrange(200)
+        self._setProp(self.league.SET_MIN_TEMPLATES, 1)
+        assert_equals(self.league.deactivateTemplate(order), None)
+        self.league.templates.updateMatchingEntities.assert_called_with({
+            'Name': {'value': 'tempName', 'type': 'positive'}},
+            {'Active': 'FALSE'})
+        self._setProp(self.league.SET_MIN_TEMPLATES, 210)
+        assert_raises(ImproperInput, self.league.deactivateTemplate, order)
+
+    def test_allTeams(self):
+        assert_equals(self.league.allTeams,
+                      self.teams.findEntities.return_value)
+
+    def test_getPlayersFromOrder(self):
+        order = {'author': 12, 'orders': ['1v1', '1204', '902', '671']}
+        self.league.mods = set()
+        assert_equals(self.league.getPlayersFromOrder(order), {'12',})
+        self.league.mods.add(12)
+        assert_equals(self.league.getPlayersFromOrder(order),
+                      {'1204','902','671'})
+
+    def test_updateConfirms(self):
+        self.league.updateConfirms(13804, [True, False, False])
+        self.teams.updateMatchingEntities.assert_called_with({'ID': {'value':
+            13804, 'type': 'positive'}}, {'Confirmations': 'TRUE,FALSE,FALSE'})
+
+    @patch('resources.league.League.updateConfirms')
+    @patch('resources.league.League.getPlayersFromOrder')
+    def test_quitLeague(self, getPlayers, update):
+        getPlayers.return_value = {'11', '13', '15'}
+        self.teams.findEntities.return_value = [{'ID': 1, 'Players': '1,2,3',
+            'Confirmations': 'TRUE,TRUE,FALSE'}, {'ID': 2, 'Players': '11,0,2',
+            'Confirmations': 'TRUE,FALSE,FALSE'}, {'ID': 3, 'Players': '11,13',
+            'Confirmations': 'FALSE,TRUE'}]
+        self.league.quitLeague('order')
+        assert_equals(update.call_count, 2)
+        update.assert_called_with(3, ['FALSE', 'FALSE'])
+
 # run tests
 if __name__ == '__main__':
     run_tests()
