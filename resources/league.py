@@ -1263,7 +1263,7 @@ class League(object):
     def removeTeam(self, order):
         if not self.allowRemoval:
             raise ImproperInput("Team removal has been disabled.")
-        matchingTeam = self.fetchMatchingTeam(order)
+        matchingTeam = self.fetchMatchingTeam(order)[0]
         self.teams.removeMatchingEntities({'ID':
                                            matchingTeam.get('ID')})
 
@@ -1276,13 +1276,7 @@ class League(object):
             raise ImproperInput("League has reached max active teams.")
 
     def setLimit(self, order):
-        matchingTeam = self.fetchMatchingTeam(order, False)
-        players = (matchingTeam.get('Players')).split(self.SEP_PLYR)
-        if (str(order['author']) not in players and
-            order['author'] not in self.mods):
-            raise ImproperInput(str(order['author']) +
-                                " can't set the limit for team " +
-                                str(order['orders'][1]))
+        matchingTeam = self.fetchMatchingTeam(order)[0]
         self.checkLimitChange(matchingTeam.get('ID'), order['orders'][2])
         self.changeLimit(matchingTeam.get('ID'), order['orders'][2])
 
@@ -1328,21 +1322,19 @@ class League(object):
         IDs = self.templates.findValue({'ID': {'value': '',
                                                'type': 'negative'},
                                         'Name': {'value': templateName,
-                                                 'type': 'positive'}},
-                                       'ID')
+                                                 'type': 'positive'}})
         if len(IDs) == 0: return None
         return IDs[0]
 
     def getExistingDrops(self, order):
-        teamData = self.fetchMatchingTeam(order)
+        teamData = self.fetchMatchingTeam(order)[0]
         existingDrops = teamData.get('Drops')
-        existingDrops = existingDrops.split(self.SEP_DROPS)
+        existingDrops = set(existingDrops.split(self.SEP_DROPS))
         teamID = teamData.get('ID')
         return teamID, existingDrops
 
     def updateTeamDrops(self, teamID, drops):
-        dropStr = (self.SEP_DROPS).join(str(d) for d in
-                   set(int(x) for x in drops))
+        dropStr = (self.SEP_DROPS).join(set(str(x) for x in drops))
         self.updateEntityValue(self.teams, teamID, Drops=dropStr)
 
     def dropTemplates(self, order):
@@ -1361,7 +1353,7 @@ class League(object):
         for templateName in templateNames:
             temp = self.findMatchingTemplate(templateName)
             if temp is None: continue
-            existingDrops.append(temp)
+            existingDrops.add(str(temp.get('ID')))
         self.updateTeamDrops(teamID, existingDrops)
 
     def undropTemplates(self, order):
@@ -1369,8 +1361,8 @@ class League(object):
         teamID, existingDrops = self.getExistingDrops(order)
         for templateName in templateNames:
             temp = self.findMatchingTemplate(templateName)
-            if (temp is not None and str(temp) in existingDrops):
-                existingDrops.remove(str(temp))
+            if (temp is not None and str(temp.get('ID')) in existingDrops):
+                existingDrops.remove(str(temp.get('ID')))
         self.updateTeamDrops(teamID, existingDrops)
 
     def toggleActivity(self, order, setTo):
@@ -1495,9 +1487,9 @@ class League(object):
 
     def fetchGameStatus(self, gameID, created):
         gameData = self.handler.queryGame(gameID)
-        if gameData['state'] == 'Finished':
+        if gameData.get('state') == 'Finished':
             return self.handleFinished(gameData)
-        elif gameData['state'] == 'WaitingForPlayers':
+        elif gameData.get('state') == 'WaitingForPlayers':
             return self.handleWaiting(gameData, created)
 
     @staticmethod
@@ -1517,12 +1509,18 @@ class League(object):
     def fetchTemplateData(self, templateID):
         return self.fetchDataByID(self.templates, templateID, "template")
 
+    @classmethod
+    def getGameTeams(cls, gameData):
+        results = list()
+        for side in gameData[0]['Sides'].split(cls.SEP_SIDES):
+            results += side.split(cls.SEP_TEAMS)
+        return results
+
     def findCorrespondingTeams(self, gameID, players):
-        players = set([str(player) for player in players])
-        results = set()
+        players, results = set([str(player) for player in players]), set()
         gameData = self.games.findEntities({'ID': {'value': gameID,
                                                    'type': 'positive'}})
-        gameTeams = gameData[0]['Teams'].split(self.SEP_TEAMS)
+        gameTeams = self.getGameTeams(gameData)
         for team in gameTeams:
             teamData = self.teams.findEntities({'ID': {'value': team,
                                                        'type': 'positive'}})
@@ -1542,16 +1540,13 @@ class League(object):
         teamData = self.fetchTeamData(teamID)
         oldCount = int(teamData['Count'])
         oldFin = int(teamData['Finished'])
-        self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                  'type': 'positive'}},
-                                          {'Count': str(oldCount + adj),
-                                           'Finished': str(oldFin + totalAdj)})
+        self.updateEntityValue(self.teams, teamID, Count=str(oldCount+adj),
+                               Finished=str(oldFin+totalAdj))
 
     def adjustTemplateGameCount(self, templateID, adj):
         oldCount = int(self.fetchTemplateData(templateID)['Games'])
-        self.templates.updateMatchingEntities({'ID': {'value': templateID,
-                                                      'type': 'positive'}},
-                                              {'Games': str(oldCount + adj)})
+        self.updateEntityValue(self.templates, templateID,
+                               Games=str(oldCount+adj))
 
     def getEloDiff(self, rating, events):
         oldRating = rating
@@ -1596,17 +1591,17 @@ class League(object):
                                     int(round(diffs[team])))
         return results
 
-    @staticmethod
-    def getSplitRtg(dataDict, key):
-        return [int(v) for v in dataDict[key].split(self.SEP_RTG)]
+    @classmethod
+    def getSplitRating(cls, dataDict, key):
+        return tuple(int(v) for v in dataDict[key].split(cls.SEP_RTG))
 
     @classmethod
     def unsplitRtg(cls, rating):
         return (cls.SEP_RTG).join([str(val) for val in rating])
 
     def getGlickoRating(self, teamID):
-        return tuple([int(x) for x in
-                     self.getTeamRating(teamID).split(self.SEP_RTG)])
+        return tuple(int(x) for x in
+                     self.getTeamRating(teamID).split(self.SEP_RTG))
 
     def getSideGlickoRating(self, side):
         rating, dev = 0, 0
@@ -1623,10 +1618,10 @@ class League(object):
 
     def updateGlickoMatchup(self, players, i, j, winner):
         side1, side2 = players[i], players[j]
-        side1.update_player([side2.rating], [side2.rd],
-                            [self.getEvent(i, j, winner)])
-        side2.update_player([side1.rating], [side1.rd],
-                            [self.getEvent(j, i, winner)])
+        side1.update_player([side2.rating,], [side2.rd,],
+                            [self.getEvent(i, j, winner),])
+        side2.update_player([side1.rating,], [side1.rd,],
+                            [self.getEvent(j, i, winner),])
 
     def makeGlickoPlayersFromSides(self, sides):
         players = list()
@@ -1817,7 +1812,7 @@ class League(object):
                                           {'Rating': newRating})
 
     def penalizeVeto(self, gameID):
-        teams = self.getGameTeams(gameID)
+        teams = self.getGameTeams(self.fetchGameData(gameID))
         for team in teams:
             self.adjustRating(team, -self.vetoPenalty)
 
@@ -2139,7 +2134,7 @@ class League(object):
         if status is not None:
             updateWin = self.getOneArgFunc(self.updateWinners, status[1])
             updateDecline = self.getOneArgFunc(self.updateDecline, status[1])
-            {'FINISHED': self.updateWinners, 'DECLINED': self.updateDecline,
+            {'FINISHED': updateWin, 'DECLINED': updateDecline,
              'ABANDONED': self.updateVeto}.get([status[0]])(gameID)
 
     def wipeRank(self, teamID):
