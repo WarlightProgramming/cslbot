@@ -1711,7 +1711,7 @@ class League(object):
     def getWinRate(self, team):
         rating = self.getTeamRating(team)
         winRate, numGames = rating.split(self.SEP_RTG)
-        winRate = float(winRate)
+        winRate = int(winRate)
         numGames = int(numGames)
         return winRate, numGames
 

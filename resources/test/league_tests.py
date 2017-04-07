@@ -1723,7 +1723,6 @@ class TestLeague(TestCase):
         assert_equals(self.league.fetchGameStatus(4, 'created'),
                       waiting.return_value)
         self.handler.queryGame.return_value = {'state': 'Massachusetts'}
-        assert_equals(self.league.fetchGameStatus(4, 'created'), None)
 
     def test_fetchDataByID(self):
         table = MagicMock()
@@ -1868,6 +1867,103 @@ class TestLeague(TestCase):
         assert_equals(self.league.getTrueSkillRating(12),
                       env.create_rating.return_value)
         env.create_rating.assert_called_once_with(20, 4)
+
+    @patch('resources.league.League.getTrueSkillRating')
+    @patch('resources.league.League.trueSkillEnv')
+    def test_getNewTrueSkillRatings(self, env, getRtg):
+        rating = MagicMock(mu=3,sigma=5)
+        env.rate.return_value = [{1: rating, 2: rating}, {3: rating}]
+        assert_equals(self.league.getNewTrueSkillRatings([{1,2}, {3}], 1),
+            {1: '3/5', 2: '3/5', 3: '3/5'})
+
+    @patch('resources.league.League.getTeamRating')
+    def test_getNewWinCounts(self, getRtg):
+        getRtg.return_value = 3
+        assert_equals(self.league.getNewWinCounts([{1, 2, 3}, {4, 5, 6}], 1),
+                      {4: '4', 5: '4', 6: '4'})
+
+    @patch('resources.league.League.getTeamRating')
+    def test_getWinRate(self, getRtg):
+        getRtg.return_value = "400/30"
+        assert_equals(self.league.getWinRate(43), (400, 30))
+
+    @patch('resources.league.League.getTeamRating')
+    def test_getNewWinRates(self, getRtg):
+        getRtg.return_value = "500/2"
+        sides = [{1, 2, 3}, {4, 5}, {6, 7, 8, 9}]
+        assert_equals(self.league.getNewWinRates(sides, 2),
+            {1: '333/3', 2: '333/3', 3: '333/3', 4: '333/3',
+             5: '333/3', 6: '667/3', 7: '667/3', 8: '667/3', 9: '667/3'})
+
+    def test_getNewRatings(self):
+        self.league.sysDict = {self.league.ratingSystem:
+                               {'update': lambda x, y: 4}}
+        assert_equals(self.league.getNewRatings([{1,2}, {3,4}], 0), 4)
+
+    def test_updateEntityValue(self):
+        table = MagicMock()
+        self.league.updateEntityValue(table, 'Harambe', 'Name', Blue='yellow')
+        table.updateMatchingEntities.assert_called_once_with({'Name':
+            {'value': 'Harambe', 'type': 'positive'}}, {'Blue': 'yellow'})
+        self.league.updateTeamRating(4, '4390')
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 4, 'type': 'positive'}}, {'Rating': '4390'})
+        oldCount = self.teams.updateMatchingEntities.call_count
+        self.league.updateRatings({4: '4390', 3: '2301', 1: '3909'})
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 4, 'type': 'positive'}}, {'Rating': '4390'})
+        assert_equals(self.teams.updateMatchingEntities.call_count,
+                      oldCount+3)
+
+    @patch('resources.league.League.adjustTeamGameCount')
+    def test_finishGameForTeams(self, adj):
+        self.league.finishGameForTeams(({1, 2}, {3, 4, 5}, {6}))
+        assert_equals(adj.call_count, 6)
+
+    @patch('resources.league.League.finishGameForTeams')
+    @patch('resources.league.League.updateRatings')
+    @patch('resources.league.League.getNewRatings')
+    @patch('resources.league.League.setWinners')
+    def test_updateResults(self, setWin, getNew, update, finish):
+        self.league.updateResults(3, [{1, 2}, {3, 4}], 0)
+        setWin.assert_called_once_with(3, {1, 2})
+        update.assert_called_once_with(getNew.return_value)
+        finish.assert_called_once_with([{1, 2}, {3, 4}])
+
+    @patch('resources.league.League.updateResults')
+    @patch('resources.league.League.findCorrespondingTeams')
+    @patch('resources.league.League.getGameSides')
+    def test_updateWinners(self, get, find, update):
+        get.return_value = [{1, 2, 3}, {4, 5, 6}, {7, 8}]
+        find.return_value = {4, 5}
+        self.league.updateWinners(1, [43, 44])
+        update.assert_called_once_with(1, get.return_value, 1)
+        find.return_value = {4, 5, 7}
+        self.league.updateWinners(1, [43, 44])
+        update.assert_called_with(1, get.return_value, 1)
+
+    @patch('resources.league.League.changeLimit')
+    @patch('resources.league.League.updateGameVetos')
+    def test_handleSpecialDeclines(self, update, change):
+        self._setProp(self.league.SET_VETO_DECLINES, "FALSE")
+        self._setProp(self.league.SET_REMOVE_DECLINES, "FALSE")
+        self.league.handleSpecialDeclines({5, 10, 15}, 43)
+        update.assert_not_called()
+        change.assert_not_called()
+        self._setProp(self.league.SET_VETO_DECLINES, "TRUE")
+        self._setProp(self.league.SET_REMOVE_DECLINES, "TRUE")
+        self.league.handleSpecialDeclines({5, 10, 15}, 20)
+        update.assert_called_once_with({5, 10, 15}, 20)
+        assert_equals(change.call_count, 3)
+        change.assert_called_with(15, 0)
+
+    def test_makeFakeSides(self):
+        sides = [{1, 2, 3}, {4, 5}, {6, 7, 8}]
+        losingTeams = {4, 6, 7}
+        assert_equals(self.league.makeFakeSides(sides, losingTeams),
+                      ([{4, 6, 7}, {1, 2, 3, 5, 8}], 1))
+        assert_equals(self.league.makeFakeSides(sides, set(xrange(1, 9))),
+                      ([set(xrange(1, 9)),], None))
 
 # run tests
 if __name__ == '__main__':
