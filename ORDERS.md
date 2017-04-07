@@ -329,6 +329,55 @@ more.
 
 ___
 
+#### add\_template
+
+**Minimum access level**: admin
+
+**Syntax**:
+```
+add_template <leagueName> <templateName> <warlightID> <opt:settings>
+```
+(for single-scheme leagues)
+
+```
+add_template <leagueName> <templateName> <warlightID> <schemes> <opt:settings>
+```
+(for multi-scheme leagues)
+
+All templates will have their IDs automatically assigned and their status set
+to active upon their debut. If you want to add a template but not have it
+active, just use the deactivate\_template order right after the add\_template
+order. You should supply schemes as a comma-separated list, without any leading
+spaces (unless those spaces are to be interpreted as part of the scheme name).
+Note that template names should be unique.
+
+For the optional <opt:settings> parameters, you can have an indefinitely long
+list of setting names (with the prefix SET_) or bonus names (with the prefix
+OVERRIDE_) followed by the values you want to assign to those parameters. As an
+example, if I wanted to add a template 'Cincinnati Zoo 3v3' to a league called '3v3'
+(single-scheme) with the warlight ID of 49024 and I wanted to set the luck
+modifier to 5.0, disallow percentage attacks, change the number of pieces of
+the blockade card received each turn to 4, and override the 'GorillaEnclosure'
+bonus, my order would look like:
+
+```
+add_template 3v3 'Cincinnati Zoo 3v3' 49024 SET_LuckModifier 5.0
+SET_AllowPercentageAttacks False SET_BlockadeCard#MinimumPiecesPerTurn 4
+OVERRIDE_GorillaEnclosure 8
+```
+
+You can find more documentation about template settings and overriden bonuses
+in the Structure document. However, you can figure out setting names by using
+the query game API (and requesting the game settings); for settings like
+BlockadeCard that have settings of their own, simply separate them using a
+pound symbol. Overriden bonuses just need the bonus name (as used by Warlight)
+and the value you want to set them to.
+
+For now, if you want to edit any of these details after you've added a template
+using the order, you will have to modify the template data sheet yourself.
+
+___
+
 #### activate\_template
 
 **Minimum access level**: mod

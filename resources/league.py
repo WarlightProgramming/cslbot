@@ -76,6 +76,7 @@ class League(object):
     ORD_ACTIVATE_TEMPLATE = "activate_template"
     ORD_DEACTIVATE_TEMPLATE = "deactivate_template"
     ORD_QUIT_LEAGUE = "quit_league"
+    ORD_ADD_TEMPLATE = "add_template"
 
     # commands
     SET_MODS = "MODS"
@@ -264,7 +265,7 @@ class League(object):
 
     def _getMods(self):
         mods = self.fetchProperty(self.SET_MODS, set(), self.getIDGroup)
-        mods.add(self.admin)
+        mods.add(int(self.admin))
         return mods
 
     @staticmethod
@@ -1408,6 +1409,30 @@ class League(object):
                     confirms[index] = "FALSE"
             if hit: self.updateConfirms(team['ID'], confirms)
 
+    @property
+    def usedTemplates(self):
+        IDs, games = self.templateIDs, self.getExtantEntities(self.table)
+        results = set()
+        for ID in IDs: results.add(int(ID))
+        for game in games: results.add(int(game['Template']))
+        return results
+
+    def confirmAdmin(self, author, ordType):
+        if author != self.admin:
+            raise ImproperInput("%s orders are only usable by admins" %
+                                (ordType))
+
+    def addTemplate(self, order):
+        self.confirmAdmin(int(order['author']), order['type'])
+        tempName, warlightID, used, nexti = order[1:3], self.usedTemplates, 3
+        ID = (max(used) + 1) if len(used) else 0
+        tempDict = {'ID': ID, 'Name': tempName, 'WarlightID': warlightID,
+                    'Active': 'TRUE', 'Games': 0}
+        if self.multischeme: tempDict['Schemes'], nexti = order[3], 4
+        for i in xrange(nexti+1, len(order), 2):
+            tempDict[order[i-1]] = order[i]
+        self.templates.addEntity(tempDict)
+
     @runPhase
     def executeOrders(self):
         for order in self.orders:
@@ -1424,7 +1449,8 @@ class League(object):
                  self.ORD_UNDROP_TEMPLATES: self.undropTemplates,
                  self.ORD_ACTIVATE_TEMPLATE: self.activateTemplate,
                  self.ORD_DEACTIVATE_TEMPLATE: self.deactivateTemplate,
-                 self.ORD_QUIT_LEAGUE: self.quitLeague
+                 self.ORD_QUIT_LEAGUE: self.quitLeague,
+                 self.ORD_ADD_TEMPLATE: self.addTemplate
                 }[orderType](order)
             except Exception as e:
                 if len(str(e)): # exception has some description string

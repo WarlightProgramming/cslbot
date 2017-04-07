@@ -45,7 +45,7 @@ class TestLeague(TestCase):
                                                   MagicMock())
         self.settings, self.orders, self.parent = dict(), list(), MagicMock()
         self.league = League(self.games, self.teams, self.templates,
-                             self.settings, self.orders, 'ADMIN', self.parent,
+                             self.settings, self.orders, 30221, self.parent,
                              'NAME', 'THREADURL')
 
     def test_init(self):
@@ -54,7 +54,7 @@ class TestLeague(TestCase):
         assert_equals(self.league.templates, self.templates)
         assert_equals(self.league.settings, self.settings)
         assert_equals(self.league.orders, self.orders)
-        assert_equals(self.league.admin, 'ADMIN')
+        assert_equals(self.league.admin, 30221)
         assert_equals(self.league.mods, 'MODS')
         assert_equals(self.league.parent, self.parent)
         assert_equals(self.league.name, 'NAME')
