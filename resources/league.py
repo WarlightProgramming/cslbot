@@ -1592,16 +1592,11 @@ class League(object):
         return results
 
     @classmethod
-    def getSplitRating(cls, dataDict, key):
-        return tuple(int(v) for v in dataDict[key].split(cls.SEP_RTG))
-
-    @classmethod
     def unsplitRtg(cls, rating):
         return (cls.SEP_RTG).join([str(val) for val in rating])
 
     def getGlickoRating(self, teamID):
-        return tuple(int(x) for x in
-                     self.getTeamRating(teamID).split(self.SEP_RTG))
+        return self.splitRating(self.getTeamRating(teamID))
 
     def getSideGlickoRating(self, side):
         rating, dev = 0, 0
@@ -2264,10 +2259,10 @@ class League(object):
 
     @classmethod
     def splitRating(cls, rating):
-        return [int(x) for x in rating.split(self.SEP_RTG)]
+        return tuple(int(x) for x in rating.split(cls.SEP_RTG))
 
     def updateSums(self, rating, sums):
-        splitRtg = self.getSplitRating(rating)
+        splitRtg = self.splitRating(rating)
         for i in xrange(len(splitRtg)):
             if i >= len(sums): sums.append(splitRtg[i])
             else: sums[i] += splitRtg[i]

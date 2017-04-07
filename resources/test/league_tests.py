@@ -1773,10 +1773,6 @@ class TestLeague(TestCase):
         assert_equals(self.league.getNewEloRatings([{1, 2}, {3, 4}, {5,}], 0),
                 {1: '15', 2: '15', 3: '15', 4: '15', 5: '15'})
 
-    def test_getSplitRating(self):
-        assert_equals(self.league.getSplitRating({'key': '4/53/43'}, 'key'),
-                      (4, 53, 43))
-
     def test_unsplitRtg(self):
         assert_equals(self.league.unsplitRtg((43, 44, 56, 90)), '43/44/56/90')
 
@@ -1799,6 +1795,13 @@ class TestLeague(TestCase):
             [side2.rd,], [1,])
         side2.update_player.assert_called_once_with([side1.rating,],
             [side1.rd,], [0,])
+
+    @patch('resources.league.Player')
+    @patch('resources.league.League.getSideGlickoRating')
+    def test_makeGlickoPlayersFromSides(self, getSideRtg, plyr):
+        getSideRtg.return_value = (10, 42)
+        assert_equals(self.league.makeGlickoPlayersFromSides([{1,2,3}, {4,5}]),
+            [plyr.return_value,] * 2)
 
 # run tests
 if __name__ == '__main__':
