@@ -1722,6 +1722,8 @@ class TestLeague(TestCase):
         self.handler.queryGame.return_value = {'state': 'WaitingForPlayers'}
         assert_equals(self.league.fetchGameStatus(4, 'created'),
                       waiting.return_value)
+        self.handler.queryGame.return_value = {'state': 'Massachusetts'}
+        assert_equals(self.league.fetchGameStatus(4, 'created'), None)
 
     def test_fetchDataByID(self):
         table = MagicMock()
