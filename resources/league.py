@@ -1411,7 +1411,7 @@ class League(object):
 
     @property
     def usedTemplates(self):
-        IDs, games = self.templateIDs, self.getExtantEntities(self.table)
+        IDs, games = self.templateIDs, self.getExtantEntities(self.games)
         results = set()
         for ID in IDs: results.add(int(ID))
         for game in games: results.add(int(game['Template']))
@@ -1424,13 +1424,14 @@ class League(object):
 
     def addTemplate(self, order):
         self.confirmAdmin(int(order['author']), order['type'])
-        tempName, warlightID, used, nexti = order[1:3], self.usedTemplates, 3
+        used, nexti, orders = self.usedTemplates, 3, order['orders']
+        tempName, warlightID = orders[1:3]
         ID = (max(used) + 1) if len(used) else 0
         tempDict = {'ID': ID, 'Name': tempName, 'WarlightID': warlightID,
                     'Active': 'TRUE', 'Games': 0}
-        if self.multischeme: tempDict['Schemes'], nexti = order[3], 4
-        for i in xrange(nexti+1, len(order), 2):
-            tempDict[order[i-1]] = order[i]
+        if self.multischeme: tempDict['Schemes'], nexti = orders[3], 4
+        for i in xrange(nexti+1, len(orders), 2):
+            tempDict[orders[i-1]] = orders[i]
         self.templates.addEntity(tempDict)
 
     @runPhase
@@ -1654,14 +1655,14 @@ class League(object):
 
     def updateGlickoMatchups(self, sides, players, winningSide):
         for i in xrange(len(sides)):
-            for j in xrange(len(sides[(i+1):])):
+            for j in xrange(i+1, len(sides)):
                 self.updateGlickoMatchup(players, i, j, winningSide)
 
     def getGlickoResultsFromPlayers(self, sides, players):
         results = dict()
         for i in xrange(len(sides)):
             newRtg, newRd = players[i].rating, players[i].rd
-            oldRtg, oldRd = self.getSideGlickoRating(side)
+            oldRtg, oldRd = self.getSideGlickoRating(sides[i])
             rtgDiff, rdDiff = float(newRtg - oldRtg), float(newRd - oldRd)
             rtgDiff = (rtgDiff / ((len(sides) - 1) * self.sideSize))
             rdDiff /= (rdDiff / ((len(sides) - 1) * self.sideSize))
@@ -1669,7 +1670,7 @@ class League(object):
                 origRtg, origRd = self.getGlickoRating(team)
                 rtg = origRtg + int(round(rtgDiff))
                 rd = origRd + int(round(rdDiff))
-                results[team] = (self.SEP_RTG).join([str(rtg), str(rd)])
+                results[team] = self.unsplitRtg([str(rtg), str(rd)])
         return results
 
     def getNewGlickoRatings(self, sides, winningSide):
@@ -1678,7 +1679,7 @@ class League(object):
         return self.getGlickoResultsFromPlayers(sides, players)
 
     def getTrueSkillRating(self, teamID):
-        mu, sigma = self.getTeamRating(teamID).split(self.SEP_RTG)
+        mu, sigma = self.splitRating(self.getTeamRating(teamID))
         return self.trueSkillEnv.create_rating(mu, sigma)
 
     def getNewTrueSkillRatings(self, sides, winningSide):

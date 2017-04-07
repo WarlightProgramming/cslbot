@@ -1581,8 +1581,39 @@ class TestLeague(TestCase):
         assert_equals(update.call_count, 2)
         update.assert_called_with(3, ['FALSE', 'FALSE'])
 
+    def test_addTemplate(self):
+        self.league.admin = 43
+        self.games.findEntities.return_value = [{'Template': '12'},
+            {'Template': '43'}, {'Template': '91'}]
+        self.templates.findEntities.return_value = range(39)
+        assert_equals(self.league.usedTemplates,
+                      set(range(39)).union([12, 43, 91]))
+        order = {'type': 'add_template', 'author': 41,
+                 'orders': ['1v1', 'Template Name', '4902494',
+                            'SET_Setting#Sub', 'Val', 'OVERRIDE_Mexico', 3]}
+        self._setProp(self.league.SET_GAME_SIZE, "3")
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, "4")
+        assert_false(self.league.multischeme)
+        assert_raises(ImproperInput, self.league.addTemplate, order)
+        order['author'] = 43
+        self.league.addTemplate(order)
+        self.templates.addEntity.assert_called_with({'ID': 92,
+            'Name': 'Template Name', 'WarlightID': '4902494',
+            'Active': 'TRUE', 'Games': 0, 'SET_Setting#Sub': 'Val',
+            'OVERRIDE_Mexico': 3})
+        self._setProp(self.league.SET_GAME_SIZE, "5,7,6")
+        assert_true(self.league.multischeme)
+        order['orders'] = ['1v1', 'Template Name', '4902494', '1v1,2v2,3v3',
+                           'SET_Setting#Sub', 'Val', 'OVERRIDE_Mexico', 3]
+        self.league.addTemplate(order)
+        self.templates.addEntity.assert_called_with({'ID': 92,
+            'Name': 'Template Name', 'WarlightID': '4902494',
+            'Active': 'TRUE', 'Games': 0, 'SET_Setting#Sub': 'Val',
+            'OVERRIDE_Mexico': 3, 'Schemes': '1v1,2v2,3v3'})
+
     @patch('resources.league.League.updateRanks')
     @patch('resources.league.League.logFailedOrder')
+    @patch('resources.league.League.addTemplate')
     @patch('resources.league.League.quitLeague')
     @patch('resources.league.League.deactivateTemplate')
     @patch('resources.league.League.activateTemplate')
@@ -1596,8 +1627,8 @@ class TestLeague(TestCase):
     def test_executeOrders(self, addTeam, confirmTeam, unconfirmTeam,
                            setLimit, removeTeam, dropTemplates,
                            undropTemplates, activateTemplate,
-                           deactivateTemplate, quitLeague, logFailedOrder,
-                           updateRanks):
+                           deactivateTemplate, quitLeague, addTemplate,
+                           logFailedOrder, updateRanks):
         existingLogs = self.parent.log.call_count
         self.league.orders = [{'type': 'ADD_team'}, {'type': 'add_team'},
             {'type': 'confirm_team'}, {'type': 'CONFIRM_TEAM'},
@@ -1606,7 +1637,7 @@ class TestLeague(TestCase):
             {'type': 'drop_template'}, {'type': 'undrop_template'},
             {'type': 'undrop_templates'}, {'type': 'activate_template'},
             {'type': 'deactivate_template'}, {'type': 'quit_league'},
-            {'type': 'subtract_team'}]
+            {'type': 'subtract_team'}, {'type': 'add_template'}]
         self.league.executeOrders()
         updateRanks.assert_called_once_with()
         assert_equals(self.parent.log.call_count, existingLogs+1)
@@ -1802,6 +1833,39 @@ class TestLeague(TestCase):
         getSideRtg.return_value = (10, 42)
         assert_equals(self.league.makeGlickoPlayersFromSides([{1,2,3}, {4,5}]),
             [plyr.return_value,] * 2)
+
+    @patch('resources.league.League.updateGlickoMatchup')
+    def test_updateGlickoMatchups(self, update):
+        self.league.updateGlickoMatchups([{1,2}, {3,4}, {5,6}], 'playaz', 0)
+        assert_equals(update.call_count, 3)
+        update.assert_called_with('playaz', 1, 2, 0)
+
+    @patch('resources.league.League.getGlickoRating')
+    @patch('resources.league.League.getSideGlickoRating')
+    def test_getGlickoResultsFromPlayers(self, getSide, getRtg):
+        getSide.return_value = 12, 1
+        getRtg.return_value = 3, 2
+        player = MagicMock()
+        player.rating, player.rd = 13, 4
+        players = [player,] * 3
+        sides = [{1,2}, {3,4}, {5,6}]
+        assert_equals(self.league.getGlickoResultsFromPlayers(sides, players),
+                {1: '4/4', 2: '4/4', 3: '4/4', 4: '4/4', 5: '4/4', 6: '4/4'})
+
+    @patch('resources.league.League.getGlickoResultsFromPlayers')
+    @patch('resources.league.League.updateGlickoMatchups')
+    @patch('resources.league.League.makeGlickoPlayersFromSides')
+    def test_getNewGlickoRatings(self, make, update, getFrom):
+        assert_equals(self.league.getNewGlickoRatings('sides', 'winningSide'),
+                      getFrom.return_value)
+
+    @patch('resources.league.League.trueSkillEnv')
+    @patch('resources.league.League.getTeamRating')
+    def test_getTrueSkillRating(self, getRtg, env):
+        getRtg.return_value = "20/4"
+        assert_equals(self.league.getTrueSkillRating(12),
+                      env.create_rating.return_value)
+        env.create_rating.assert_called_once_with(20, 4)
 
 # run tests
 if __name__ == '__main__':
