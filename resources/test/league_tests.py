@@ -2078,9 +2078,89 @@ class TestLeague(TestCase):
                       ['Bob','+','Bob','+','Bob'])
         assert_equals(self.league.getNameInfo('1,2,3', 2),
                       ['..', '+', '..', '+', '..'])
+        self.teams.findEntities.return_value = [{'Name': 'longnamethisoneis'},]
+        assert_equals(self.league.getNameInfo('1,2,3', 10),
+                      ['longnam...', '+', 'longnam...', '+', 'longnam...'])
+        self.teams.findEntities.return_value = [{'Name': 'longnam...lkj'},]
+        assert_equals(self.league.getNameInfo('1,2,3', 10),
+                      ['longnam...', '+', 'longnam...', '+', 'longnam...'])
 
-    def test_getGameName(self):
-        pass
+    @patch('resources.league.League.getTeamName')
+    def test_getGameName(self, getTeamName):
+        self._setProp(self.league.SET_LEAGUE_ACRONYM, "MDL")
+        gameData = {'Sides': '1,2/3,4'}
+        getTeamName.return_value = "Name"
+        assert_equals(self.league.getGameName(gameData),
+                      'MDL | Name+Name vs Name+Name')
+        getTeamName.return_value = "N..."
+        assert_equals(self.league.getGameName(gameData, 28),
+                      'MDL | N...+N... vs N...+N...')
+
+    def test_getPrettyRating(self):
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
+        assert_equals(self.league.prettifyRating("4904"), "4904")
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_GLICKO)
+        assert_equals(self.league.prettifyRating("490/4309"), "490")
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_TRUESKILL)
+        assert_equals(self.league.prettifyRating("49/3"), "40")
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_WINCOUNT)
+        assert_equals(self.league.prettifyRating("23"), "23")
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_WINRATE)
+        assert_equals(self.league.prettifyRating("493/94"), "493")
+        self.teams.findEntities.return_value = [{'Rating': '48/44'},]
+        assert_equals(self.league.getPrettyRating('team'), "48")
+        assert_equals(self.league.getOfficialRating('team'), 48)
+
+    def test_getTeamRank(self):
+        self.teams.findEntities.return_value = [{'Rank': '12'},]
+        assert_equals(self.league.getTeamRank('team'), 12)
+
+    def test_sideInfo(self):
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
+        gameData = {'Sides': '14,43/17,81'}
+        self.teams.findEntities.return_value = [{'Rating': '1399', 'Rank': '9',
+            'Name': 'Test Team'},]
+        assert_equals(self.league.sideInfo(gameData),
+                      ("Test Team, with rank 9 and rating 1399\n" * 4)[:-1])
+        self.teams.findEntities.return_value = [{'Rating': '1400', 'Rank': '',
+            'Name': 'Test Team'},]
+        assert_equals(self.league.sideInfo(gameData),
+                      ("Test Team, not ranked with rating 1400\n" * 4)[:-1])
+
+    def test_makeInterface(self):
+        assert_equals(self.league.makeInterface(
+            'https://www.warlight.net/Forum/48'),
+            'https://www.warlight.net/Forum/48')
+        assert_equals(self.league.makeInterface('404309'),
+            'https://www.warlight.net/Forum/404309')
+        assert_equals(self.league.makeInterface('interface.com'),
+            'interface.com')
+
+    def test_getTemplateName(self):
+        gameData = {'Template': '43'}
+        self.templates.findEntities.return_value = [{'ID': '43', 'Name': 'A'},]
+        assert_equals(self.league.getTemplateName(gameData), 'A')
+
+    @patch('resources.league.PlayerParser')
+    def test_adminName(self, parser):
+        parser.return_value.name = "name"
+        assert_equals(self.league.adminName, "name")
+
+    @patch('resources.league.League.getTemplateName')
+    @patch('resources.league.League.sideInfo')
+    def test_processMessage(self, sideInfo, tempName):
+        self._setProp(self.league.SET_SUPER_NAME, 'Cluster Name')
+        self._setProp(self.league.SET_VETO_LIMIT, '9')
+        self._setProp(self.league.SET_URL, 'League URL')
+        self.league.name, self.league.thread = "Name", "Thread"
+        sideInfo.return_value = "SIDE INFO"
+        tempName.return_value = 'TEMP NAME'
+        gameData = {'Vetos': 9}
+        assert_not_equal(self.league.processMessage(self.league.DEFAULT_MSG,
+            gameData), self.league.DEFAULT_MSG)
+        assert_not_equal(self.league.getGameMessage(gameData),
+            self.league.leagueMessage)
+        assert_true(len(self.league.getGameMessage(gameData)) <= 2048)
 
 # run tests
 if __name__ == '__main__':

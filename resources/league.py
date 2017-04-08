@@ -19,6 +19,7 @@ from wl_api import APIHandler
 from wl_api.wl_api import APIError
 from sheetDB import errors as SheetErrors
 from constants import API_CREDS
+from utility import isInteger
 
 # decorators
 
@@ -235,7 +236,7 @@ class League(object):
     def makeRateSysDict(self):
         self.sysDict = {self.RATE_ELO: {'default': self.defaultElo,
                                         'update': self.getNewEloRatings,
-                                        'prettify': self.getPrettyEloRating,
+                                        'prettify': str,
                                         'parity': self.getEloParity},
                         self.RATE_GLICKO: {'default': self.defaultGlicko,
                                            'update': self.getNewGlickoRatings,
@@ -1904,9 +1905,7 @@ class League(object):
         if maxLen is not None and len(val) > maxLen:
             replace = replace[:maxLen]
             repLen = len(replace)
-            if val[maxLen-repLen:maxLen] != replace:
-                return val[:maxLen-repLen] + replace
-            return val[:maxLen]
+            return val[:maxLen-repLen] + replace
         return val
 
     def getGameName(self, gameData, maxLen=50):
@@ -1919,10 +1918,6 @@ class League(object):
         name = self.fitToMaxLen((start + "".join(nameData[1:])),
                                 maxLen)
         return name
-
-    @staticmethod
-    def getPrettyEloRating(rating):
-        return rating
 
     def getPrettyGlickoRating(self, rating):
         return rating.split(self.SEP_RTG)[0]
@@ -1950,9 +1945,8 @@ class League(object):
         sides = gameData['Sides']
         for side in sides.split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
-                infoData.append('\n')
-                teamRating = self.getPrettyRating(team)
                 teamData = self.fetchTeamData(team)
+                teamRating = self.prettifyRating(teamData['Rating'])
                 teamRank = teamData['Rank']
                 teamName = teamData['Name']
                 if teamRank is '':
@@ -1960,10 +1954,10 @@ class League(object):
                                                                  teamRating)
                 else:
                     teamStr = "%s, with rank %d and rating %s" % (teamName,
-                                                                  teamRank,
-                                                                  teamRating)
+                                                                 int(teamRank),
+                                                                 teamRating)
                 infoData.append(teamStr)
-        infoStr = "".join(infoData[1:])
+        infoStr = "\n".join(infoData)
         return infoStr
 
     @staticmethod
@@ -1972,7 +1966,7 @@ class League(object):
         return ('https://www.warlight.net/Forum/' + str(thread))
 
     def makeInterface(self, interface):
-        if (isinstance(interface, str) and
+        if (isinstance(interface, str) and not isInteger(interface) and
             'warlight.net/Forum/' not in interface):
             return interface
         return self.makeThread(interface)
@@ -2006,7 +2000,7 @@ class League(object):
     def getGameMessage(self, gameData):
         MAX_MESSAGE_LEN = 2048
         msg = self.processMessage(self.leagueMessage, gameData)
-        return msg[:MAX_MESSAGE_LEN]
+        return self.fitToMaxLen(msg, MAX_MESSAGE_LEN)
 
     def getAllGameTeams(self, gameData):
         allTeams = list()
