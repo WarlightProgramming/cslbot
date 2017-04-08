@@ -156,6 +156,7 @@ class League(object):
     SET_MAX_VACATION = "MAX VACATION LENGTH" # days
     SET_AUTODROP = "AUTODROP"
     SET_TEAMLESS = "TEAMLESS"
+    SET_NAME_LENGTH = "MAX TEAM NAME LENGTH"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -378,6 +379,10 @@ class League(object):
     @property
     def clusterName(self):
         return self.fetchProperty(self.SET_SUPER_NAME, self.name)
+
+    @property
+    def nameLength(self):
+        return self.fetchProperty(self.SET_NAME_LENGTH, None, int)
 
     @property
     def leagueMessage(self):
@@ -1192,9 +1197,14 @@ class League(object):
         forcedDrops, members, confirms = self.checkAuthorAndMembers(order)
         return self.checkLimit(gameLimit), forcedDrops, members, confirms
 
+    def getTeamNameFromOrder(self, order):
+        teamName = order['orders'][1]
+        if len(teamName) > self.nameLength: return teamName[:self.nameLength]
+        return teamName
+
     def addTeam(self, order):
         self.checkJoins()
-        teamName = order['orders'][1]
+        teamName = self.getTeamNameFromOrder(order)
         gameLimit, forcedDrops, members, confirms = self.checkEligible(order)
         temp = sorted(zip(members, confirms))
         members, confirms = [x for (x,y) in temp], [y for (x,y) in temp]
@@ -1265,8 +1275,7 @@ class League(object):
         if not self.allowRemoval:
             raise ImproperInput("Team removal has been disabled.")
         matchingTeam = self.fetchMatchingTeam(order)[0]
-        self.teams.removeMatchingEntities({'ID':
-                                           matchingTeam.get('ID')})
+        self.removeEntity(self.teams, matchingTeam['ID'])
 
     def checkLimitChange(self, teamID, newLimit):
         if int(newLimit) <= 0: return
@@ -1539,22 +1548,23 @@ class League(object):
     @classmethod
     def getGameTeams(cls, gameData):
         results = list()
-        for side in gameData[0]['Sides'].split(cls.SEP_SIDES):
+        for side in gameData['Sides'].split(cls.SEP_SIDES):
             results += side.split(cls.SEP_TEAMS)
         return results
 
-    def findCorrespondingTeams(self, gameID, players):
+    def findTeamsFromData(self, gameData, players):
         players, results = set([str(player) for player in players]), set()
-        gameData = self.games.findEntities({'ID': {'value': gameID,
-                                                   'type': 'positive'}})
         gameTeams = self.getGameTeams(gameData)
         for team in gameTeams:
-            teamData = self.teams.findEntities({'ID': {'value': team,
-                                                       'type': 'positive'}})
+            teamData = self.fetchTeamData(team)
             playerData = set(teamData['Players'].split(self.SEP_PLYR))
             if len(playerData.intersection(players)) > 0:
                 results.add(team)
         return results
+
+    def findCorrespondingTeams(self, gameID, players):
+        gameData = self.fetchGameData(gameID)
+        return self.findTeamsFromData(gameData, players)
 
     def setWinners(self, gameID, winningSide):
         sortedWinners = sorted(team for team in winningSide)
@@ -1763,8 +1773,9 @@ class League(object):
         self.finishGameForTeams(sides)
 
     def updateWinners(self, gameID, winners):
-        sides = self.getGameSides(gameID)
-        winningTeams = self.findCorrespondingTeams(gameID, winners)
+        gameData = self.fetchGameData(gameID)
+        sides = self.getGameSidesFromData(gameData)
+        winningTeams = self.findTeamsFromData(gameData, winners)
         for i in xrange(len(sides)):
             side = sides[i]
             if len(side & winningTeams) > 0:
@@ -1791,47 +1802,46 @@ class League(object):
         return results, winningSide
 
     def updateDecline(self, gameID, decliners):
-        sides = self.getGameSides(gameID)
-        losingTeams = self.findCorrespondingTeams(gameID, decliners)
-        template = str(self.fetchGameData(gameID)['Template'])
+        gameData = self.fetchGameData(gameID)
+        sides = self.getGameSidesFromData(gameData)
+        losingTeams = self.findTeamsFromData(gameData, decliners)
+        template = str(gameData['Template'])
         self.handleSpecialDeclines(losingTeams, template)
         sides, winningSide = self.makeFakeSides(sides, losingTeams)
-        if winningSide == None: self.updateVeto(gameID)
+        if winningSide is None: self.updateVeto(gameID)
         self.updateResults(gameID, sides, winningSide)
 
+    @staticmethod
+    def removeEntity(table, ID, identifier='ID'):
+        table.removeMatchingEntities({identifier: {'value': ID,
+                                                   'type': 'positive'}})
+
     def deleteGame(self, gameID, gameData):
-        self.games.removeMatchingEntities({'ID': {'value': gameID,
-                                                  'type': 'positive'}})
+        self.removeEntity(self.games, gameID)
         sides = self.getGameSidesFromData(gameData)
         self.finishGameForTeams(sides)
 
-    def getGameSidesFromData(self, gameData):
+    @classmethod
+    def getGameSidesFromData(cls, gameData):
         results = list()
-        sides = gameData['Sides'].split(self.SEP_SIDES)
+        sides = gameData['Sides'].split(cls.SEP_SIDES)
         for side in sides:
-            results.append(set(side.split(self.SEP_TEAMS)))
+            results.append(set(side.split(cls.SEP_TEAMS)))
         return results
 
     def getGameSides(self, gameID):
         gameData = self.fetchGameData(gameID)
         return self.getGameSidesFromData(gameData)
 
-    def getTeamRating(self, team, getDefault=True):
-        searchDict = {'ID': {'value': team, 'type': 'positive'}}
-        if len(searchDict) < 1:
-            if getDefault:
-                return self.defaultRating
-            raise NonexistentItem("Nonexistent team: %s" % (str(team)))
-        return self.teams.findEntities(searchDict)[0]['Rating']
+    def getTeamRating(self, team):
+        teamData = self.fetchTeamData(team)
+        return teamData['Rating']
 
     def adjustRating(self, team, adjustment):
-        oldRating = self.getTeamRating(team)
-        newRating = oldRating.split(self.SEP_RTG)
-        newRating[0] = str(int(newRating[0]) + adjustment)
-        newRating = (self.SEP_RTG).join(newRating)
-        self.teams.updateMatchingEntities({'ID': {'value': team,
-                                                  'type': 'positive'}},
-                                          {'Rating': newRating})
+        rating = list(self.splitRating(self.getTeamRating(team)))
+        rating[0] += adjustment
+        self.updateEntityValue(self.teams, team,
+                               Rating=self.unsplitRtg(rating))
 
     def penalizeVeto(self, gameID):
         teams = self.getGameTeams(self.fetchGameData(gameID))
@@ -1848,10 +1858,11 @@ class League(object):
 
     def setGameTemplate(self, gameID, tempID):
         self.updateEntityValue(self.games, gameID, Template=tempID)
+        self.adjustTemplateGameCount(tempID, 1)
 
     def getTeamPlayers(self, team):
         teamData = self.fetchTeamData(team)
-        return [int(p) for p in teamData.split(self.SEP_PLYR)]
+        return [int(p) for p in teamData['Players'].split(self.SEP_PLYR)]
 
     def getSidePlayers(self, side):
         players = list()
@@ -1863,23 +1874,25 @@ class League(object):
         teams = list()
         sides = gameData['Sides'].split(self.SEP_SIDES)
         for side in sides:
-            teams.append(tuple(self.getSidePlayers(side)))
+            sideTeams = side.split(self.SEP_TEAMS)
+            teams.append(tuple(self.getSidePlayers(sideTeams)))
         return teams
 
     def getTeamName(self, teamID):
         teamData = self.fetchTeamData(teamID)
         return teamData['Name']
 
-    def getNameInfo(self, side):
-        nameInfo, MAX_NAME_LEN = list(), 10
+    def getNameInfo(self, side, maxLen=10):
+        nameInfo = list()
         for team in side.split(self.SEP_TEAMS):
             nameInfo.append("+")
-            teamName = self.fitToMaxLen(self.getTeamName(team), MAX_NAME_LEN)
+            teamName = self.fitToMaxLen(self.getTeamName(team), maxLen)
             nameInfo.append(teamName)
-        return nameInfo
+        return nameInfo[1:]
 
     @staticmethod
     def fitToMaxLen(val, maxLen, replace="..."):
+        replace = replace[:maxLen]
         repLen = len(replace)
         if len(val) > maxLen:
             if val[maxLen-repLen:maxLen] != replace:
@@ -1887,16 +1900,15 @@ class League(object):
             return val[:maxLen]
         return val
 
-    def getGameName(self, gameData):
-        MAX_DISPLAY_LEN = 50
+    def getGameName(self, gameData, maxLen=50):
         start = self.leagueAcronym + " | "
         nameData = list()
         for side in gameData['Sides'].split(self.SEP_SIDES):
             nameData.append(" vs ")
             nameInfo = self.getNameInfo(side)
-            nameData += nameInfo[1:]
+            nameData += nameInfo
         name = self.fitToMaxLen((start + "".join(nameData[1:])),
-                                MAX_DISPLAY_LEN)
+                                maxLen)
         return name
 
     @staticmethod
@@ -2061,8 +2073,7 @@ class League(object):
             sides = gameData['Sides']
             self.parent.log("Failed to make game with %s on %d because of %s" %
                             (sides, temp, str(e)), self.name)
-            self.games.removeMatchingEntities({'ID': {'value': gameID,
-                                                      'type': 'positive'}})
+            self.removeEntity(self.games, gameID)
 
     def makeGame(self, gameID):
         gameData = self.createGame(gameID)

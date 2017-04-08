@@ -1118,6 +1118,22 @@ ___
 
 ___
 
+### MAX TEAM NAME LENGTH
+
+The maximum length that a team name can have.
+
+*Sample Args*: "5", "10", "20"
+
+*Default*: (no limit)
+
+If you want to avoid having messy team names in game names, you should set this
+to a specific value. Team names are automatically truncated if they're longer
+than 10 characters (in game names) and game names are automatically truncated
+if they're longer than 50 characters. So for best results, set this to 10 or
+lower.
+
+___
+
 #### MIN LIMIT
 
 The minimum value a team can set for how many games it wants to be in at once.
