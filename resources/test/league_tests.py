@@ -113,7 +113,7 @@ class TestLeague(TestCase):
         self.league.checkTeamSheet()
         expectedConstraints = {'ID': 'UNIQUE INT',
                                'Name': 'UNIQUE STRING',
-                               'Players': 'STRING',
+                               'Players': 'UNIQUE STRING',
                                'Confirmations': 'STRING',
                                'Rating': 'STRING',
                                'Vetos': 'STRING',
@@ -288,6 +288,10 @@ class TestLeague(TestCase):
 
     def test_nameLength(self):
         self._intPropertyTest("nameLength", self.league.SET_NAME_LENGTH, None)
+
+    def test_constrainName(self):
+        self._boolPropertyTest("constrainName", self.league.SET_CONSTRAIN_NAME,
+                               True)
 
     def test_leagueMessage(self):
         self._strPropertyTest("leagueMessage", self.league.SET_LEAGUE_MESSAGE,
@@ -1278,15 +1282,6 @@ class TestLeague(TestCase):
         self.league.mods = set()
         assert_raises(ImproperInput, self.league.checkAuthorAndMembers, order)
 
-    def test_checkTeamDuplication(self):
-        self.teams.findEntities.return_value = [
-                                          {'Name': 'A', 'Players': '1,2,3'},
-                                          {'Name': '402v', 'Players': '4,9'}]
-        assert_equals(None, self.league.checkTeamDuplication('4,5', 'B'))
-        assert_equals(None, self.league.checkTeamDuplication('6,7,8', 'D 4'))
-        assert_raises(ImproperInput, self.league.checkTeamDuplication, '4,9',
-                      'F')
-
     @patch('resources.league.League.checkLimit')
     @patch('resources.league.League.checkAuthorAndMembers')
     def test_checkEligible(self, check, limCheck):
@@ -1299,16 +1294,18 @@ class TestLeague(TestCase):
     def test_getTeamNameFromOrder(self):
         order = {'orders': ['', 'TeamName',]}
         self._setProp(self.league.SET_NAME_LENGTH, 5)
+        self._setProp(self.league.SET_CONSTRAIN_NAME, "FALSE")
+        assert_raises(ImproperInput, self.league.getTeamNameFromOrder, order)
+        self._setProp(self.league.SET_CONSTRAIN_NAME, "TRUE")
         assert_equals(self.league.getTeamNameFromOrder(order), "TeamN")
         self._setProp(self.league.SET_NAME_LENGTH, "")
         assert_equals(self.league.getTeamNameFromOrder(order), "TeamName")
         self._setProp(self.league.SET_NAME_LENGTH, 8)
         assert_equals(self.league.getTeamNameFromOrder(order), "TeamName")
 
-    @patch('resources.league.League.checkTeamDuplication')
     @patch('resources.league.League.checkEligible')
     @patch('resources.league.League.checkJoins')
-    def test_addTeam(self, joinCheck, eligible, checkDup):
+    def test_addTeam(self, joinCheck, eligible):
         order = {'author': 1403, 'type': 'add_team',
                  'orders': ['1v1', 'name', '3', '41', '4042', '3905', '12']}
         eligible.return_value = (5, "", [41, 4042, 3905, 12], [False,
@@ -1623,8 +1620,17 @@ class TestLeague(TestCase):
             'Active': 'TRUE', 'Games': 0, 'SET_Setting#Sub': 'Val',
             'OVERRIDE_Mexico': 3, 'Schemes': '1v1,2v2,3v3'})
 
+    @patch('resources.league.League.fetchMatchingTeam')
+    def test_renameTeam(self, fetch):
+        fetch.return_value = [{'ID': 3},]
+        self._setProp(self.league.SET_NAME_LENGTH, None)
+        self.league.renameTeam({'orders': ['1v1', 'Old Name', 'New Name']})
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 3, 'type': 'positive'}}, {'Name': 'New Name'})
+
     @patch('resources.league.League.updateRanks')
     @patch('resources.league.League.logFailedOrder')
+    @patch('resources.league.League.renameTeam')
     @patch('resources.league.League.addTemplate')
     @patch('resources.league.League.quitLeague')
     @patch('resources.league.League.deactivateTemplate')
@@ -1640,7 +1646,7 @@ class TestLeague(TestCase):
                            setLimit, removeTeam, dropTemplates,
                            undropTemplates, activateTemplate,
                            deactivateTemplate, quitLeague, addTemplate,
-                           logFailedOrder, updateRanks):
+                           renameTeam, logFailedOrder, updateRanks):
         existingLogs = self.parent.log.call_count
         self.league.orders = [{'type': 'ADD_team'}, {'type': 'add_team'},
             {'type': 'confirm_team'}, {'type': 'CONFIRM_TEAM'},
@@ -1649,7 +1655,8 @@ class TestLeague(TestCase):
             {'type': 'drop_template'}, {'type': 'undrop_template'},
             {'type': 'undrop_templates'}, {'type': 'activate_template'},
             {'type': 'deactivate_template'}, {'type': 'quit_league'},
-            {'type': 'subtract_team'}, {'type': 'add_template'}]
+            {'type': 'subtract_team'}, {'type': 'add_template'},
+            {'type': 'rename_team'}]
         self.league.executeOrders()
         updateRanks.assert_called_once_with()
         assert_equals(self.parent.log.call_count, existingLogs+1)

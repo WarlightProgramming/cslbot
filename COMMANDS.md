@@ -1118,7 +1118,7 @@ ___
 
 ___
 
-### MAX TEAM NAME LENGTH
+#### MAX TEAM NAME LENGTH
 
 The maximum length that a team name can have.
 
@@ -1126,11 +1126,26 @@ The maximum length that a team name can have.
 
 *Default*: (no limit)
 
-If you want to avoid having messy team names in game names, you should set this
-to a specific value. Team names are automatically truncated if they're longer
-than 10 characters (in game names) and game names are automatically truncated
-if they're longer than 50 characters. So for best results, set this to 10 or
-lower.
+Warlight game names/titles are truncated at 50 characters, so sometimes your
+game name will look messy if the team names are too long. If you want to keep
+things neat and pretty, set this to a specific value- usually something like
+10.
+
+___
+
+#### CONSTRAIN NAME LENGTH
+
+Whether to (silently) constrain team name lengths if they're too long, instead
+of raising an error and rejecting the order.
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: True
+
+If you set this to True, team names that are too long will just be accepted but
+truncated to shorter lengths- so someone who adds a team with too long a name
+(like "too long a name") might end up playing on a team with a shorter name
+("too long a n", for example) and not understand why.
 
 ___
 

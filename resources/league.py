@@ -77,6 +77,7 @@ class League(object):
     ORD_DEACTIVATE_TEMPLATE = "deactivate_template"
     ORD_QUIT_LEAGUE = "quit_league"
     ORD_ADD_TEMPLATE = "add_template"
+    ORD_RENAME_TEAM = "rename_team"
 
     # commands
     SET_MODS = "MODS"
@@ -157,6 +158,7 @@ class League(object):
     SET_AUTODROP = "AUTODROP"
     SET_TEAMLESS = "TEAMLESS"
     SET_NAME_LENGTH = "MAX TEAM NAME LENGTH"
+    SET_CONSTRAIN_NAME = "CONSTRAIN NAME LENGTH"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -293,7 +295,7 @@ class League(object):
     def checkTeamSheet(self):
         teamConstraints = {'ID': 'UNIQUE INT',
                            'Name': 'UNIQUE STRING',
-                           'Players': 'STRING',
+                           'Players': 'UNIQUE STRING',
                            'Confirmations': 'STRING',
                            'Rating': 'STRING',
                            'Vetos': 'STRING',
@@ -383,6 +385,11 @@ class League(object):
     @property
     def nameLength(self):
         return self.fetchProperty(self.SET_NAME_LENGTH, None, int)
+
+    @property
+    def constrainName(self):
+        return self.fetchProperty(self.SET_CONSTRAIN_NAME, True,
+                                  self.getBoolProperty)
 
     @property
     def leagueMessage(self):
@@ -1186,20 +1193,16 @@ class League(object):
         confirms = [(m == author) for m in members]
         return self.checkTeam(members), members, confirms
 
-    def checkTeamDuplication(self, members, teamName):
-        if members in self.teamPlayers:
-            orig = self.teamPlayers[members]
-            raise ImproperInput("Team %s is a duplicate of existing team %s" %
-                                (teamName, orig))
-
     def checkEligible(self, order):
         gameLimit = int(order['orders'][2])
         forcedDrops, members, confirms = self.checkAuthorAndMembers(order)
         return self.checkLimit(gameLimit), forcedDrops, members, confirms
 
-    def getTeamNameFromOrder(self, order):
-        teamName = order['orders'][1]
-        if len(teamName) > self.nameLength: return teamName[:self.nameLength]
+    def getTeamNameFromOrder(self, order, index=1):
+        teamName = order['orders'][index]
+        if len(teamName) > self.nameLength:
+            if self.constrainName: return teamName[:self.nameLength]
+            raise ImproperInput("Team name %s is too long" % (teamName))
         return teamName
 
     def addTeam(self, order):
@@ -1210,7 +1213,6 @@ class League(object):
         members, confirms = [x for (x,y) in temp], [y for (x,y) in temp]
         members = (self.SEP_PLYR).join([str(m) for m in members])
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
-        self.checkTeamDuplication(members, teamName)
         self.teams.addEntity({'ID': self.currentID,
                               'Name': teamName,
                               'Limit': gameLimit,
@@ -1443,6 +1445,12 @@ class League(object):
             tempDict[orders[i-1]] = orders[i]
         self.templates.addEntity(tempDict)
 
+    def renameTeam(self, order):
+        matchingTeam = self.fetchMatchingTeam(order)[0]
+        newName = self.getTeamNameFromOrder(order, 2)
+        self.updateEntityValue(self.teams, matchingTeam['ID'], identifier='ID',
+                               Name=newName)
+
     @runPhase
     def executeOrders(self):
         for order in self.orders:
@@ -1460,7 +1468,8 @@ class League(object):
                  self.ORD_ACTIVATE_TEMPLATE: self.activateTemplate,
                  self.ORD_DEACTIVATE_TEMPLATE: self.deactivateTemplate,
                  self.ORD_QUIT_LEAGUE: self.quitLeague,
-                 self.ORD_ADD_TEMPLATE: self.addTemplate
+                 self.ORD_ADD_TEMPLATE: self.addTemplate,
+                 self.ORD_RENAME_TEAM: self.renameTeam
                 }[orderType](order)
             except Exception as e:
                 if len(str(e)): # exception has some description string
@@ -1882,7 +1891,7 @@ class League(object):
         teamData = self.fetchTeamData(teamID)
         return teamData['Name']
 
-    def getNameInfo(self, side, maxLen=10):
+    def getNameInfo(self, side, maxLen=None):
         nameInfo = list()
         for team in side.split(self.SEP_TEAMS):
             nameInfo.append("+")
@@ -1892,9 +1901,9 @@ class League(object):
 
     @staticmethod
     def fitToMaxLen(val, maxLen, replace="..."):
-        replace = replace[:maxLen]
-        repLen = len(replace)
-        if len(val) > maxLen:
+        if maxLen is not None and len(val) > maxLen:
+            replace = replace[:maxLen]
+            repLen = len(replace)
             if val[maxLen-repLen:maxLen] != replace:
                 return val[:maxLen-repLen] + replace
             return val[:maxLen]
@@ -1905,7 +1914,7 @@ class League(object):
         nameData = list()
         for side in gameData['Sides'].split(self.SEP_SIDES):
             nameData.append(" vs ")
-            nameInfo = self.getNameInfo(side)
+            nameInfo = self.getNameInfo(side, self.nameLength)
             nameData += nameInfo
         name = self.fitToMaxLen((start + "".join(nameData[1:])),
                                 maxLen)

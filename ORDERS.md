@@ -256,6 +256,21 @@ any team.
 
 ___
 
+#### rename\_team
+
+**Minimum access level**: player (on the affected team)
+
+**Syntax**:
+```
+rename_team <leagueName> <teamName> <newName>
+```
+
+This simply changes the name of an existing team to a new name. Like with
+[set\_limit](#set-limit), players making this order must be on the team
+affected by it unless they are mods or admins.
+
+___
+
 #### remove\_team
 
 **Minimum access level**: player (on the affected team)
