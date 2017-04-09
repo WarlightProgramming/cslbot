@@ -1991,21 +1991,34 @@ class League(object):
         parser = PlayerParser(self.admin)
         return str(parser.name)
 
-    def processMessage(self, message, gameData):
-        replaceDict = {'_LEAGUE_NAME': self.name,
-                       self.SET_SUPER_NAME: self.clusterName,
-                       self.SET_URL: self.leagueUrl,
-                       self.SET_VETO_LIMIT: self.vetoLimit,
-                       '_VETOS': gameData['Vetos'],
-                       '_LEAGUE_INTERFACE': self.makeInterface(self.thread),
-                       '_GAME_SIDES': self.sideInfo(gameData),
-                       '_TEMPLATENAME': self.getTemplateName(gameData),
-                       '_LEAGUE_ADMIN': self.adminName}
+    @staticmethod
+    def adaptMessage(message, replaceDict):
         for val in replaceDict:
             checkStr = "{{%s}}" % val
             if checkStr in message:
-                message = message.replace(checkStr, str(replaceDict[val]))
+                message = message.replace(checkStr, str(replaceDict[val]()))
         return message
+
+    def processMessage(self, message, gameData):
+        leagueName = lambda: self.name
+        clusterName = lambda: self.clusterName
+        leagueUrl = lambda: self.leagueUrl
+        vetoLimit = lambda: self.vetoLimit
+        vetos = lambda: gameData['Vetos']
+        makeInterface = lambda: self.makeInterface(self.thread)
+        sideInfo = lambda: self.sideInfo(gameData)
+        tempName = lambda: self.getTemplateName(gameData)
+        adminName = lambda: self.adminName
+        replaceDict = {'_LEAGUE_NAME': leagueName,
+                       self.SET_SUPER_NAME: clusterName,
+                       self.SET_URL: leagueUrl,
+                       self.SET_VETO_LIMIT: vetoLimit,
+                       '_VETOS': vetos,
+                       '_LEAGUE_INTERFACE': makeInterface,
+                       '_GAME_SIDES': sideInfo,
+                       '_TEMPLATENAME': tempName,
+                       '_LEAGUE_ADMIN': adminName}
+        return self.adaptMessage(message, replaceDict)
 
     def getGameMessage(self, gameData):
         MAX_MESSAGE_LEN = 2048
@@ -2042,12 +2055,14 @@ class League(object):
 
     def addTempSetting(self, settings, head, data):
         head = head[len(self.KW_TEMPSETTING):]
-        if (head.count(self.SEP_TEMPSET) == 1):
-            head, name = head.split(self.SEP_TEMPSET)
-            if head not in settings:
-                settings[head] = dict()
-            settings[head][name] = data
-        else: settings[head] = data
+        head, target = head.split(self.SEP_TEMPSET), settings
+        for i in xrange(len(head)):
+            elem = head[i]
+            if i == len(head) - 1:
+                target[elem] = data
+            else:
+                target[elem] = dict()
+                target = target[elem]
 
     def addTempOverride(self, overrides, head, data):
         head = head[len(self.KW_TEMPOVERRIDE):]
@@ -2068,7 +2083,7 @@ class League(object):
         gameData = self.fetchGameData(gameID)
         temp = int(gameData['Template'])
         tempID, tempSettings, overrides = self.getTempSettings(temp)
-        teams = assembleTeams(gameData)
+        teams = self.assembleTeams(gameData)
         try:
             wlID = self.handler.createGame(tempID, self.getGameName(gameData),
                        teams, settingsDict=tempSettings,
@@ -2077,15 +2092,13 @@ class League(object):
                        message=self.getGameMessage(gameData))
             self.adjustTemplateGameCount(temp, 1)
             createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
-            self.games.updateMatchingEntities({'ID': {'value': gameID,
-                                                      'type': 'positive'}},
-                                              {'WarlightID': wlID,
-                                               'Created': createdStr})
+            self.updateEntityValue(self.games, gameID, WarlightID=wlID,
+                                   Created=createdStr)
             return gameData
         except Exception as e:
             sides = gameData['Sides']
             self.parent.log("Failed to make game with %s on %d because of %s" %
-                            (sides, temp, str(e)), self.name)
+                            (sides, temp, repr(e)), self.name)
             self.removeEntity(self.games, gameID)
 
     def makeGame(self, gameID):

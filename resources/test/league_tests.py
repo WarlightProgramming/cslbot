@@ -2153,6 +2153,7 @@ class TestLeague(TestCase):
     @patch('resources.league.League.getTemplateName')
     @patch('resources.league.League.sideInfo')
     def test_processMessage(self, sideInfo, tempName, parser):
+        assert_equals(self.league.adaptMessage("MESSAGE", dict()), "MESSAGE")
         parser.return_value.name = "name"
         self._setProp(self.league.SET_SUPER_NAME, 'Cluster Name')
         self._setProp(self.league.SET_VETO_LIMIT, '9')
@@ -2160,12 +2161,76 @@ class TestLeague(TestCase):
         self.league.name, self.league.thread = "Name", "Thread"
         sideInfo.return_value = "SIDE INFO"
         tempName.return_value = 'TEMP NAME'
-        gameData = {'Vetos': 9}
+        gameData = {'Vetos': 9, 'Template': '49'}
         assert_not_equal(self.league.processMessage(self.league.DEFAULT_MSG,
             gameData), self.league.DEFAULT_MSG)
         assert_not_equal(self.league.getGameMessage(gameData),
             self.league.leagueMessage)
         assert_true(len(self.league.getGameMessage(gameData)) <= 2048)
+        assert_equals(self.league.processMessage("{{_TEMPLATENAME}}",
+            gameData), "TEMP NAME")
+
+    def test_updateHistories(self):
+        gameData = {'Sides': '12,33/2390,49,448'}
+        assert_equals(self.league.getAllGameTeams(gameData), ['12','33','2390',
+                      '49','448'])
+        assert_equals(self.league.getOtherTeams([1, 2, 3], 3), [1, 2])
+        self.teams.findEntities.return_value = [{'History': '1,2,3,4'},]
+        self.league.updateTeamHistory(1, ['9','8'])
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 1, 'type': 'positive'}}, {'History': '1,2,3,4,9,8'})
+        self.teams.findEntities.return_value = [{'History': ''},]
+        self.league.updateHistories(gameData)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': '448', 'type': 'positive'}},
+            {'History': '12,33,2390,49'})
+
+    def test_strBeginsWith(self):
+        assert_true(self.league.strBeginsWith("lasdkjfvnalkjalk", "lasdkjfv"))
+        assert_false(self.league.strBeginsWith("$9837vlkjas;dfkja", "$9837 "))
+
+    def test_addTempSetting(self):
+        settings = dict()
+        self.league.addTempSetting(settings, "SET_A", "B")
+        assert_equals(settings["A"], "B")
+        self.league.addTempSetting(settings, "SET_C#D#E#F#G", "K")
+        assert_equals(settings, {'A':'B','C':{'D':{'E':{'F':{'G':'K'}}}}})
+
+    def test_addTempOverride(self):
+        overrides = list()
+        self.league.addTempOverride(overrides,
+                                    'OVERRIDE_Random Bonus', '430904')
+        assert_equals(overrides, [('Random Bonus', 430904),])
+
+    def test_getTempSettings(self):
+        self.templates.findEntities.return_value = [{'ID': 'tempID',
+            'WarlightID': 4904, 'SET_A#B': '490', 'SET_SETTING': 314,
+            'OVERRIDE_Bonus': 12},]
+        assert_equals(self.league.getTempSettings('tempID'), (4904,
+            {'A': {'B': '490'}, 'SETTING': 314}, [('Bonus', 12),]))
+
+    @patch('resources.league.datetime')
+    @patch('resources.league.PlayerParser')
+    def test_createGame(self, parser, datetime):
+        self.games.findEntities.return_value = [{'Template': '43',
+            'Sides': '1/2', 'Vetos': '8'},]
+        self.templates.findEntities.return_value = [{'ID': 'tempID',
+            'WarlightID': 4904, 'SET_A#B': '490', 'SET_SETTING': 314,
+            'OVERRIDE_Bonus': 12, 'Games': '8', 'Name': 'TempName'},]
+        self.teams.findEntities.return_value = [{'ID': '1', 'Players':
+            '3022124041', 'Name': 'Team Name', 'Rating': '4034', 'Rank': '1'},]
+        self.handler.createGame.return_value = "WLID"
+        datetime.strftime.return_value = "strftime"
+        self.league.createGame('gameID')
+        self.games.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 'gameID', 'type': 'positive'}}, {'WarlightID': 'WLID',
+            'Created': 'strftime'})
+        self.handler.createGame.side_effect = IOError
+        self.league.createGame('gameID')
+        failStr = "Failed to make game with 1/2 on 43 because of IOError()"
+        self.parent.log.assert_called_with(failStr, self.league.name)
+        self.games.removeMatchingEntities.assert_called_with({'ID':
+            {'value': 'gameID', 'type': 'positive'}})
 
 # run tests
 if __name__ == '__main__':
