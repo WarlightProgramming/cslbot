@@ -5,7 +5,6 @@
 
 # imports
 import datetime
-from resources.errors import *
 from resources.utility import *
 from resources.order_parser import OrderParser
 from resources.league import League
