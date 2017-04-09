@@ -7,6 +7,7 @@
 import copy
 import json
 import math
+import time
 import random
 from decimal import Decimal
 from pair import group_teams, assign_templates
@@ -18,8 +19,8 @@ from wl_parsers import PlayerParser
 from wl_api import APIHandler
 from wl_api.wl_api import APIError
 from sheetDB import errors as SheetErrors
-from constants import API_CREDS
-from utility import isInteger
+from resources.constants import API_CREDS
+from resources.utility import isInteger
 
 # decorators
 
@@ -208,7 +209,6 @@ class League(object):
     SEP_TEAMS = ","
     SEP_SIDES = "/"
     SEP_RTG = "/"
-    SEP_TEMP = ","
     SEP_VETOCT = "."
     SEP_VETOS = "/"
     SEP_DROPS = "/"
@@ -250,7 +250,7 @@ class League(object):
                                               self.getPrettyTrueSkillRating,
                                               'parity':
                                               self.getTrueSkillParity},
-                        self.RATE_WINCOUNT: {'default': self.defaultWinCount,
+                        self.RATE_WINCOUNT: {'default': str(0),
                                              'update': self.getNewWinCounts,
                                              'prettify': str,
                                              'parity': self.getWinCountParity},
@@ -503,10 +503,16 @@ class League(object):
         """maximum vacation length (in days) to remain on ladder"""
         return self.fetchProperty(self.SET_MAX_VACATION, None, int)
 
+    @staticmethod
+    def timeZoneDiff():
+        offset = (time.timezone if (time.localtime().tm_isdst == 0)
+                  else time.altzone)
+        return timedelta(hours=(offset/3600))
+
     def meetsVacation(self, player):
         maxVac, secsPerDay = self.maxVacation, 86400
         if maxVac is None: return True
-        timeZoneDiff = timedelta(hours=5)
+        timeZoneDiff = self.timeZoneDiff()
         ID, formatStr = int(player.ID), '%m/%d/%Y %H:%M:%S'
         validationData = self.handler.validateToken(ID)
         if 'onVacationUntil' not in validationData: return True
@@ -608,10 +614,6 @@ class League(object):
     @property
     def defaultTrueSkill(self):
         return self.unsplitRtg([self.trueSkillMu, self.trueSkillSigma])
-
-    @property
-    def defaultWinCount(self):
-        return str(0)
 
     @property
     def defaultWinRate(self):
@@ -757,7 +759,7 @@ class League(object):
     @classmethod
     def getDateTimeProperty(cls, val):
         if isinstance(val, datetime): return val
-        return datetime.strptime(val, cls.TIMEFORMAT)
+        return (datetime.strptime(val, cls.TIMEFORMAT) - cls.timeZoneDiff())
 
     @property
     def joinPeriodStart(self):
@@ -1597,7 +1599,7 @@ class League(object):
 
     def getEloDiff(self, rating, events, count):
         oldRating = rating
-        rating = self.eloEnv.Rate(oldRating, events)
+        rating = self.eloEnv.rate(oldRating, events)
         diff = int(round((rating - oldRating) / count))
         return diff
 
@@ -1836,8 +1838,8 @@ class League(object):
         table.removeMatchingEntities({identifier: {'value': ID,
                                                    'type': 'positive'}})
 
-    def deleteGame(self, gameID, gameData):
-        self.removeEntity(self.games, gameID)
+    def deleteGame(self, gameData):
+        self.removeEntity(self.games, gameData['ID'])
         sides = self.getGameSidesFromData(gameData)
         self.finishGameForTeams(sides)
 
@@ -1863,8 +1865,8 @@ class League(object):
         self.updateEntityValue(self.teams, team,
                                Rating=self.unsplitRtg(rating))
 
-    def penalizeVeto(self, gameID):
-        teams = self.getGameTeams(self.fetchGameData(gameID))
+    def penalizeVeto(self, gameData):
+        teams = self.getGameTeams(gameData)
         for team in teams:
             self.adjustRating(team, -self.vetoPenalty)
 
@@ -1876,9 +1878,10 @@ class League(object):
                                Vetos=vetoCount, Template='')
         self.adjustTemplateGameCount(gameData['Template'], -1)
 
-    def setGameTemplate(self, gameID, tempID):
-        self.updateEntityValue(self.games, gameID, Template=tempID)
+    def setGameTemplate(self, gameData, tempID):
+        self.updateEntityValue(self.games, gameData['ID'], Template=tempID)
         self.adjustTemplateGameCount(tempID, 1)
+        gameData['Template'] = tempID
 
     def getTeamPlayers(self, team):
         teamData = self.fetchTeamData(team)
@@ -2079,8 +2082,7 @@ class League(object):
                 self.addTempOverride(overrides, head, tempData[head])
         return template, settingsDict, overrides
 
-    def createGame(self, gameID):
-        gameData = self.fetchGameData(gameID)
+    def createGameFromData(self, gameData):
         temp = int(gameData['Template'])
         tempID, tempSettings, overrides = self.getTempSettings(temp)
         teams = self.assembleTeams(gameData)
@@ -2092,44 +2094,51 @@ class League(object):
                        message=self.getGameMessage(gameData))
             self.adjustTemplateGameCount(temp, 1)
             createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
-            self.updateEntityValue(self.games, gameID, WarlightID=wlID,
+            self.updateEntityValue(self.games, gameData['ID'], WarlightID=wlID,
                                    Created=createdStr)
             return gameData
         except Exception as e:
             sides = gameData['Sides']
             self.parent.log("Failed to make game with %s on %d because of %s" %
                             (sides, temp, repr(e)), self.name)
-            self.removeEntity(self.games, gameID)
+            self.removeEntity(self.games, gameData['ID'])
+
+    def createGame(self, gameID):
+        gameData = self.fetchGameData(gameID)
+        self.createGameFromData(gameData)
 
     def makeGame(self, gameID):
         gameData = self.createGame(gameID)
+        if gameData is None: return
         for side in gameData['Sides'].split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
                 self.adjustTeamGameCount(team, 1)
         self.updateHistories(gameData)
 
     def getGameVetos(self, gameData):
-        vetos = set([v for v in gameData['Vetoed'].split(self.SEP_TEMP)])
-        for side in gameData['sides'].split(self.SEP_SIDES):
+        vetos = set([v for v in gameData['Vetoed'].split(self.SEP_VETOS)])
+        for side in gameData['Sides'].split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
                 teamData = self.fetchTeamData(team)
                 self.updateConflicts(teamData, vetos)
         return set(int(v) for v in vetos)
 
-    def updateTemplate(self, gameID, gameData):
+    def updateTemplate(self, gameData):
         vetos, ranks, i = self.getGameVetos(gameData), self.templateRanks, 0
         while (i < len(ranks) and ranks[i][0] in vetos): i += 1
         if i < len(ranks):
             newTemp = ranks[i][0]
-            self.setGameTemplate(gameID, newTemp)
-            self.createGame(gameID)
+            self.setGameTemplate(gameData, newTemp)
+            self.createGameFromData(gameData)
         else:
-            self.deleteGame(gameID, gameData)
+            self.deleteGame(gameData)
 
-    def getVetoDict(self, vetos):
+    @classmethod
+    def getVetoDict(cls, vetos):
         results = dict()
-        for temp in vetos.split(self.SEP_VETOS):
-            tempID, vetoCt = temp.split(self.SEP_VETOCT)
+        for temp in vetos.split(cls.SEP_VETOS):
+            if len(temp) == 0: continue
+            tempID, vetoCt = temp.split(cls.SEP_VETOCT)
             results[tempID] = int(vetoCt)
         return results
 
@@ -2144,7 +2153,9 @@ class League(object):
 
     def updateVetoCt(self, oldVetos, template, adj):
         vetoDict = self.getVetoDict(oldVetos)
-        vetoDict[str(template)] += int(adj)
+        template = str(template)
+        if template not in vetoDict: vetoDict[template] = 0
+        vetoDict[template] += int(adj)
         return self.packageVetoDict(vetoDict)
 
     def updateTeamVetos(self, team, template, adj):
@@ -2153,10 +2164,8 @@ class League(object):
         if str(template) not in oldVetos:
             newVetos = (oldVetos + self.SEP_VETOS + str(template) +
                         self.SEP_VETOCT + str(adj))
-            if len(oldVetos) == 0:
-                newVetos = newVetos[1:]
-        else:
-            newVetos = self.updateVetoCt(oldVetos, template, adj)
+            if len(oldVetos) == 0: newVetos = newVetos[1:]
+        else: newVetos = self.updateVetoCt(oldVetos, template, adj)
         self.updateEntityValue(self.teams, team, Vetos=newVetos)
 
     def updateGameVetos(self, teams, template):
@@ -2175,13 +2184,13 @@ class League(object):
     def updateVeto(self, gameID):
         gameData = self.fetchGameData(gameID)
         if int(gameData['Vetos']) >= self.vetoLimit:
-            self.penalizeVeto(gameID)
-            self.deleteGame(gameID, gameData)
+            self.penalizeVeto(gameData)
+            self.deleteGame(gameData)
         else:
             template = gameData['Template']
             self.vetoCurrentTemplate(gameData)
             self.updateGameVetos(self.getTeams(gameData), template)
-            self.updateTemplate(gameID, gameData)
+            self.updateTemplate(gameData)
 
     @staticmethod
     def getOneArgFunc(fun, *args):
@@ -2194,7 +2203,7 @@ class League(object):
             updateWin = self.getOneArgFunc(self.updateWinners, status[1])
             updateDecline = self.getOneArgFunc(self.updateDecline, status[1])
             {'FINISHED': updateWin, 'DECLINED': updateDecline,
-             'ABANDONED': self.updateVeto}.get([status[0]])(gameID)
+             'ABANDONED': self.updateVeto}.get(status[0])(gameID)
 
     def wipeRank(self, teamID):
         self.updateEntityValue(self.teams, teamID, Rank='')
@@ -2241,7 +2250,7 @@ class League(object):
 
     def checkExcess(self, playerCount):
         if self.teamLimit is None: return False
-        return (playerCount > teamLimit)
+        return (playerCount > self.teamLimit)
 
     def changeLimit(self, teamID, limit):
         limit = int(limit)
@@ -2299,7 +2308,7 @@ class League(object):
             self.changeLimit(teamID, 0)
             return True
 
-    def validatePlayer(self, playerCounts, players):
+    def validatePlayer(self, playerCounts, players, team):
         for player in players:
             if player not in playerCounts: continue
             if playerCounts[player] >= self.teamLimit:
@@ -2317,7 +2326,7 @@ class League(object):
             if ('FALSE' in confirmations or limit < 1): continue
             players = allTeams[team]['Players'].split(self.SEP_PLYR)
             dropped = self.validateTeam(team['ID'], players)
-            dropped = self.validatePlayer(playerCounts, players)
+            dropped = self.validatePlayer(playerCounts, players, team)
             if not dropped:
                 self.updatePlayerCounts(playerCounts, players)
 
@@ -2460,7 +2469,7 @@ class League(object):
         else:
             score_fn = lambda *args: self.getParityScore(args)
         groups = group_teams(groupingDict, score_fn=score_fn,
-                             game_size=self.groupSize)
+                             game_size=groupSize)
         return {groupSep.join([str(x) for x in group])
                 for group in groups}
 

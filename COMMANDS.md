@@ -329,8 +329,8 @@ The start time for the league.
 
 No games will be created before the LEAGUE START. The date supplied must be in
 a "YYYY-mm-dd HH:MM:SS" format with zero-padding. Even after the league start,
-if the league is not [**ACTIVE**](#active), games will not be created. This is in the
-timezone of the machine running the cslbot instance (US Eastern).
+if the league is not [**ACTIVE**](#active), games will not be created. This is
+in the GMT/UTC time zone.
 
 ___
 
@@ -1059,10 +1059,11 @@ The time at which join requests can be accepted.
 
 *Default*: no restriction
 
+Supply a UTC/GMT time for this value for best results.
+
 This has to follow a particular time format- "YYYY-mm-dd HH:MM:SS" (with
 zero-padding). Keep in mind this is based on when an add\_team command is
-*processed*, not when it's made, and that it's also dependent on the timezone
-of the machine on which cslbot runs (US Eastern). When in doubt, leave some
+*processed*, not when it's made. When in doubt, leave some
 room or just use [**ALLOW JOINING**](#allow-joining) and a formula.
 
 ___

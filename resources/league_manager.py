@@ -5,11 +5,11 @@
 
 # imports
 import datetime
-from errors import *
-from utility import *
-from order_parser import OrderParser
+from resources.errors import *
+from resources.utility import *
+from resources.order_parser import OrderParser
+from resources.league import League
 from wl_parsers import ForumThreadParser, PlayerParser
-from league import League
 
 # constants
 

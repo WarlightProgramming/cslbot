@@ -2,6 +2,7 @@
 ## automated tests for the League class
 
 # imports
+import time
 from unittest import TestCase, main as run_tests
 from nose.tools import *
 from mock import patch, MagicMock
@@ -250,9 +251,13 @@ class TestLeague(TestCase):
         self._propertyTest(prop, label, default, values)
 
     def _dateTimePropertyTest(self, prop, label, default):
+        offset = (time.timezone if (time.localtime().tm_isdst == 0)
+                  else time.altzone)
+        timeDiff = timedelta(hours = (offset/3600))
         values = {"0": default, "": default, "none": default,
                   "2010-4-20": default,
-                  "2010-04-20 10:30:50": datetime(2010, 4, 20, 10, 30, 50)}
+                  "2010-04-20 10:30:50":
+                  datetime(2010, 4, 20, 10, 30, 50) - timeDiff}
         self._propertyTest(prop, label, default, values)
 
     def _IDGroupPropertyTest(self, prop, label, default):
@@ -540,7 +545,8 @@ class TestLeague(TestCase):
         assert_equals(self.league.defaultTrueSkill, expVal)
 
     def test_defaultWinCount(self):
-        assert_equals(self.league.defaultWinCount, str(0))
+        assert_equals(self.league.sysDict[self.league.RATE_WINCOUNT]['default'],
+                      "0")
 
     def test_defaultWinRate(self):
         assert_equals(self.league.defaultWinRate, "0" + self.league.SEP_RTG +
@@ -722,13 +728,16 @@ class TestLeague(TestCase):
         assert_false(self.league.leagueFull)
 
     def test_getDateTimeProperty(self):
+        timeDiff = timedelta(hours=((time.timezone if
+                                     (time.localtime().tm_isdst == 0) else
+                                     time.altzone)/3600))
         getProp = self.league.getDateTimeProperty
         assert_equals(getProp(datetime(2000, 4, 20, 10, 30, 50)),
                       datetime(2000, 4, 20, 10, 30, 50))
         assert_equals(getProp(datetime.strftime(datetime(2000, 4, 20, 10, 30,
                                                          50),
                                                 self.league.TIMEFORMAT)),
-                      datetime(2000, 4, 20, 10, 30, 50))
+                      datetime(2000, 4, 20, 10, 30, 50) - timeDiff)
 
     def test_joinPeriodStart(self):
         self._dateTimePropertyTest('joinPeriodStart',
@@ -1789,7 +1798,7 @@ class TestLeague(TestCase):
 
     @patch('resources.league.League.eloEnv')
     def test_getEloDiff(self, eloEnv):
-        eloEnv.Rate.return_value = 30
+        eloEnv.rate.return_value = 30
         assert_equals(self.league.getEloDiff(40, xrange(5), 5), -2)
 
     @patch('resources.league.League.getTeamRating')
@@ -2012,11 +2021,11 @@ class TestLeague(TestCase):
     @patch('resources.league.League.finishGameForTeams')
     @patch('resources.league.League.getGameSidesFromData')
     def test_deleteGame(self, get, finish):
-        self.league.deleteGame('ID', 'data')
+        self.league.deleteGame({'ID': 'ID'})
         self.games.removeMatchingEntities.assert_called_with({'ID':
                                                     {'value': 'ID',
                                                      'type': 'positive'}})
-        get.assert_called_once_with('data')
+        get.assert_called_once_with({'ID': 'ID'})
         finish.assert_called_once_with(get.return_value)
 
     @patch('resources.league.League.fetchGameData')
@@ -2040,7 +2049,7 @@ class TestLeague(TestCase):
         self.games.findEntities.return_value = [{'Sides': '1,2,3/4,5/6,7,8'},]
         oldCount = self.teams.updateMatchingEntities.call_count
         self._setProp(self.league.SET_VETO_PENALTY, -9)
-        self.league.penalizeVeto('gameID')
+        self.league.penalizeVeto(self.games.findEntities.return_value[0])
         assert_equals(self.teams.updateMatchingEntities.call_count, oldCount+8)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': '8', 'type': 'positive'}}, {'Rating': '42/43/490'})
@@ -2058,11 +2067,13 @@ class TestLeague(TestCase):
 
     def test_setGameTemplate(self):
         self.templates.findEntities.return_value = [{'Games': '43'},]
-        self.league.setGameTemplate('gameID', 'tempID')
+        gameData = {'ID': 'gameID'}
+        self.league.setGameTemplate(gameData, 'tempID')
         self.games.updateMatchingEntities.assert_called_with({'ID':
             {'value': 'gameID', 'type': 'positive'}}, {'Template': 'tempID'})
         self.templates.updateMatchingEntities.assert_called_with({'ID':
             {'value': 'tempID', 'type': 'positive'}}, {'Games': '44'})
+        assert_equals(gameData['Template'], 'tempID')
 
     def test_getTeamPlayers(self):
         self.teams.findEntities.return_value = [{'Players': '30,221,240,41'},]
@@ -2213,7 +2224,7 @@ class TestLeague(TestCase):
     @patch('resources.league.PlayerParser')
     def test_createGame(self, parser, datetime):
         self.games.findEntities.return_value = [{'Template': '43',
-            'Sides': '1/2', 'Vetos': '8'},]
+            'Sides': '1/2', 'Vetos': '8', 'ID': 'gameID'},]
         self.templates.findEntities.return_value = [{'ID': 'tempID',
             'WarlightID': 4904, 'SET_A#B': '490', 'SET_SETTING': 314,
             'OVERRIDE_Bonus': 12, 'Games': '8', 'Name': 'TempName'},]
@@ -2231,6 +2242,123 @@ class TestLeague(TestCase):
         self.parent.log.assert_called_with(failStr, self.league.name)
         self.games.removeMatchingEntities.assert_called_with({'ID':
             {'value': 'gameID', 'type': 'positive'}})
+
+    @patch('resources.league.League.createGame')
+    @patch('resources.league.League.updateHistories')
+    def test_makeGame(self, update, create):
+        oldCount = self.teams.updateMatchingEntities.call_count
+        create.return_value = None
+        self.league.makeGame('gameID')
+        assert_equals(self.teams.updateMatchingEntities.call_count, oldCount)
+        update.assert_not_called()
+        create.return_value = {'Sides': '1,4/8,49/3/6,9'}
+        self.teams.findEntities.return_value = [{'History': '',
+            'Count': '4', 'Finished': '400'},]
+        self.league.makeGame('gameID')
+        assert_equals(self.teams.updateMatchingEntities.call_count,
+                      oldCount+7)
+        update.assert_called_once_with(create.return_value)
+
+    @patch('resources.league.League.updateConflicts')
+    def test_getGameVetos(self, update):
+        gameData = {'Vetoed': '1/5/9/390', 'Sides': '1,4,9/12,16'}
+        self.teams.findEntities.return_value = [{},]
+        assert_equals(self.league.getGameVetos(gameData), {1,5,9,390})
+        assert_equals(update.call_count, 5)
+
+    @patch('resources.league.League.deleteGame')
+    @patch('resources.league.League.createGameFromData')
+    @patch('resources.league.League.getGameVetos')
+    def test_updateTemplate(self, vetos, create, delete):
+        vetos.return_value = {1, 33, 2, 48}
+        self.templates.findEntities.return_value = [{'ID': 1, 'Games': 12},
+            {'ID': 2, 'Games': 23}, {'ID': 3, 'Games': 2}, {'ID': 33,
+             'Games': 4}]
+        self.league.updateTemplate({'ID': 43})
+        create.assert_called_once_with({'ID': 43, 'Template': 3})
+        vetos.return_value = {1, 2, 3, 33}
+        self.league.updateTemplate({'ID': 43})
+        delete.assert_called_once_with({'ID': 43})
+        self.templates.findEntities.return_value = list()
+        self.league.updateTemplate({'ID': 44})
+        delete.assert_called_with({'ID': 44})
+
+    def test_vetoDict(self):
+        assert_equals(self.league.getVetoDict('4.3/389.1/39.4/8.1/9.33'),
+                      {'4': 3, '389': 1, '39': 4, '8': 1, '9': 33})
+        self.teams.findEntities.return_value = [{'Vetos': ''},]
+        assert_equals(self.league.getTeamVetoDict('teamID'), dict())
+        assert_equals(self.league.packageVetoDict({5: 4, 3: 2, 1: 1}),
+                      '1.1/3.2/5.4')
+        assert_equals(self.league.updateVetoCt('3.2/5.4', '1', 3),
+                      '1.3/3.2/5.4')
+        assert_equals(self.league.updateVetoCt('1.3/3.2/5.4', '5', 5),
+                      '1.3/3.2/5.9')
+        self.league.updateTeamVetos('teamID', '4', 1)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 'teamID', 'type': 'positive'}}, {'Vetos': '4.1'})
+        self.teams.findEntities.return_value = [{'Vetos': '1.2/3.4/4.1'},]
+        self.league.updateTeamVetos('teamID', '3', 3)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 'teamID', 'type': 'positive'}}, {'Vetos': '1.2/3.7/4.1'})
+        self.league.updateTeamVetos('teamID', '490', 1)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 'teamID', 'type': 'positive'}},
+            {'Vetos': '1.2/3.4/4.1/490.1'})
+        self.league.updateGameVetos({1, 2, 3}, '317')
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 3, 'type': 'positive'}},
+            {'Vetos': '1.2/3.4/4.1/317.1'})
+
+    def test_getTeams(self):
+        gameData = {'Sides': '67,30/105,495,384/2,5,81'}
+        assert_equals(self.league.getTeams(gameData),
+            {67, 30, 105, 495, 384, 2, 5, 81})
+
+    @patch('resources.league.League.updateTemplate')
+    @patch('resources.league.League.updateGameVetos')
+    @patch('resources.league.League.vetoCurrentTemplate')
+    @patch('resources.league.League.deleteGame')
+    @patch('resources.league.League.penalizeVeto')
+    def test_updateVeto(self, penalize, delete, veto, gameVetos, temp):
+        gameData = {'Vetos': '9', 'Template': 3, 'Sides': '1/2'}
+        self.games.findEntities.return_value = [gameData,]
+        self._setProp(self.league.SET_VETO_LIMIT, 10)
+        self.league.updateVeto('gameID')
+        veto.assert_called_once_with(gameData)
+        gameVetos.assert_called_once_with({1, 2}, 3)
+        temp.assert_called_once_with(gameData)
+        self._setProp(self.league.SET_VETO_LIMIT, 4)
+        self.league.updateVeto('gameID')
+        penalize.assert_called_once_with(gameData)
+        delete.assert_called_once_with(gameData)
+
+    def test_getOneArgFunc(self):
+        func = lambda x, y, z, k: x * y * z / k
+        oneArg = self.league.getOneArgFunc(func, 4, 48, 3)
+        assert_equals(oneArg(3), (3 * 4 * 48 / 3))
+        assert_equals(oneArg(2309505095), (2309505095 * 4 * 48 / 3))
+
+    @patch('resources.league.League.updateVeto')
+    @patch('resources.league.League.updateDecline')
+    @patch('resources.league.League.updateWinners')
+    @patch('resources.league.League.fetchGameStatus')
+    def test_updateGame(self, fetch, win, decline, veto):
+        createdTime = '2491-04-20 19:39:39'
+        fetch.return_value = None
+        self.league.updateGame("wlID", "gameID", createdTime)
+        win.assert_not_called()
+        decline.assert_not_called()
+        veto.assert_not_called()
+        fetch.return_value = ('FINISHED', set())
+        self.league.updateGame("wlID", "gameID", createdTime)
+        fetch.return_value = ('DECLINED', set())
+        self.league.updateGame("wlID", "gameID", createdTime)
+        fetch.return_value = ('ABANDONED', None)
+        self.league.updateGame("wlID", "gameID", createdTime)
+        win.assert_called_once_with("gameID", set())
+        decline.assert_called_once_with("gameID", set())
+        veto.assert_called_once_with("gameID")
 
 # run tests
 if __name__ == '__main__':
