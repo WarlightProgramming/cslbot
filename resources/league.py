@@ -1595,10 +1595,10 @@ class League(object):
         self.updateEntityValue(self.templates, templateID,
                                Games=str(oldCount+adj))
 
-    def getEloDiff(self, rating, events):
+    def getEloDiff(self, rating, events, count):
         oldRating = rating
         rating = self.eloEnv.Rate(oldRating, events)
-        diff = int(round((rating - oldRating) / len(events)))
+        diff = int(round((rating - oldRating) / count))
         return diff
 
     def getEloRating(self, teamID):
@@ -1617,20 +1617,21 @@ class League(object):
             other = sides[j]
             otherRtg = self.getSideEloRating(other)
             event = self.getEvent(i, j, winningSide)
-            opps.append((event, otherRtg))
+            if event is not None: opps.append((event, otherRtg))
         return opps
 
     @staticmethod
     def applyEloDiff(side, diff, diffs):
-        for team in side: diffs[team] = diff
+        for team in side:
+            diffs[team] = Decimal(diff) / Decimal(len(side))
 
     def getNewEloRatings(self, sides, winningSide):
-        results, diffs = dict(), dict()
+        results, diffs, count = dict(), dict(), len(sides) - 1
         for i in xrange(len(sides)):
             side = sides[i]
             sideRtg = self.getSideEloRating(side)
             opps = self.makeOpps(sides, i, winningSide)
-            diff = self.getEloDiff(sideRtg, opps)
+            diff = self.getEloDiff(sideRtg, opps, count)
             self.applyEloDiff(side, diff, diffs)
         for side in sides:
             for team in side:
@@ -1653,13 +1654,13 @@ class League(object):
         return rating, dev
 
     @staticmethod
-    def getEvent(i, j, winner, WIN=1, LOSS=0, DRAW=0.5):
+    def getEvent(i, j, winner, WIN=1, LOSS=0):
         if i == winner: return WIN
         elif j == winner: return LOSS
-        else: return DRAW
 
     def updateGlickoMatchup(self, players, i, j, winner):
         side1, side2 = players[i], players[j]
+        if self.getEvent(i, j, winner) is None: return
         side1.update_player([side2.rating,], [side2.rd,],
                             [self.getEvent(i, j, winner),])
         side2.update_player([side1.rating,], [side1.rd,],
@@ -1678,14 +1679,19 @@ class League(object):
             for j in xrange(i+1, len(sides)):
                 self.updateGlickoMatchup(players, i, j, winningSide)
 
+    @staticmethod
+    def preciseUpdate(val, divisor_1, divisor_2):
+        return int(round(Decimal(val) /
+                   (Decimal(divisor_1) * Decimal(divisor_2))))
+
     def getGlickoResultsFromPlayers(self, sides, players):
         results = dict()
         for i in xrange(len(sides)):
             newRtg, newRd = players[i].rating, players[i].rd
             oldRtg, oldRd = self.getSideGlickoRating(sides[i])
             rtgDiff, rdDiff = float(newRtg - oldRtg), float(newRd - oldRd)
-            rtgDiff = (rtgDiff / ((len(sides) - 1) * self.sideSize))
-            rdDiff /= (rdDiff / ((len(sides) - 1) * self.sideSize))
+            rtgDiff = self.preciseUpdate(rtgDiff, len(sides)-1, len(sides[i]))
+            rdDiff = self.preciseUpdate(rdDiff, len(sides)-1, len(sides[i]))
             for team in sides[i]:
                 origRtg, origRd = self.getGlickoRating(team)
                 rtg = origRtg + int(round(rtgDiff))

@@ -1790,7 +1790,7 @@ class TestLeague(TestCase):
     @patch('resources.league.League.eloEnv')
     def test_getEloDiff(self, eloEnv):
         eloEnv.Rate.return_value = 30
-        assert_equals(self.league.getEloDiff(40, xrange(5)), -2)
+        assert_equals(self.league.getEloDiff(40, xrange(5), 5), -2)
 
     @patch('resources.league.League.getTeamRating')
     def test_getEloRating(self, getRtg):
@@ -1813,7 +1813,8 @@ class TestLeague(TestCase):
     def test_applyEloDiff(self):
         diffs = {12: 94, 13: 49}
         self.league.applyEloDiff({12, 15, 390}, 43, diffs)
-        assert_equals(diffs, {12: 43, 13: 49, 15: 43, 390: 43})
+        expVal = Decimal(43) / Decimal(3)
+        assert_equals(diffs, {12: expVal, 13: 49, 15: expVal, 390: expVal})
 
     @patch('resources.league.League.getEloRating')
     @patch('resources.league.League.getEloDiff')
@@ -1823,7 +1824,7 @@ class TestLeague(TestCase):
         teamRtg.return_value = 12
         diff.return_value = 3
         assert_equals(self.league.getNewEloRatings([{1, 2}, {3, 4}, {5,}], 0),
-                {1: '15', 2: '15', 3: '15', 4: '15', 5: '15'})
+                {1: '14', 2: '14', 3: '14', 4: '14', 5: '15'})
 
     def test_unsplitRtg(self):
         assert_equals(self.league.unsplitRtg((43, 44, 56, 90)), '43/44/56/90')
@@ -1835,7 +1836,7 @@ class TestLeague(TestCase):
         assert_equals(self.league.getSideGlickoRating({1, 2, 3}), (15, 9))
 
     def test_getEvent(self):
-        assert_equals(self.league.getEvent(1, 2, 3), 0.5)
+        assert_equals(self.league.getEvent(1, 2, 3), None)
         assert_equals(self.league.getEvent(1, 2, 1), 1)
         assert_equals(self.league.getEvent(1, 2, 2), 0)
 
@@ -1847,6 +1848,9 @@ class TestLeague(TestCase):
             [side2.rd,], [1,])
         side2.update_player.assert_called_once_with([side1.rating,],
             [side1.rd,], [0,])
+        self.league.updateGlickoMatchup(players, 1, 2, 3)
+        assert_equals(side1.update_player.call_count, 1)
+        assert_equals(side2.update_player.call_count, 1)
 
     @patch('resources.league.Player')
     @patch('resources.league.League.getSideGlickoRating')
@@ -1867,11 +1871,11 @@ class TestLeague(TestCase):
         getSide.return_value = 12, 1
         getRtg.return_value = 3, 2
         player = MagicMock()
-        player.rating, player.rd = 13, 4
+        player.rating, player.rd = 13, 10
         players = [player,] * 3
         sides = [{1,2}, {3,4}, {5,6}]
         assert_equals(self.league.getGlickoResultsFromPlayers(sides, players),
-                {1: '4/4', 2: '4/4', 3: '4/4', 4: '4/4', 5: '4/4', 6: '4/4'})
+                {1: '3/4', 2: '3/4', 3: '3/4', 4: '3/4', 5: '3/4', 6: '3/4'})
 
     @patch('resources.league.League.getGlickoResultsFromPlayers')
     @patch('resources.league.League.updateGlickoMatchups')
@@ -2066,7 +2070,6 @@ class TestLeague(TestCase):
         assert_equals(self.league.getSidePlayers({1,2}), [30,221,240,41,30,221,
             240,41])
         gameData = {'Sides': '1,2,3/4,5,6/7'}
-        print self.league.assembleTeams(gameData)
         assert_equals(self.league.assembleTeams(gameData),
                       [(30,221,240,41,30,221,240,41,30,221,240,41),] * 2
                       + [(30,221,240,41)])
@@ -2146,9 +2149,11 @@ class TestLeague(TestCase):
         parser.return_value.name = "name"
         assert_equals(self.league.adminName, "name")
 
+    @patch('resources.league.PlayerParser')
     @patch('resources.league.League.getTemplateName')
     @patch('resources.league.League.sideInfo')
-    def test_processMessage(self, sideInfo, tempName):
+    def test_processMessage(self, sideInfo, tempName, parser):
+        parser.return_value.name = "name"
         self._setProp(self.league.SET_SUPER_NAME, 'Cluster Name')
         self._setProp(self.league.SET_VETO_LIMIT, '9')
         self._setProp(self.league.SET_URL, 'League URL')
