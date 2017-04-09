@@ -1680,18 +1680,22 @@ class League(object):
                 self.updateGlickoMatchup(players, i, j, winningSide)
 
     @staticmethod
-    def preciseUpdate(val, divisor_1, divisor_2):
-        return int(round(Decimal(val) /
-                   (Decimal(divisor_1) * Decimal(divisor_2))))
+    def preciseUpdate(vals, divisor_1, divisor_2):
+        results = list()
+        for val in vals:
+            res = int(round(Decimal(val) /
+                      (Decimal(divisor_1) * Decimal(divisor_2))))
+            results.append(res)
+        return tuple(results)
 
     def getGlickoResultsFromPlayers(self, sides, players):
-        results = dict()
+        results, otherSides = dict(), len(sides)-1
         for i in xrange(len(sides)):
             newRtg, newRd = players[i].rating, players[i].rd
             oldRtg, oldRd = self.getSideGlickoRating(sides[i])
             rtgDiff, rdDiff = float(newRtg - oldRtg), float(newRd - oldRd)
-            rtgDiff = self.preciseUpdate(rtgDiff, len(sides)-1, len(sides[i]))
-            rdDiff = self.preciseUpdate(rdDiff, len(sides)-1, len(sides[i]))
+            rtgDiff, rdDiff = self.preciseUpdate([rtgDiff, rdDiff], otherSides,
+                                                 len(sides[i]))
             for team in sides[i]:
                 origRtg, origRd = self.getGlickoRating(team)
                 rtg = origRtg + int(round(rtgDiff))
