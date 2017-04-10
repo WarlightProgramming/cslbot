@@ -586,9 +586,26 @@ quit the league), set this to be true.
 
 ___
 
+#### PENALIZE DECLINES
+
+Whether to penalize declining teams (by treating declines as losses against all
+non-declining teams and adjusting the ratings accordingly).
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: True
+
+Set this to False if you want to keep declines from affecting players' ratings.
+If this is True, then declines will be treated (in terms of ratings
+adjustments) as losses by all declining teams vs. all non-declining teams (so
+the adjustment will be symmetric if the rating system is symmetric) and
+declining will incur a penalty.
+
+___
+
 #### COUNT DECLINES AS VETOS
 
-Whether to consider declines as vetos (as well as losses).
+Whether to consider declines as vetos (without declaring the game abandoned).
 
 *Possible Args*: "TRUE", "FALSE"
 

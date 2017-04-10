@@ -115,6 +115,7 @@ class League(object):
     SET_URL = "URL"
     SET_MAX_TEAMS = "PLAYER TEAM LIMIT"
     SET_REMOVE_DECLINES = "REMOVE DECLINES"
+    SET_PENALIZE_DECLINES = "PENALIZE DECLINES"
     SET_VETO_DECLINES = "COUNT DECLINES AS VETOS"
     SET_DROP_LIMIT = "DROP LIMIT"
     SET_MAX_BOOT = "MAX BOOT RATE"
@@ -445,6 +446,11 @@ class League(object):
     @property
     def removeDeclines(self):
         return self.fetchProperty(self.SET_REMOVE_DECLINES, True,
+                                  self.getBoolProperty)
+
+    @property
+    def penalizeDeclines(self):
+        return self.fetchProperty(self.SET_PENALIZE_DECLINES, True,
                                   self.getBoolProperty)
 
     @property
@@ -1802,10 +1808,11 @@ class League(object):
             for team in side:
                 self.adjustTeamGameCount(team, -1, 1)
 
-    def updateResults(self, gameID, sides, winningSide):
+    def updateResults(self, gameID, sides, winningSide, adj=True):
         self.setWinners(gameID, sides[winningSide])
-        newRatings = self.getNewRatings(sides, winningSide)
-        self.updateRatings(newRatings)
+        if adj:
+            newRatings = self.getNewRatings(sides, winningSide)
+            self.updateRatings(newRatings)
         self.finishGameForTeams(sides)
 
     def updateWinners(self, gameID, winners):
@@ -1845,7 +1852,8 @@ class League(object):
         self.handleSpecialDeclines(losingTeams, template)
         sides, winningSide = self.makeFakeSides(sides, losingTeams)
         if winningSide is None: self.updateVeto(gameID)
-        self.updateResults(gameID, sides, winningSide)
+        self.updateResults(gameID, sides, winningSide,
+                           adj=self.penalizeDeclines)
 
     @staticmethod
     def removeEntity(table, ID, identifier='ID'):

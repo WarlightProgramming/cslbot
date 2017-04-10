@@ -349,6 +349,10 @@ class TestLeague(TestCase):
         self._boolPropertyTest("removeDeclines",
                                self.league.SET_REMOVE_DECLINES, True)
 
+    def test_penalizeDeclines(self):
+        self._boolPropertyTest("penalizeDeclines",
+                               self.league.SET_PENALIZE_DECLINES, True)
+
     def test_countDeclinesAsVetos(self):
         self._boolPropertyTest("countDeclinesAsVetos",
                                self.league.SET_VETO_DECLINES, False)
@@ -1976,6 +1980,10 @@ class TestLeague(TestCase):
         setWin.assert_called_once_with(3, {1, 2})
         update.assert_called_once_with(getNew.return_value)
         finish.assert_called_once_with([{1, 2}, {3, 4}])
+        self.league.updateResults(12, [{1,}, {3,}], 1, False)
+        setWin.assert_called_with(12, {3,})
+        assert_equals(update.call_count, 1)
+        finish.assert_called_with([{1,}, {3,}])
 
     @patch('resources.league.League.updateResults')
     @patch('resources.league.League.findTeamsFromData')
@@ -2027,7 +2035,8 @@ class TestLeague(TestCase):
         make.return_value = set(), 0
         self.league.updateDecline('ID', 'decliners')
         veto.assert_not_called()
-        updateRes.assert_called_once_with('ID', set(), 0)
+        updateRes.assert_called_once_with('ID', set(), 0,
+                                          adj=self.league.penalizeDeclines)
         make.return_value = set(), None
         self.league.updateDecline('ID', 'decliners')
         veto.assert_called_once_with('ID')
