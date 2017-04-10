@@ -274,6 +274,10 @@ class TestLeague(TestCase):
     def test_autoformat(self):
         self._boolPropertyTest("autoformat", self.league.SET_AUTOFORMAT, True)
 
+    def test_preserveRecords(self):
+        self._boolPropertyTest("preserveRecords",
+                                self.league.SET_PRESERVE_RECORDS, True)
+
     def test_autodrop(self):
         self._boolPropertyTest("autodrop", self.league.SET_AUTODROP,
                                (self.league.dropLimit > 0))
@@ -319,6 +323,9 @@ class TestLeague(TestCase):
                   "490": processVal(490), "0": 0, "": 0, "Five": 0}
         self._propertyTest("rematchLimit", self.league.SET_REMATCH_LIMIT,
                            0, values)
+
+    def test_rematchCap(self):
+        self._intPropertyTest("rematchCap", self.league.SET_REMATCH_CAP, 1)
 
     def test_teamLimit(self):
         values = {"10": 10, "0": 0, "": None, "None": None, "NONE": None,
@@ -1705,14 +1712,20 @@ class TestLeague(TestCase):
         assert_equals(self.league.findDecliners(players), list())
         assert_equals(self.league.findWaiting(players), list())
 
+    @patch('resources.league.League.findDecliners')
     @patch('resources.league.League.findWinners')
     @patch('resources.league.League.isAbandoned')
-    def test_handleFinished(self, abandon, find):
+    def test_handleFinished(self, abandon, find, declines):
         abandon.return_value = True
-        gameData = {'players': [{'id': 5}, {'id': 10}, {'id': 15}]}
+        gameData = {'players': [{'id': 5, 'state': 'Declined'},
+            {'id': 10, 'state': 'Eliminated'}, {'id': 15, 'state': 'Won'}]}
         assert_equals(self.league.handleFinished(gameData),
                       ('ABANDONED', [5, 10, 15]))
         abandon.return_value = False
+        declines.return_value = range(3)
+        assert_equals(self.league.handleFinished(gameData),
+                      ('DECLINED', declines.return_value))
+        declines.return_value = list()
         assert_equals(self.league.handleFinished(gameData),
                       ('FINISHED', find.return_value))
 
@@ -1721,7 +1734,7 @@ class TestLeague(TestCase):
     def test_handleWaiting(self, decliners, waiting):
         self._setProp(self.league.SET_EXP_THRESH, 3)
         assert_equals(self.league.expiryThreshold, 3)
-        gameData = {'players': [1, 2, 3, 4, 5]}
+        gameData = {'players': [1, 2, 3, 4, 5], 'id': '3'}
         created = datetime.now() - timedelta(5)
         decliners.return_value = range(3)
         assert_equals(self.league.handleWaiting(gameData, created),
@@ -1740,6 +1753,7 @@ class TestLeague(TestCase):
         assert_false((datetime.now() - created).days >
                      self.league.expiryThreshold)
         assert_equals(self.league.handleWaiting(gameData, created), None)
+        assert_equals(self.handler.deleteGame.call_count, 3)
 
     @patch('resources.league.League.handleWaiting')
     @patch('resources.league.League.handleFinished')
@@ -2021,12 +2035,20 @@ class TestLeague(TestCase):
     @patch('resources.league.League.finishGameForTeams')
     @patch('resources.league.League.getGameSidesFromData')
     def test_deleteGame(self, get, finish):
+        self._setProp(self.league.SET_PRESERVE_RECORDS, "FALSE")
         self.league.deleteGame({'ID': 'ID'})
         self.games.removeMatchingEntities.assert_called_with({'ID':
                                                     {'value': 'ID',
                                                      'type': 'positive'}})
         get.assert_called_once_with({'ID': 'ID'})
         finish.assert_called_once_with(get.return_value)
+        self._setProp(self.league.SET_PRESERVE_RECORDS, "TRUE")
+        old = self.games.updateMatchingEntities.call_count
+        self.league.deleteGame({'ID': 'NewID'})
+        self.games.removeMatchingEntities.assert_called_with({'ID':
+                                                    {'value': 'ID',
+                                                     'type': 'positive'}})
+        assert_equals(self.games.updateMatchingEntities.call_count, old+1)
 
     @patch('resources.league.League.fetchGameData')
     def test_getGameSidesFromData(self, fetch):

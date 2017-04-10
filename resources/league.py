@@ -149,6 +149,7 @@ class League(object):
     SET_MIN_PERCENTILE = "MIN RATING PERCENTILE"
     SET_MIN_TEMPLATES = "MIN ACTIVE TEMPLATES"
     SET_REMATCH_LIMIT = "REMATCH HORIZON"
+    SET_REMATCH_CAP = "REMATCH CAP"
     SET_RESTORATION_PERIOD = "RESTORATION PERIOD" # days
     SET_LEAGUE_CAPACITY = "MAX TEAMS"
     SET_ACTIVE_CAPACITY = "MAX ACTIVE TEAMS"
@@ -161,6 +162,7 @@ class League(object):
     SET_TEAMLESS = "TEAMLESS"
     SET_NAME_LENGTH = "MAX TEAM NAME LENGTH"
     SET_CONSTRAIN_NAME = "CONSTRAIN NAME LENGTH"
+    SET_PRESERVE_RECORDS = "PRESERVE RECORDS"
 
     # rating systems
     RATE_ELO = "ELO"
@@ -364,6 +366,12 @@ class League(object):
                                   self.getBoolProperty)
 
     @property
+    def preserveRecords(self):
+        """whether to keep records of abandoned games"""
+        return self.fetchProperty(self.SET_PRESERVE_RECORDS, True,
+                                  self.getBoolProperty)
+
+    @property
     def autodrop(self):
         """whether to automatically drop templates players can't use"""
         return self.fetchProperty(self.SET_AUTODROP, (self.dropLimit > 0),
@@ -412,6 +420,10 @@ class League(object):
                       int(val) if self.multischeme else
                       (int(val) * self.sideSize * self.gameSize))
         return self.fetchProperty(self.SET_REMATCH_LIMIT, 0, process_fn)
+
+    @property
+    def rematchCap(self):
+        return self.fetchProperty(self.SET_REMATCH_CAP, 1, int)
 
     @property
     def teamLimit(self):
@@ -1492,10 +1504,8 @@ class League(object):
     @staticmethod
     def isAbandoned(players):
         for player in players:
-            if player['state'] == 'VotedToEnd':
-                return True
-            elif player['state'] == 'Won':
-                return False
+            if player['state'] == 'VotedToEnd': return True
+            elif player['state'] == 'Won': return False
         return False
 
     @staticmethod
@@ -1520,17 +1530,21 @@ class League(object):
         if self.isAbandoned(gameData['players']):
             return 'ABANDONED', [int(p.get('id')) for p in gameData['players']]
         else:
+            decliners = self.findDecliners(gameData['players'])
+            if len(decliners) > 0: return 'DECLINED', decliners
             return 'FINISHED', self.findWinners(gameData['players'])
 
     def handleWaiting(self, gameData, created):
         decliners = self.findDecliners(gameData['players'])
         if len(decliners) > 0:
+            self.handler.deleteGame(gameData['id'])
             if len(decliners) == len(gameData['players']):
                 return 'ABANDONED', None
             return 'DECLINED', decliners
         waiting = self.findWaiting(gameData['players'])
         if (len(waiting) == len(gameData['players']) and
             (datetime.now() - created).days > self.expiryThreshold):
+            self.handler.deleteGame(gameData['id'])
             return 'ABANDONED', None
 
     def fetchGameStatus(self, gameID, created):
@@ -1839,7 +1853,10 @@ class League(object):
                                                    'type': 'positive'}})
 
     def deleteGame(self, gameData):
-        self.removeEntity(self.games, gameData['ID'])
+        if self.preserveRecords:
+            finStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
+            self.updateEntityValue(self.games, gameData['ID'], Finished=finStr)
+        else: self.removeEntity(self.games, gameData['ID'])
         sides = self.getGameSidesFromData(gameData)
         self.finishGameForTeams(sides)
 
@@ -2438,6 +2455,13 @@ class League(object):
                 self.addToSetWithinDict(result, player, ID)
         return result
 
+    def narrowHistory(self, history):
+        results = set()
+        for item in set(history):
+            if history.count(item) >= self.rematchCap:
+                results.add(item)
+        return results
+
     @property
     def teamsDict(self):
         result, allTeams = dict(), self.activeTeams
@@ -2457,7 +2481,7 @@ class League(object):
                 history = fullHistory
             else:
                 history = fullHistory[-(self.rematchLimit):]
-            conflicts = conflicts.union(set(history))
+            conflicts = conflicts.union(self.narrowHistory(history))
             teamDict['conflicts'] = conflicts
             result[ID] = teamDict
         return result

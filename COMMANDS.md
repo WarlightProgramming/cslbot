@@ -204,6 +204,23 @@ able to try and fix things yourself.
 
 ___
 
+#### PRESERVE RECORDS
+
+Whether to keep records of abandoned/excessively vetoed games.
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: True
+
+If you disable this, the league's game data sheet will not keep any records of
+games that end without wins/losses (counting declines as losses)- so games
+without any league-declared winners. These games will still be considered
+finished (with the finish time based on when the game record would otherwise
+have been deleted). This only impacts the league's storage of games and does
+not affect whether the game will be deleted/kept on Warlight.
+
+___
+
 ### Basic League Design
 
 ### Game Setting Configurations
@@ -587,7 +604,7 @@ ___
 
 Number of (most recent) games from which opponents/allies will be excluded from new matches.
 
-*Possible Args*: "1", "10", "15", "ALL"
+*Sample Args*: "1", "10", "15", "ALL"
 
 *Default*: 0 (no restriction)
 
@@ -606,6 +623,25 @@ they've played with before- so you can set up round robins this way.
 
 This command has special behavior for 
 [multischeme ladders](#multischeme-ladders).
+
+___
+
+#### REMATCH CAP
+
+Number of times (within the [**REMATCH HORIZON**](#rematch-horizon)) that any
+two teams can be placed in a game together.
+
+*Sample Args*: "1", "3", "5"
+
+*Default*: 1 (no rematches)
+
+If you set this to a value higher than 1, rematches can take place up to a
+certain limit, even within the rematch horizon. This setting can be used to
+create more sophisticated restrictions on rematches or facilitate (in
+conjunction with a rematch horizon set to ALL) a round-robin-style tournament
+where each team plays each other team more than once (by setting the rematch
+cap to N, where N is the number of matches you want to happen between each
+teams).
 
 ___
 
