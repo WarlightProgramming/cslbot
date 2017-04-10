@@ -3,6 +3,7 @@
 
 # imports
 import time
+import sheetDB
 from unittest import TestCase, main as run_tests
 from nose.tools import *
 from mock import patch, MagicMock
@@ -28,9 +29,35 @@ def test_runPhase():
     assert_equals(t.testPhase(5), 5)
     t.parent.log.assert_not_called()
     assert_equals(t.testPhase(None), None)
-    failStr = ("Phase testPhase failed due to "
+    failStr = ("Call to testPhase failed due to "
                "Exception('This is an exception!',)")
     t.parent.log.assert_called_once_with(failStr, "test", True)
+
+def test_noisy():
+
+    ### dummy test class
+    class TestClass:
+        parent = MagicMock()
+        name = "name"
+        debug = False
+
+        @noisy
+        def testFn(self, *args, **kwargs):
+            return 9 / args[0]
+
+    t = TestClass()
+    t.testFn(5, "these", "are", "just", "args", 5)
+    t.parent.log.assert_not_called()
+    t.debug = True
+    t.testFn(6, "these", "are", "just", "args", "and", a="kwarg")
+    runStr = ("Calling method testFn with args (6, 'these', 'are', 'just',"
+              " 'args', 'and') and kwargs {'a': 'kwarg'}")
+    t.parent.log.assert_called_once_with(runStr, "name", False)
+    t.testFn(0)
+    assert_equals(t.parent.log.call_count, 3)
+    failStr = ("Call to testFn failed due to "
+               "ZeroDivisionError('integer division or modulo by zero',)")
+    t.parent.log.assert_called_with(failStr, "name", True)
 
 ## League class tests
 class TestLeague(TestCase):
@@ -61,6 +88,7 @@ class TestLeague(TestCase):
         assert_equals(self.league.name, 'NAME')
         assert_equals(self.league.thread, 'THREADURL')
         assert_equals(self.league.handler, self.handler)
+        assert_equals(self.league.debug, False)
 
     @patch('resources.league.json.load')
     @patch('resources.league.APIHandler')
@@ -184,7 +212,8 @@ class TestLeague(TestCase):
         assert_equals(self.league.fetchProperty('intlabel', 12, int), 5)
         assert_equals(self.league.fetchProperty('label', 12, float), 12)
         failStr = "Couldn't get label due to ValueError, using default of 12"
-        self.league.parent.log.assert_called_once_with(failStr, 'NAME')
+        self.league.parent.log.assert_called_once_with(failStr, 'NAME',
+                                                       error=True)
 
     def test_getBoolProperty(self):
         getBool = self.league.getBoolProperty
@@ -1162,7 +1191,8 @@ class TestLeague(TestCase):
         self.league.logFailedOrder(order)
         expDesc = "Failed to process OrderType order by 3940430"
         self.parent.log.assert_called_once_with(expDesc,
-                                                league=self.league.name)
+                                                league=self.league.name,
+                                                error=True)
 
     def test_checkTeamCreator(self):
         self.league.mods = {12,}
@@ -1537,7 +1567,7 @@ class TestLeague(TestCase):
         find.return_value = {'ID': 3}
         self.league.dropTemplates(order)
         dataStr = "Too many drops by team The Harambes, dropping only first 1"
-        self.parent.log.assert_called_with(dataStr, 'NAME')
+        self.parent.log.assert_called_with(dataStr, 'NAME', error=True)
         update.assert_called_once_with(4032, {'12', '13', '14', '3'})
         self._setProp(self.league.SET_DROP_LIMIT, 40)
         assert_equals(self.league.dropLimit, 40)
@@ -2270,7 +2300,8 @@ class TestLeague(TestCase):
         self.handler.createGame.side_effect = IOError
         self.league.createGame('gameID')
         failStr = "Failed to make game with 1/2 on 43 because of IOError()"
-        self.parent.log.assert_called_with(failStr, self.league.name)
+        self.parent.log.assert_called_with(failStr, self.league.name,
+                                           error=True)
         self.games.removeMatchingEntities.assert_called_with({'ID':
             {'value': 'gameID', 'type': 'positive'}})
 
@@ -2390,6 +2421,83 @@ class TestLeague(TestCase):
         win.assert_called_once_with("gameID", set())
         decline.assert_called_once_with("gameID", set())
         veto.assert_called_once_with("gameID")
+
+    def test_wipeRank(self):
+        self.league.wipeRank('teamID')
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 'teamID', 'type': 'positive'}}, {'Rank': ''})
+
+    def test_rankTests(self):
+        teamData = {'Finished': 43, 'Limit': 4}
+        self._setProp(self.league.SET_MIN_TO_RANK, 40)
+        self._setProp(self.league.SET_MIN_LIMIT_TO_RANK, 5)
+        assert_false(self.league.eligibleForRank(teamData))
+        self._setProp(self.league.SET_MIN_LIMIT_TO_RANK, 4)
+        assert_true(self.league.eligibleForRank(teamData))
+        teamData['Rank'] = ''
+        assert_false(self.league.hasRank(teamData))
+        teamData['Rank'] = '8'
+        assert_true(self.league.hasRank(teamData))
+
+    def test_rankUsingRatings(self):
+        teamRatings = [(1, 390), (2, 904), (3, 104), (4, 569), (5, 392),
+                       (6, 104)]
+        oldCount = self.teams.updateMatchingEntities.call_count
+        self.league.rankUsingRatings(teamRatings)
+        assert_equals(self.teams.updateMatchingEntities.call_count,
+                      oldCount+6)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 3, 'type': 'positive'}}, {'Rank': 5})
+
+    def test_updateRanks(self):
+        oldOfficial = self.league.getOfficialRating
+        self.league.getOfficialRating = lambda ID: {'3':48,'4':55,'5':48}[ID]
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
+        self._setProp(self.league.SET_MIN_TO_RANK, 20)
+        self._setProp(self.league.SET_MIN_LIMIT_TO_RANK, 2)
+        self.teams.findEntities.return_value = [{'ID': '1', 'Rank': '',
+            'Rating': '43', 'Limit': '1', 'Finished': '32'}, {'ID': '2',
+            'Rank': '3', 'Rating': '49', 'Limit': '4', 'Finished': '18'},
+            {'ID': '3', 'Rank': '1', 'Rating': '48', 'Limit': '2',
+             'Finished': '22'}, {'ID': '4', 'Rank': '2', 'Rating': '55',
+             'Limit': '3', 'Finished': '40'}, {'ID': '5', 'Rank': '3',
+             'Rating': '48', 'Limit': '12', 'Finished': '35'}]
+        oldCount = self.teams.updateMatchingEntities.call_count
+        self.league.updateRanks()
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': '3', 'type': 'positive'}}, {'Rank': 2})
+        assert_equals(self.teams.updateMatchingEntities.call_count,
+                      oldCount+4) # not called for team 1
+
+    @patch('resources.league.League.updateGame')
+    def test_updateGames(self, update):
+        self.games.findEntities.return_value = {1: {'ID': '1', 'Created': 'c'},
+            2: {'ID': '2', 'Created': 'r'}, 4: {'ID': '3', 'Created': 'e'},
+            56: {'ID': '9', 'Created': 'a'}}
+        self.league.updateGames()
+        assert_equals(update.call_count, 4)
+        update.assert_called_with(4, '3', 'e')
+        update.side_effect = sheetDB.errors.SheetError
+        self.league.updateGames()
+        self.parent.log.assert_called_with("Failed to update game: 4",
+            league=self.league.name, error=True)
+
+    def test_checkExcess(self):
+        self._setProp(self.league.SET_MAX_TEAMS, "")
+        assert_false(self.league.checkExcess(40000))
+        self._setProp(self.league.SET_MAX_TEAMS, "4")
+        assert_true(self.league.checkExcess(5))
+        assert_false(self.league.checkExcess(4))
+
+    @patch('resources.league.League.checkLimit')
+    def test_changeLimit(self, check):
+        check.return_value = 5
+        self.league.changeLimit('teamID', 0)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 'teamID', 'type': 'positive'}}, {'Limit': 0})
+        self.league.changeLimit('teamID', 400)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 'teamID', 'type': 'positive'}}, {'Limit': 5})
 
 # run tests
 if __name__ == '__main__':
