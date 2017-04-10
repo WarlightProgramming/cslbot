@@ -27,15 +27,18 @@ from resources.utility import isInteger
 def makeFailStr(func, err):
     return ("Call to %s failed due to %s" % (func.__name__, repr(err)))
 
+def tryOrLog(func, self, *args, **kwargs):
+    try:
+        return func(self, *args, **kwargs)
+    except Exception as e:
+        self.parent.log(makeFailStr(func, e), self.name, True)
+
 def runPhase(func):
     """
     function decorator to log failures if phase fails
     """
     def func_wrapper(self, *args, **kwargs):
-        try:
-            return func(self, *args, **kwargs)
-        except Exception as e:
-            self.parent.log(makeFailStr(func, e), self.name, True)
+        return tryOrLog(func, self, *args, **kwargs)
     return func_wrapper
 
 def noisy(func):
@@ -47,10 +50,7 @@ def noisy(func):
         runStr = ("Calling method %s with args %s and kwargs %s" %
                   (func.__name__, str(args), str(kwargs)))
         self.parent.log(runStr, self.name, False)
-        try:
-            return func(self, *args, **kwargs)
-        except Exception as e:
-            self.parent.log(makeFailStr(func, e), self.name, True)
+        return tryOrLog(func, self, *args, **kwargs)
     return func_wrapper
 
 # errors
