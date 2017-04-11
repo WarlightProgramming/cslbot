@@ -2575,6 +2575,9 @@ class TestLeague(TestCase):
         assert_equals(self.league.validatePlayer({1: 3}, {3, 4, 5}, 'team'),
                       False)
         change.assert_not_called()
+        assert_equals(self.league.validatePlayer({4: 3}, {3, 4, 5}, 'team'),
+                      False)
+        change.assert_not_called()
         check.return_value = True
         assert_equals(self.league.validatePlayer({4: 3}, {3, 4, 5}, 'team'),
                       True)
