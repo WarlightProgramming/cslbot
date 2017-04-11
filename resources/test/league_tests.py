@@ -378,6 +378,10 @@ class TestLeague(TestCase):
         self._boolPropertyTest("removeDeclines",
                                self.league.SET_REMOVE_DECLINES, True)
 
+    def test_removeBoots(self):
+        self._boolPropertyTest("removeBoots",
+                               self.league.SET_REMOVE_BOOTS, True)
+
     def test_penalizeDeclines(self):
         self._boolPropertyTest("penalizeDeclines",
                                self.league.SET_PENALIZE_DECLINES, True)
@@ -1745,11 +1749,13 @@ class TestLeague(TestCase):
         assert_equals(self.league.findWinners(players), [1, 40])
         assert_equals(self.league.findDecliners(players), list())
         assert_equals(self.league.findWaiting(players), list())
+        assert_equals(self.league.findBooted(players), list())
 
+    @patch('resources.league.League.findBooted')
     @patch('resources.league.League.findDecliners')
     @patch('resources.league.League.findWinners')
     @patch('resources.league.League.isAbandoned')
-    def test_handleFinished(self, abandon, find, declines):
+    def test_handleFinished(self, abandon, find, declines, boots):
         abandon.return_value = True
         gameData = {'players': [{'id': 5, 'state': 'Declined'},
             {'id': 10, 'state': 'Eliminated'}, {'id': 15, 'state': 'Won'}]}
@@ -1761,7 +1767,7 @@ class TestLeague(TestCase):
                       ('DECLINED', declines.return_value))
         declines.return_value = list()
         assert_equals(self.league.handleFinished(gameData),
-                      ('FINISHED', find.return_value))
+                      ('FINISHED', find.return_value, boots.return_value))
 
     @patch('resources.league.League.findWaiting')
     @patch('resources.league.League.findDecliners')
@@ -2020,15 +2026,19 @@ class TestLeague(TestCase):
     @patch('resources.league.League.getGameSidesFromData')
     @patch('resources.league.League.fetchGameData')
     def test_updateWinners(self, fetch, get, find, update):
+        self._setProp(self.league.SET_REMOVE_BOOTS, False)
         get.return_value = [{1, 2, 3}, {4, 5, 6}, {7, 8}]
         find.return_value = {4, 5}
-        self.league.updateWinners(1, [43, 44])
+        self.league.updateWinners(1, ([43, 44], [12, 13]))
         update.assert_called_once_with(1, get.return_value, 1)
         find.return_value = {4, 5, 7}
-        self.league.updateWinners(1, [43, 44])
+        self._setProp(self.league.SET_REMOVE_BOOTS, True)
+        self.league.updateWinners(1, ([43, 44], [12, 13]))
         update.assert_called_with(1, get.return_value, 1)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 7, 'type': 'positive'}}, {'Limit': 0})
         get.return_value = list()
-        assert_raises(NameError, self.league.updateWinners, 1, [43,44])
+        assert_raises(NameError, self.league.updateWinners, 1, ([43,44], []))
 
     @patch('resources.league.League.changeLimit')
     @patch('resources.league.League.updateGameVetos')
@@ -2239,8 +2249,11 @@ class TestLeague(TestCase):
         assert_not_equal(self.league.getGameMessage(gameData),
             self.league.leagueMessage)
         assert_true(len(self.league.getGameMessage(gameData)) <= 2048)
-        assert_equals(self.league.processMessage("{{_TEMPLATENAME}}",
+        assert_equals(self.league.processMessage("{{_TEMPLATE_NAME}}",
             gameData), "TEMP NAME")
+        self._setProp(self.league.SET_EXP_THRESH, 8)
+        assert_equals(self.league.processMessage("{{_EXPIRY_THRESHOLD}}",
+            gameData), "8")
 
     def test_updateHistories(self):
         gameData = {'Sides': '12,33/2390,49,448'}
@@ -2412,13 +2425,13 @@ class TestLeague(TestCase):
         win.assert_not_called()
         decline.assert_not_called()
         veto.assert_not_called()
-        fetch.return_value = ('FINISHED', set())
+        fetch.return_value = ('FINISHED', set(), set())
         self.league.updateGame("wlID", "gameID", createdTime)
         fetch.return_value = ('DECLINED', set())
         self.league.updateGame("wlID", "gameID", createdTime)
         fetch.return_value = ('ABANDONED', None)
         self.league.updateGame("wlID", "gameID", createdTime)
-        win.assert_called_once_with("gameID", set())
+        win.assert_called_once_with("gameID", (set(), set()))
         decline.assert_called_once_with("gameID", set())
         veto.assert_called_once_with("gameID")
 

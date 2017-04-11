@@ -132,6 +132,7 @@ class League(object):
     SET_URL = "URL"
     SET_MAX_TEAMS = "PLAYER TEAM LIMIT"
     SET_REMOVE_DECLINES = "REMOVE DECLINES"
+    SET_REMOVE_BOOTS = "REMOVE BOOTED PLAYERS"
     SET_PENALIZE_DECLINES = "PENALIZE DECLINES"
     SET_VETO_DECLINES = "COUNT DECLINES AS VETOS"
     SET_DROP_LIMIT = "DROP LIMIT"
@@ -471,6 +472,11 @@ class League(object):
     @property
     def removeDeclines(self):
         return self.fetchProperty(self.SET_REMOVE_DECLINES, True,
+                                  self.getBoolProperty)
+
+    @property
+    def removeBoots(self):
+        return self.fetchProperty(self.SET_REMOVE_BOOTS, True,
                                   self.getBoolProperty)
 
     @property
@@ -1616,6 +1622,10 @@ class League(object):
         return self.findMatchingPlayers(players, 'Declined')
 
     @noisy
+    def findBooted(self, players):
+        return self.findMatchingPlayers(players, 'Booted')
+
+    @noisy
     def findWaiting(self, players):
         return self.findMatchingPlayers(players, 'Invited', 'Declined')
 
@@ -1626,7 +1636,8 @@ class League(object):
         else:
             decliners = self.findDecliners(gameData['players'])
             if len(decliners) > 0: return 'DECLINED', decliners
-            return 'FINISHED', self.findWinners(gameData['players'])
+            return ('FINISHED', self.findWinners(gameData['players']),
+                    self.findBooted(gameData['players']))
 
     @noisy
     def handleWaiting(self, gameData, created):
@@ -1936,8 +1947,17 @@ class League(object):
         self.finishGameForTeams(sides)
 
     @noisy
-    def updateWinners(self, gameID, winners):
+    def removeBooted(self, gameData, booted):
+        if not self.removeBoots: return
+        bootedTeams = self.findTeamsFromData(gameData, booted)
+        for team in bootedTeams:
+            self.changeLimit(team, 0)
+
+    @noisy
+    def updateWinners(self, gameID, groups):
+        winners, booted = groups
         gameData = self.fetchGameData(gameID)
+        self.removeBooted(gameData, booted)
         sides = self.getGameSidesFromData(gameData)
         winningTeams = self.findTeamsFromData(gameData, winners)
         for i in xrange(len(sides)):
@@ -2183,6 +2203,7 @@ class League(object):
         sideInfo = lambda: self.sideInfo(gameData)
         tempName = lambda: self.getTemplateName(gameData)
         adminName = lambda: self.adminName
+        expThresh = lambda: self.expiryThreshold
         replaceDict = {'_LEAGUE_NAME': leagueName,
                        self.SET_SUPER_NAME: clusterName,
                        self.SET_URL: leagueUrl,
@@ -2190,8 +2211,9 @@ class League(object):
                        '_VETOS': vetos,
                        '_LEAGUE_INTERFACE': makeInterface,
                        '_GAME_SIDES': sideInfo,
-                       '_TEMPLATENAME': tempName,
-                       '_LEAGUE_ADMIN': adminName}
+                       '_TEMPLATE_NAME': tempName,
+                       '_LEAGUE_ADMIN': adminName,
+                       '_EXPIRY_THRESHOLD': expThresh}
         return self.adaptMessage(message, replaceDict)
 
     @noisy
@@ -2391,7 +2413,7 @@ class League(object):
         created = datetime.strptime(createdTime, self.TIMEFORMAT)
         status = self.fetchGameStatus(warlightID, created)
         if status is not None:
-            updateWin = self.getOneArgFunc(self.updateWinners, status[1])
+            updateWin = self.getOneArgFunc(self.updateWinners, status[1:])
             updateDecline = self.getOneArgFunc(self.updateDecline, status[1])
             {'FINISHED': updateWin, 'DECLINED': updateDecline,
              'ABANDONED': self.updateVeto}.get(status[0])(gameID)

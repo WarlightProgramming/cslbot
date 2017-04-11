@@ -266,8 +266,9 @@ Here's a list of all of them, with some basic descriptions:
 * **VETO LIMIT**: This league's veto limit (as declared using **VETO LIMIT**)
 * **\_GAME_SIDES**: The name, rank, and rating for each team on each side of
   the game
-* **\_TEMPLATENAME**: Name of the template used by the game
+* **\_TEMPLATE_NAME**: Name of the template used by the game
 * **\_LEAGUE\_ADMIN**: Username of league's stated admin
+* **\_EXPIRY_THRESHOLD**: The league's **EXPIRY THRESHOLD**
   
 ___
 
@@ -572,9 +573,24 @@ discontinue participation without deleting all their data/history.
 
 ___
 
+#### REMOVE BOOTS
+
+Whether to remove booted players' teams from the league (by setting their Limit
+to 0).
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: True
+
+This keeps inactive players from remaining in the league and wasting other
+players' time. To further handle inactivity, you can also use the
+[**MAX LAST SEEN**](#max-last-seen) prerequisite.
+
+___
+
 #### REMOVE DECLINES
 
-Whether to remove Declined teams from the league (by setting their Limit to 0).
+Whether to remove declined teams from the league (by setting their Limit to 0).
 
 *Possible Args*: "TRUE", "FALSE"
 
