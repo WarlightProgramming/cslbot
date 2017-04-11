@@ -19,7 +19,7 @@ from wl_parsers import PlayerParser
 from wl_api import APIHandler
 from wl_api.wl_api import APIError
 from sheetDB import errors as SheetErrors
-from resources.constants import API_CREDS
+from resources.constants import API_CREDS, TIMEFORMAT
 from resources.utility import isInteger
 
 # decorators
@@ -192,7 +192,7 @@ class League(object):
     WINRATE_SCALE = 1000
 
     # timeformat
-    TIMEFORMAT = "%Y-%m-%d %H:%M:%S"
+    TIMEFORMAT = TIMEFORMAT
 
     # default message
     DEFAULT_MSG = """This is a game for the {{%s}} league, part of {{%s}}.
@@ -2254,7 +2254,8 @@ class League(object):
         template = tempData['WarlightID']
         settingsDict, overrides = dict(), list()
         for head in tempData:
-            if self.strBeginsWith(head, self.KW_TEMPSETTING):
+            if (tempData[head] == ''): continue
+            elif self.strBeginsWith(head, self.KW_TEMPSETTING):
                 self.addTempSetting(settingsDict, head, tempData[head])
             elif self.strBeginsWith(head, self.KW_TEMPOVERRIDE):
                 self.addTempOverride(overrides, head, tempData[head])

@@ -2277,7 +2277,7 @@ class TestLeague(TestCase):
     def test_getTempSettings(self):
         self.templates.findEntities.return_value = [{'ID': 'tempID',
             'WarlightID': 4904, 'SET_A#B': '490', 'SET_SETTING': 314,
-            'OVERRIDE_Bonus': 12},]
+            'OVERRIDE_Bonus': 12, 'SET_DEF#GH#I': '', 'OVERRIDE_2': ''},]
         assert_equals(self.league.getTempSettings('tempID'), (4904,
             {'A': {'B': '490'}, 'SETTING': 314}, [('Bonus', 12),]))
 

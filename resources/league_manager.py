@@ -8,6 +8,7 @@ import datetime
 from resources.utility import *
 from resources.order_parser import OrderParser
 from resources.league import League
+from resources.constants import TIMEFORMAT
 from wl_parsers import ForumThreadParser, PlayerParser
 
 # constants
@@ -155,7 +156,7 @@ class LeagueManager(object):
 
     def log(self, description, league="", error=False):
         """logs an entry onto the sheet"""
-        time = datetime.datetime.now()
+        time = datetime.datetime.strftime(datetime.datetime.now(), TIMEFORMAT)
         self.logSheet.addEntity({TITLE_TIME: time,
                                  TITLE_LEAGUE: league,
                                  TITLE_STATUS: error,
