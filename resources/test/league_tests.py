@@ -2499,6 +2499,87 @@ class TestLeague(TestCase):
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': 'teamID', 'type': 'positive'}}, {'Limit': 5})
 
+    def test_updatePlayerCounts(self):
+        pc = {4: 3}
+        self.league.updatePlayerCounts(pc, {1, 3, 4})
+        assert_equals(pc, {1: 1, 3: 1, 4: 4})
+
+    @patch('resources.league.datetime')
+    def test_setProbation(self, dt):
+        dt.strftime.return_value = 'now'
+        self.league.wipeProbation('teamID')
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 'teamID', 'type': 'positive'}}, {'Probation Start': ''})
+        self.league.startProbation('teamID')
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 'teamID', 'type': 'positive'}},
+            {'Probation Start': 'now'})
+
+    def test_meetsRetention(self):
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
+        self._setProp(self.league.SET_MIN_TO_CULL, 8)
+        self._setProp(self.league.SET_MIN_RATING, 1500)
+        self._setProp(self.league.SET_MIN_PERCENTILE, 0)
+        self._setProp(self.league.SET_MAX_RANK, 25)
+        teamData = {'Finished': '3', 'Rating': '1560', 'Rank': '20'}
+        assert_true(self.league.meetsRetention(teamData))
+        teamData['Finished'] = '12'
+        assert_true(self.league.meetsRetention(teamData))
+        teamData['Rating'] = '1300'
+        assert_false(self.league.meetsRetention(teamData))
+        teamData['Rating'], teamData['Rank'] = '1800', '28'
+        assert_false(self.league.meetsRetention(teamData))
+        teamData['Rank'] = '1'
+        assert_true(self.league.meetsRetention(teamData))
+
+    @patch('resources.league.League.meetsRetention')
+    def test_checkTeamRating(self, meets):
+        self._setProp(self.league.SET_GRACE_PERIOD, 5)
+        start = datetime.strftime(datetime.now() - timedelta(3),
+                                  self.league.TIMEFORMAT)
+        self.teams.findEntities.return_value = [{'Probation Start':
+            start},]
+        meets.return_value = True
+        self.league.checkTeamRating('teamID')
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 'teamID', 'type': 'positive'}}, {'Probation Start': ''})
+        self.teams.findEntities.return_value[0]['Probation Start'] = ''
+        oldCount = self.teams.updateMatchingEntities.call_count
+        self.league.checkTeamRating('teamID')
+        assert_equals(self.teams.updateMatchingEntities.call_count, oldCount)
+        meets.return_value = False
+        self.league.checkTeamRating('teamID')
+        assert_equals(self.teams.updateMatchingEntities.call_count, oldCount+1)
+        self.teams.findEntities.return_value[0]['Probation Start'] = start
+        self.league.checkTeamRating('teamID')
+        self._setProp(self.league.SET_GRACE_PERIOD, 2)
+        assert_raises(ImproperInput, self.league.checkTeamRating, 'teamID')
+
+    @patch('resources.league.League.changeLimit')
+    @patch('resources.league.League.checkTeam')
+    @patch('resources.league.League.checkTeamRating')
+    def test_validateTeam(self, checkRtg, check, change):
+        assert_equals(self.league.validateTeam('teamID', 'players'), False)
+        checkRtg.assert_called_once_with('teamID')
+        check.assert_called_once_with('players', 'teamID')
+        check.side_effect = ImproperInput()
+        assert_equals(self.league.validateTeam('teamID', 'players'), True)
+        self.parent.log.assert_called_with("Removing teamID because: ", 'NAME')
+        change.assert_called_once_with('teamID', 0)
+
+    @patch('resources.league.League.changeLimit')
+    @patch('resources.league.League.checkExcess')
+    def test_validatePlayer(self, check, change):
+        check.return_value = False
+        assert_equals(self.league.validatePlayer(dict(), set(), 'team'), False)
+        assert_equals(self.league.validatePlayer({1: 3}, {3, 4, 5}, 'team'),
+                      False)
+        change.assert_not_called()
+        check.return_value = True
+        assert_equals(self.league.validatePlayer({4: 3}, {3, 4, 5}, 'team'),
+                      True)
+        change.assert_called_once_with('team', 0)
+
 # run tests
 if __name__ == '__main__':
     run_tests()

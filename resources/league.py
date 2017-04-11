@@ -2340,8 +2340,8 @@ class League(object):
     def updateVetoCt(self, oldVetos, template, adj):
         vetoDict = self.getVetoDict(oldVetos)
         template = str(template)
-        if template not in vetoDict: vetoDict[template] = 0
-        vetoDict[template] += int(adj)
+        if template not in vetoDict: vetoDict[template] = int(adj)
+        else: vetoDict[template] += int(adj)
         return self.packageVetoDict(vetoDict)
 
     @noisy
@@ -2456,17 +2456,15 @@ class League(object):
     @staticmethod
     def updatePlayerCounts(playerCounts, players):
         for player in players:
-            if player not in playerCounts:
-                playerCounts[player] = 0
-            playerCounts[player] += 1
+            if player not in playerCounts: playerCounts[player] = 1
+            else: playerCounts[player] += 1
 
     @noisy
     def setProbation(self, teamID, start=None):
         if start is None: probStr = ''
         else: probStr = datetime.strftime(start, self.TIMEFORMAT)
-        self.teams.updateMatchingEntities({'ID': {'value': teamID,
-                                                  'type': 'positive'}},
-                                          {'Probation Start': probStr})
+        self.updateEntityValue(self.teams, teamID,
+                               **{'Probation Start': probStr})
 
     @noisy
     def wipeProbation(self, teamID):
@@ -2500,6 +2498,7 @@ class League(object):
 
     @noisy
     def validateTeam(self, teamID, players):
+        """returns True is the team has been dropped from the league"""
         try:
             self.checkTeamRating(teamID)
             self.checkTeam(players, teamID)
@@ -2511,11 +2510,12 @@ class League(object):
             return True
 
     @noisy
-    def validatePlayer(self, playerCounts, players, team):
+    def validatePlayer(self, playerCounts, players, teamID):
+        """returns True is the player's team has been dropped"""
         for player in players:
             if player not in playerCounts: continue
             if self.checkExcess(playerCounts[player]):
-                self.changeLimit(team['ID'], 0)
+                self.changeLimit(teamID, 0)
                 return True
         return False
 
@@ -2525,11 +2525,11 @@ class League(object):
         for i in xrange(len(allTeams)):
             team, dropped = allTeams[i], False
             confirmations = team['Confirmations']
-            limit = int(team['Limit'])
+            limit, ID = int(team['Limit']), team['ID']
             if ('FALSE' in confirmations or limit < 1): continue
-            players = allTeams[team]['Players'].split(self.SEP_PLYR)
-            dropped = self.validateTeam(team['ID'], players)
-            dropped = self.validatePlayer(playerCounts, players, team)
+            players = team['Players'].split(self.SEP_PLYR)
+            dropped = self.validateTeam(ID, players)
+            dropped = self.validatePlayer(playerCounts, players, ID)
             if not dropped:
                 self.updatePlayerCounts(playerCounts, players)
 
