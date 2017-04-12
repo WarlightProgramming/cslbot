@@ -19,7 +19,7 @@ from wl_parsers import PlayerParser
 from wl_api import APIHandler
 from wl_api.wl_api import APIError
 from sheetDB import errors as SheetErrors
-from resources.constants import API_CREDS, TIMEFORMAT
+from resources.constants import API_CREDS, TIMEFORMAT, DEBUG_KEY
 from resources.utility import isInteger
 
 # decorators
@@ -182,7 +182,7 @@ class League(object):
     SET_NAME_LENGTH = "MAX TEAM NAME LENGTH"
     SET_CONSTRAIN_NAME = "CONSTRAIN NAME LENGTH"
     SET_PRESERVE_RECORDS = "PRESERVE RECORDS"
-    SET_DEBUG = "DEBUG MODE"
+    SET_DEBUG = DEBUG_KEY
 
     # rating systems
     RATE_ELO = "ELO"
