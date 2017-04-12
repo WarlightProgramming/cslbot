@@ -1639,19 +1639,20 @@ class League(object):
             return ('FINISHED', self.findWinners(gameData['players']),
                     self.findBooted(gameData['players']))
 
+    def wrapUp(self, gameData, group):
+        self.handler.deleteGame(gameData['id'])
+        if len(group) == len(gameData['players']):
+            return 'ABANDONED', None
+        return 'DECLINED', group
+
     @noisy
     def handleWaiting(self, gameData, created):
         decliners = self.findDecliners(gameData['players'])
-        if len(decliners) > 0:
-            self.handler.deleteGame(gameData['id'])
-            if len(decliners) == len(gameData['players']):
-                return 'ABANDONED', None
-            return 'DECLINED', decliners
+        if len(decliners): return self.wrapUp(gameData, decliners)
         waiting = self.findWaiting(gameData['players'])
-        if (len(waiting) == len(gameData['players']) and
-            (datetime.now() - created).days > self.expiryThreshold):
-            self.handler.deleteGame(gameData['id'])
-            return 'ABANDONED', None
+        if (((datetime.now() - created).days >= self.expiryThreshold)
+            and len(waiting)):
+            return self.wrapUp(gameData, waiting)
 
     @noisy
     def fetchGameStatus(self, gameID, created):

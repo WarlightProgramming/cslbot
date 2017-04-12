@@ -1782,10 +1782,11 @@ class TestLeague(TestCase):
         decliners.return_value = xrange(1, 6)
         assert_equals(self.league.handleWaiting(gameData, created),
                       ('ABANDONED', None))
-        waiting.return_value = xrange(3)
+        waiting.return_value = range(3)
         decliners.return_value = list()
         assert_false(len(waiting.return_value) == len(gameData['players']))
-        assert_equals(self.league.handleWaiting(gameData, created), None)
+        assert_equals(self.league.handleWaiting(gameData, created),
+                      ('DECLINED', range(3)))
         waiting.return_value = xrange(1, 6)
         assert_equals(self.league.handleWaiting(gameData, created),
                       ('ABANDONED', None))
@@ -1793,7 +1794,7 @@ class TestLeague(TestCase):
         assert_false((datetime.now() - created).days >
                      self.league.expiryThreshold)
         assert_equals(self.league.handleWaiting(gameData, created), None)
-        assert_equals(self.handler.deleteGame.call_count, 3)
+        assert_equals(self.handler.deleteGame.call_count, 4)
 
     @patch('resources.league.League.handleWaiting')
     @patch('resources.league.League.handleFinished')
