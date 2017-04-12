@@ -5,9 +5,11 @@
 import time
 import sheetDB
 from unittest import TestCase, main as run_tests
-from nose.tools import *
+from nose.tools import assert_equals, assert_not_equal, assert_true,\
+assert_raises, assert_false, assert_almost_equal
 from mock import patch, MagicMock
-from resources.league import *
+from resources.league import League, runPhase, noisy, ImproperLeague,\
+ImproperInput, NonexistentItem
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 
@@ -851,6 +853,7 @@ class TestLeague(TestCase):
 
     @patch('resources.league.League.getExtantEntities')
     def test_activityCounts(self, getExtant):
+        getExtant.return_value = [{'ID': 4, 'Limit': 3},]
         assert_equals(self.league.activeTeams, getExtant.return_value)
         assert_equals(self.league.activeTemplates, getExtant.return_value)
         getExtant.return_value = list()
@@ -871,10 +874,10 @@ class TestLeague(TestCase):
     @patch('resources.league.League.currentTimeWithinRange')
     @patch('resources.league.League.getExtantEntities')
     def test_active(self, getExtant, rangeCheck):
-        getExtant.return_value = list()
+        getExtant.return_value = [{'Limit': '-3'},]
         self._setProp(self.league.SET_MIN_TEMPLATES, 10)
         assert_false(self.league.active)
-        getExtant.return_value = range(9)
+        getExtant.return_value = [{'Limit': '1'},] * 9
         assert_false(self.league.active)
         self._setProp(self.league.SET_MIN_TEMPLATES, 9)
         self._setProp(self.league.SET_MIN_SIZE, 10)
@@ -1459,16 +1462,17 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_ACTIVE_CAPACITY, "")
         assert_equals(self.league.checkLimitChange(100, 3), None)
         self._setProp(self.league.SET_ACTIVE_CAPACITY, 2)
-        self.teams.findEntities.return_value = [{'ID': 1},]
+        self.teams.findEntities.return_value = [{'ID': 1, 'Limit': 1},]
         assert_equals(self.league.checkLimitChange(42, 20), None)
-        self.teams.findEntities.return_value = [{'ID': 1}, {'ID': 2}]
+        self.teams.findEntities.return_value = [{'ID': 1, 'Limit': 3},
+                                                {'ID': 2, 'Limit': 2}]
         fetch.return_value = {'Limit': 3}
         assert_equals(self.league.checkLimitChange(42, 20), None)
         fetch.return_value = {'Limit': 0}
         assert_raises(ImproperInput, self.league.checkLimitChange, 2, 2)
         assert_equals(self.league.checkLimitChange(42, 0), None)
-        self.teams.findEntities.return_value = [{'ID': 1}, {'ID': 2},
-                                                {'ID': 3}]
+        self.teams.findEntities.return_value = [{'ID': 1, 'Limit': 1},
+            {'ID': 2, 'Limit': 3}, {'ID': 3, 'Limit': 2}]
         assert_raises(ImproperInput, self.league.checkLimitChange, 24, 2)
 
     @patch('resources.league.League.changeLimit')
@@ -2482,6 +2486,7 @@ class TestLeague(TestCase):
             {'value': '3', 'type': 'positive'}}, {'Rank': 2})
         assert_equals(self.teams.updateMatchingEntities.call_count,
                       oldCount+4) # not called for team 1
+        self.league.getOfficialRating = oldOfficial
 
     @patch('resources.league.League.updateGame')
     def test_updateGames(self, update):
@@ -2626,6 +2631,100 @@ class TestLeague(TestCase):
             (128, 4903409, 43902, 3290))
         assert_equals(self.league.addRatings(['1/2/3', '2/3/5/7', '9', '43/4',
             '10/9/8/7/6/5/4/3/2/1/0/0/0']), "65/18/16/14/6/5/4/3/2/1/0/0/0")
+
+    @patch('resources.league.League.eloEnv')
+    def test_getEloPairingParity(self, eloEnv):
+        self.league.getEloPairingParity('3', '8')
+        eloEnv.quality_1vs1.assert_called_once_with(3, 8)
+
+    @patch('resources.league.League.getAverageParity')
+    def test_getEloParity(self, average):
+        assert_equals(self.league.getEloParity(["1", "249", "4940"]),
+                      average.return_value)
+
+    def test_getAverageParity(self):
+        parityFn = lambda *args: sum(args) / 1000.0
+        assert_equals(self.league.getAverageParity([12, 49, 4, 40, 20, 56],
+                      parityFn), 0.06)
+        parityFn = lambda *args: sum(args)
+        assert_equals(self.league.getAverageParity(range(100), parityFn), 1)
+
+    def test_getGlickoParity(self):
+        assert_equals(self.league.getGlickoPairingParity((49, 3), (49, 3)),
+                      1.00)
+        assert_almost_equal(self.league.getGlickoPairingParity((1000, 1),
+                            (2000, 200)), 0.015, 3)
+        assert_equals(self.league.getGlickoParity(["39/4", "49/3",
+            "12/1", "49/1", "20/8", "93/4", "4/3", "-9/120"]), 0.89)
+        self._setProp(self.league.SET_GLICKO_DEFAULT, 15)
+        assert_almost_equal(self.league.getGlickoPairingParity((10, 0.01),
+                            (20, 2)), 0.015, 3)
+
+    @patch('resources.league.League.trueSkillEnv')
+    def test_getTrueSkillParity(self, env):
+        assert_equals(self.league.getTrueSkillParity(["12/3", "45/6",
+                      "78/9"]), env.quality.return_value)
+        assert_equals(env.create_rating.call_count, 3)
+        env.quality.assert_called_once_with([(),] * 3)
+
+    def test_getVarianceScore(self):
+        assert_equals(self.league.getVarianceScore([50, 50, 50]), 1.0)
+        assert_equals(self.league.getVarianceScore([94, 103930390]), 0.0)
+        assert_equals(self.league.getWinCountParity(["10", "10", "50"]), 0.0)
+        assert_almost_equal(self.league.getWinCountParity(["5", "6", "7",
+                            "8"]), 0.656, 3)
+        assert_equals(self.league.getWinRateParity(["10/9", "10/49", "50/4"]),
+                      0.0)
+        assert_almost_equal(self.league.getWinRateParity(["5/49", "6/32904",
+                            "7/12057", "8/8"]), 0.656, 3)
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
+        assert_equals(self.league.getParityScore([10, 10, 10]), 1.0)
+        assert_almost_equal(self.league.getParityScore([1309, 1504]), 0.49, 2)
+
+    def test_getPlayers(self):
+        assert_equals(self.league.getPlayers({'Players': '1309,320,39003'}),
+                      [1309, 320, 39003])
+
+    def test_getHistory(self):
+        assert_equals(self.league.getHistory({'History': '1,2,3,4,5'}),
+                      range(1, 6))
+
+    def test_addToSetWithinDict(self):
+        data = {4: {3, 2}, 5: set()}
+        self.league.addToSetWithinDict(data, 4, 1)
+        self.league.addToSetWithinDict(data, 5, 3)
+        self.league.addToSetWithinDict(data, 6, 4)
+        assert_equals(data, {4: {3, 2, 1}, 5: {3,}, 6: {4,}})
+
+    def test_makePlayersDict(self):
+        teams = [{'ID': 3, 'Players': '3,6,9'}, {'ID': 2, 'Players': '2,4,6'},
+                 {'ID': 6, 'Players': '6,12,18'}]
+        assert_equals(self.league.makePlayersDict(teams), {2: {2,}, 3: {3,},
+                      4: {2,}, 6: {2, 3, 6}, 9: {3,}, 12: {6,}, 18: {6,}})
+
+    def test_narrowHistory(self):
+        self._setProp(self.league.SET_REMATCH_CAP, 3)
+        assert_equals(self.league.narrowHistory([1,1,2,3,4,3,3,2,1,2,4,9,49]),
+                      {1, 2, 3})
+
+    def test_teamsDict(self):
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
+        self._setProp(self.league.SET_REMATCH_LIMIT, "ALL")
+        self._setProp(self.league.SET_REMATCH_CAP, "1")
+        self.teams.findEntities.return_value = [{'ID': 3, 'Limit': '-3',
+            'Rating': '1500', 'Confirmations': 'TRUE,TRUE,TRUE', 'Count': '1',
+            'Players': '12,13,14'}, {'ID': 4, 'Limit': '2', 'Count': '2',
+            'Rating': '1600', 'Players': '1,23,7', 'History': '4,5,6',
+            'Confirmations': 'TRUE,TRUE,FALSE'}, {'ID': 5, 'Limit': '3',
+            'Count': 2, 'Rating': '1950', 'Confirmations': 'TRUE,TRUE',
+            'Players': '12,23,91', 'History': '12,13,9'}]
+        assert_equals(self.league.teamsDict, {5: {'rating': '1950',
+            'count': 1, 'conflicts': {12, 13, 9, 4, 5}}})
+        self._setProp(self.league.SET_REMATCH_LIMIT, "1")
+        self._setProp(self.league.SET_GAME_SIZE, "1")
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, "1")
+        assert_equals(self.league.teamsDict, {5: {'rating': '1950',
+            'count': 1, 'conflicts': {9, 4, 5}}})
 
 # run tests
 if __name__ == '__main__':

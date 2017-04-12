@@ -884,9 +884,10 @@ class League(object):
 
     @property
     def activeTeams(self):
-        return self.getExtantEntities(self.teams,
-                                      {'Limit': {'value': '0',
-                                                 'type': 'negative'}})
+        teams = self.getExtantEntities(self.teams,
+                                       {'Limit': {'value': '0',
+                                                  'type': 'negative'}})
+        return [team for team in teams if int(team['Limit']) > 0]
 
     @property
     def activeTemplates(self):
@@ -2578,7 +2579,7 @@ class League(object):
 
     @noisy
     def getEloPairingParity(self, rtg1, rtg2):
-        return self.eloEnv.quality_1vs1(rtg1, rtg2)
+        return (self.eloEnv.quality_1vs1(int(rtg1), int(rtg2)))
 
     @noisy
     def getEloParity(self, ratings):
@@ -2587,24 +2588,25 @@ class League(object):
 
     @staticmethod
     def getAverageParity(ratings, parityFn):
-        matchups = len(ratings) * float(len(ratings) - 1)
-        paritySum = 0.0
+        paritySum, matchups = 0.0, 0
         for i in xrange(len(ratings)):
             rtg1 = ratings[i]
-            for j in xrange(len(ratings[(i+1):])):
+            for j in xrange(i+1, len(ratings)):
                 rtg2 = ratings[j]
                 paritySum += parityFn(rtg1, rtg2)
-        return min((paritySum / matchups), 1.0)
+                matchups += 1
+        return max(min(round((Decimal(paritySum) / Decimal(matchups)), 2),
+                   1.0), 0.0)
 
-    @staticmethod
-    def getGlickoPairingParity(rtg1, rtg2):
+    def getGlickoPairingParity(self, rtg1, rtg2):
         rating1, rd1 = rtg1
         rating2, rd2 = rtg2
         LN10 = math.log(10, math.e)
-        glickoP = ((3 * (LN10 ** 2)) / ((math.pi ** 2) * (400 ** 2)))
+        cnst = self.glickoRating / 15.0 * 4.0
+        glickoP = ((3 * (LN10 ** 2)) / ((math.pi ** 2) * (cnst ** 2)))
         glickoF = lambda rd: 1.0 / math.sqrt(1 + glickoP * rd ** 2)
         glickoE = lambda r1, s1, r2, s2: (1.0 / (1.0 + 10 ** (-(r1 - r2) *
-                  glickoF(math.sqrt(s1 ** 2 + s2 ** 2)) / 400)))
+                  glickoF(math.sqrt(s1 ** 2 + s2 ** 2)) / cnst)))
         odds = glickoE(rating1, rd1, rating2, rd2)
         shortfall = abs(0.5 - odds)
         return (1.0 - (shortfall * 2))
@@ -2620,7 +2622,7 @@ class League(object):
         rtgs = [rating.split(self.SEP_RTG) for rating in ratings]
         players = [tuple(self.trueSkillEnv.create_rating(int(rtg[0]),
                    int(rtg[1])),) for rtg in rtgs]
-        return self.trueSkillEnv.quality(players)
+        return (self.trueSkillEnv.quality(players))
 
     @staticmethod
     def getVarianceScore(vals):
@@ -2629,7 +2631,7 @@ class League(object):
         for val in vals:
             variance += ((Decimal(val) - Decimal(average)) ** 2)
         sd = math.sqrt(float(variance))
-        score = max(1.0, (sd / float(average)))
+        score = max(min(1.0, (sd / float(average))), 0.0)
         return (1.0 - score)
 
     @noisy
@@ -2682,7 +2684,7 @@ class League(object):
         results = set()
         for item in set(history):
             if history.count(item) >= self.rematchCap:
-                results.add(item)
+                results.add(int(item))
         return results
 
     @property
