@@ -2534,7 +2534,7 @@ class League(object):
             return True
 
     @noisy
-    def validatePlayer(self, playerCounts, players, teamID):
+    def validatePlayerGroup(self, playerCounts, players, teamID):
         """returns True is the player's team has been dropped"""
         for player in players:
             if player not in playerCounts: continue
@@ -2543,18 +2543,20 @@ class League(object):
                 return True
         return False
 
+    @staticmethod
+    def isInactive(team):
+        confirmations, limit = team['Confirmations'], int(team['Limit'])
+        return ('FALSE' in confirmations or limit < 1)
+
     @runPhase
     def validatePlayers(self):
         playerCounts, allTeams = dict(), self.allTeams
         for i in xrange(len(allTeams)):
-            team, dropped = allTeams[i], False
-            confirmations = team['Confirmations']
-            limit, ID = int(team['Limit']), team['ID']
-            if ('FALSE' in confirmations or limit < 1): continue
-            players = team['Players'].split(self.SEP_PLYR)
-            dropped = self.validateTeam(ID, players)
-            dropped = self.validatePlayer(playerCounts, players, ID)
-            if not dropped:
+            team = allTeams[i]
+            if self.isInactive(team): continue
+            ID, players = team['ID'], team['Players'].split(self.SEP_PLYR)
+            if not (self.validateTeam(ID, players) or
+                    self.validatePlayerGroup(playerCounts, players, ID)):
                 self.updatePlayerCounts(playerCounts, players)
 
     @classmethod

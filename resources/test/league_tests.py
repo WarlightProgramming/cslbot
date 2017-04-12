@@ -2583,8 +2583,9 @@ class TestLeague(TestCase):
 
     @patch('resources.league.League.changeLimit')
     @patch('resources.league.League.checkExcess')
-    def test_validatePlayer(self, check, change):
+    def test_validatePlayerGroup(self, check, change):
         check.return_value = False
+        self.league.validatePlayer = self.league.validatePlayerGroup
         assert_equals(self.league.validatePlayer(dict(), set(), 'team'), False)
         assert_equals(self.league.validatePlayer({1: 3}, {3, 4, 5}, 'team'),
                       False)
@@ -2596,6 +2597,35 @@ class TestLeague(TestCase):
         assert_equals(self.league.validatePlayer({4: 3}, {3, 4, 5}, 'team'),
                       True)
         change.assert_called_once_with('team', 0)
+
+    @patch('resources.league.League.updatePlayerCounts')
+    @patch('resources.league.League.validatePlayerGroup')
+    @patch('resources.league.League.validateTeam')
+    def test_validatePlayers(self, team, player, update):
+        self.teams.findEntities.return_value = [{'Limit': '0', 'ID': '4',
+            'Players': '1,2,3,4', 'Confirmations': 'TRUE,TRUE,TRUE,FALSE'},
+            {'Limit': '2', 'Confirmations': 'FALSE,TRUE,TRUE,FALSE',
+             'ID': '2', 'Players': '5,6,7,8'}, {'Limit': '3', 'ID': '3',
+             'Players': '0,9,8,7', 'Confirmations': 'TRUE,TRUE,TRUE'}]
+        team.return_value, player.return_value = False, True
+        self.league.validatePlayers()
+        update.assert_not_called()
+        team.return_value = True
+        self.league.validatePlayers()
+        update.assert_not_called()
+        player.return_value = False
+        self.league.validatePlayers()
+        update.assert_not_called()
+        team.return_value = False
+        self.league.validatePlayers()
+        update.assert_called_once_with(dict(), ['0', '9', '8', '7'])
+
+    def test_ratingOps(self):
+        assert_equals(self.league.splitRating('1/2/3/4/5'), tuple(range(1, 6)))
+        assert_equals(self.league.splitRating('128/4903409/43902/3290'),
+            (128, 4903409, 43902, 3290))
+        assert_equals(self.league.addRatings(['1/2/3', '2/3/5/7', '9', '43/4',
+            '10/9/8/7/6/5/4/3/2/1/0/0/0']), "65/18/16/14/6/5/4/3/2/1/0/0/0")
 
 # run tests
 if __name__ == '__main__':
