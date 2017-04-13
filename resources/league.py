@@ -2478,11 +2478,10 @@ class League(object):
         limit = self.checkLimit(limit) if limit != 0 else 0
         self.updateEntityValue(self.teams, teamID, Limit=limit)
 
-    @staticmethod
-    def updatePlayerCounts(playerCounts, players):
+    @classmethod
+    def updatePlayerCounts(cls, playerCounts, players):
         for player in players:
-            if player not in playerCounts: playerCounts[player] = 1
-            else: playerCounts[player] += 1
+            cls.updateCountInDict(playerCounts, player)
 
     @noisy
     def setProbation(self, teamID, start=None):
@@ -2794,12 +2793,15 @@ class League(object):
             else: result[temp]['count'] += 1
         return result
 
+    @staticmethod
+    def updateCountInDict(data, label):
+        if label not in data: data[label] = 1
+        else: data[label] += 1
+
     @noisy
     def updateScores(self, teamData, scores):
         vetos = teamData['Vetos'].split(self.SEP_VETOS)
-        for veto in vetos:
-            if veto not in scores: scores[veto] = 1
-            else: scores[veto] += 1
+        for veto in vetos: self.updateCountInDict(scores, veto)
 
     @noisy
     def updateConflicts(self, teamData, conflicts):
