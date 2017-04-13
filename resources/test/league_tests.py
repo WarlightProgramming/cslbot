@@ -2718,13 +2718,67 @@ class TestLeague(TestCase):
             'Confirmations': 'TRUE,TRUE,FALSE'}, {'ID': 5, 'Limit': '3',
             'Count': 2, 'Rating': '1950', 'Confirmations': 'TRUE,TRUE',
             'Players': '12,23,91', 'History': '12,13,9'}]
-        assert_equals(self.league.teamsDict, {5: {'rating': '1950',
+        assert_equals(self.league.teamsDict, {'5': {'rating': '1950',
             'count': 1, 'conflicts': {12, 13, 9, 4, 5}}})
         self._setProp(self.league.SET_REMATCH_LIMIT, "1")
         self._setProp(self.league.SET_GAME_SIZE, "1")
         self._setProp(self.league.SET_TEAMS_PER_SIDE, "1")
-        assert_equals(self.league.teamsDict, {5: {'rating': '1950',
+        assert_equals(self.league.teamsDict, {'5': {'rating': '1950',
             'count': 1, 'conflicts': {9, 4, 5}}})
+
+    @patch('resources.league.League.getParityScore')
+    def test_makeGrouping(self, score):
+        score.return_value = 0.8
+        groupingDict = {1: {'rating': 1200, 'count': 0, 'conflicts': {2}},
+                        2: {'rating': 1500, 'count': 4, 'conflicts': {1}},
+                        3: {'rating': 1500, 'count': 9, 'conflicts': {1}}}
+        assert_equals(self.league.makeGrouping(groupingDict, 2, "/", False),
+                      {'2/3'})
+        assert_equals(self.league.makeGrouping(groupingDict, 3, ".", True),
+                      set())
+        self.league._sideSize = [2,]
+        assert_equals(self.league.makeSides(groupingDict), {'2,3'})
+        self.league._gameSize = [2,]
+        assert_equals(self.league.makeMatchings(groupingDict), {'2/3'})
+
+    def test_makeSidesDict(self):
+        assert_equals(self.league.getSideRating('1,2,3,4,5',
+                      {'1': {'rating': '43'}, '2': {'rating': '41'},
+                       '3': {'rating': '18'}, '4': {'rating': '56'},
+                       '5': {'rating': '12'}, '6': {'rating': '9'}}), '170')
+        assert_equals(self.league.makeTeamsToSides({'1,2,3,4,5','6,7,8,9,5'}),
+            {'1': {'1,2,3,4,5'}, '2': {'1,2,3,4,5'}, '3': {'1,2,3,4,5'},
+             '4': {'1,2,3,4,5'}, '5': {'1,2,3,4,5', '6,7,8,9,5'},
+             '6': {'6,7,8,9,5'}, '7': {'6,7,8,9,5'}, '8': {'6,7,8,9,5'},
+             '9': {'6,7,8,9,5'}})
+        assert_equals(self.league.getSideConflicts('1,2,3,4,5',
+            {'3': {'conflicts': {'8'}}, '1': {'conflicts': set()},
+             '2': {'conflicts': set()}, '4': {'conflicts': set()},
+             '5': {'conflicts': set()}},
+            self.league.makeTeamsToSides({'1,2,3,4,5', '5,6,7,8,9', '8,9',
+                                          '55,66,77'})),
+            {'1,2,3,4,5', '5,6,7,8,9', '8,9'})
+        assert_equals(self.league.makeSidesDict({'1,2,3', '4,5,6'},
+            {'1': {'rating': 102, 'count': 2, 'conflicts': set()},
+             '2': {'rating': 490, 'count': 1, 'conflicts': {'3'}},
+             '3': {'rating': 239, 'count': 8, 'conflicts': {'2'}},
+             '4': {'rating': 356, 'count': 3, 'conflicts': {'1'}},
+             '5': {'rating': 491, 'count': 4, 'conflicts': {'3','1','4'}},
+             '6': {'rating': 236, 'count': 2, 'conflicts': {'1','5'}}}),
+            {'1,2,3': {'rating': '831', 'count': 1, 'conflicts': {'1,2,3'}},
+             '4,5,6': {'rating': '1083', 'count': 1, 'conflicts': {'1,2,3',
+             '4,5,6'}}})
+
+    def test_turnNoneIntoMutable(self):
+        assert_equals(self.league.turnNoneIntoMutable(4, set), 4)
+        assert_equals(self.league.turnNoneIntoMutable(None, set), set())
+
+    def test_getTemplatesList(self):
+        tempIDs = {12: {'Games': 8}, 24: {'Games': '9'}, 36: {'Games': 12},
+                   48: {'Games': 93}}
+        assert_equals(self.league.getTemplatesList(tempIDs,
+            {47, 59}, 3, 2), [12, 24, 36, 48, 12, 24, 36, 48, 12, 24, 36,
+            48, 12, 24])
 
 # run tests
 if __name__ == '__main__':

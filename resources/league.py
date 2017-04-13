@@ -2565,7 +2565,7 @@ class League(object):
 
     @noisy
     def updateSums(self, rating, sums):
-        splitRtg = self.splitRating(rating)
+        splitRtg = self.splitRating(str(rating))
         for i in xrange(len(splitRtg)):
             if i >= len(sums): sums.append(splitRtg[i])
             else: sums[i] += splitRtg[i]
@@ -2597,6 +2597,7 @@ class League(object):
         return max(min(round((Decimal(paritySum) / Decimal(matchups)), 2),
                    1.0), 0.0)
 
+    @noisy
     def getGlickoPairingParity(self, rtg1, rtg2):
         rating1, rd1 = rtg1
         rating2, rd2 = rtg2
@@ -2696,7 +2697,7 @@ class League(object):
                         'count': max(0,
                                  (int(team['Limit']) - int(team['Count'])))}
             conflicts = set()
-            ID = int(team['ID'])
+            ID = str(team['ID'])
             players = self.getPlayers(team)
             for player in players:
                 conflicts = conflicts.union(playersDict[player])
@@ -2729,9 +2730,8 @@ class League(object):
 
     @noisy
     def getSideRating(self, side, teamsDict):
-        teams = side.split(self.SEP_TEAMS)
-        ratings = [teamsDict[int(team)]['rating']
-                   for team in teams.split(self.SEP_TEAMS)]
+        ratings = [teamsDict[team]['rating']
+                   for team in side.split(self.SEP_TEAMS)]
         return self.addRatings(ratings)
 
     @noisy
@@ -2747,7 +2747,7 @@ class League(object):
         teams = side.split(self.SEP_TEAMS)
         conflicts = set()
         for team in teams:
-            teamConflicts = teamsDict[team]['conflicts'].union({int(team),})
+            teamConflicts = teamsDict[team]['conflicts'].union({str(team),})
             for conflict in teamConflicts:
                 for conflictingSide in teamsToSides.get(conflict, set()):
                     conflicts.add(conflictingSide)
@@ -2759,7 +2759,7 @@ class League(object):
         for side in sides:
             sideDict = {'rating': self.getSideRating(side, teamsDict),
                         'conflicts': self.getSideConflicts(side, teamsDict,
-                                                           teamsToSides),
+                            teamsToSides),
                         'count': 1}
             result[side] = sideDict
         return result
@@ -2777,7 +2777,7 @@ class League(object):
     @staticmethod
     def getTemplatesList(templateIDs, skipTemps, times, mod):
         templatesList = [temp for temp in templateIDs if temp not in skipTemps]
-        templatesList.sort(key = lambda x: templateIDs[x]['Games'])
+        templatesList.sort(key = lambda x: int(templateIDs[x]['Games']))
         templatesList = (templatesList * times) + templatesList[:mod]
         return templatesList
 
@@ -2785,7 +2785,9 @@ class League(object):
     def makeTemplatesDict(self, gameCount, skipTemps=None):
         self.turnNoneIntoMutable(skipTemps, set)
         templateIDs, result = self.usableTemplateIDs, dict()
-        times, mod = gameCount / len(templateIDs), gameCount % len(templateIDs)
+        length = len(templateIDs) - len(skipTemps)
+        if length < 1: return result
+        times, mod = gameCount / length, gameCount % length
         templatesList = self.getTemplatesList(templateIDs, skipTemps,
                                               times, mod)
         for temp in templatesList:
@@ -2850,7 +2852,7 @@ class League(object):
         allConflicts = self.getUniversalConflicts(matchingsDict)
         templatesDict = self.makeTemplatesDict(gamesToCreate, allConflicts)
         unhandled, batch = copy.copy(matchings), list()
-        while (len(unhandled) > 0):
+        while (len(unhandled) and len(templatesDict)):
             newMatchings = assign_templates(matchingsDict, templatesDict)
             for match in newMatchings:
                 sides, temp = match
@@ -2882,10 +2884,7 @@ class League(object):
     @runPhase
     def createGames(self):
         teamsDict = self.teamsDict
-        if self.sideSize > 1:
-            sides = self.makeSides(teamsDict)
-        else:
-            sides = teamsDict
+        sides = self.makeSides(teamsDict) if self.sideSize > 1 else teamsDict
         sidesDict = self.makeSidesDict(sides, teamsDict)
         matchings = self.makeMatchings(sidesDict)
         batch = self.makeBatch(matchings)
