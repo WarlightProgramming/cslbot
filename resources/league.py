@@ -1163,7 +1163,7 @@ class League(object):
         for temp in tempWLIDs:
             tempName = "template" + str(temp)
             if tempResults[tempName]['result'] == 'CannotUseTemplate':
-                unusables = unusables.union(tempWLIDs[temp])
+                unusables.update(tempWLIDs[temp])
         return unusables
 
     @noisy
@@ -1175,7 +1175,7 @@ class League(object):
                                 (str(teamID)))
         team = teams[0]
         existingDrops = set(team['Drops'].split(self.SEP_DROPS))
-        existingDrops = existingDrops.union(str(t) for t in templates)
+        existingDrops.update(str(t) for t in templates)
         if (len(existingDrops) > self.dropLimit):
             raise ImproperInput("Team %s has already reached its drop limit" %
                                 (str(teamID)))
@@ -2700,13 +2700,13 @@ class League(object):
             ID = str(team['ID'])
             players = self.getPlayers(team)
             for player in players:
-                conflicts = conflicts.union(playersDict[player])
+                conflicts.update(playersDict[player])
             fullHistory = self.getHistory(team)
             if self.rematchLimit == self.KW_ALL:
                 history = fullHistory
             else:
                 history = fullHistory[-(self.rematchLimit):]
-            conflicts = conflicts.union(self.narrowHistory(history))
+            conflicts.update(self.narrowHistory(history))
             teamDict['conflicts'] = conflicts
             result[ID] = teamDict
         return result
@@ -2775,24 +2775,21 @@ class League(object):
         return val
 
     @staticmethod
-    def getTemplatesList(templateIDs, skipTemps, times, mod):
+    def getTemplatesList(templateIDs, skipTemps):
         templatesList = [temp for temp in templateIDs if temp not in skipTemps]
         templatesList.sort(key = lambda x: int(templateIDs[x]['Games']))
-        templatesList = (templatesList * times) + templatesList[:mod]
         return templatesList
 
     @noisy
     def makeTemplatesDict(self, gameCount, skipTemps=None):
-        self.turnNoneIntoMutable(skipTemps, set)
+        skipTemps = self.turnNoneIntoMutable(skipTemps, set)
         templateIDs, result = self.usableTemplateIDs, dict()
         length = len(templateIDs) - len(skipTemps)
         if length < 1: return result
         times, mod = gameCount / length, gameCount % length
-        templatesList = self.getTemplatesList(templateIDs, skipTemps,
-                                              times, mod)
-        for temp in templatesList:
-            if temp not in result: result[temp] = {'count': 1}
-            else: result[temp]['count'] += 1
+        templatesList = self.getTemplatesList(templateIDs, skipTemps)
+        for i in xrange(len(templatesList)):
+            result[str(templatesList[i])] = {'count': times + (i < mod)}
         return result
 
     @staticmethod
@@ -2800,14 +2797,18 @@ class League(object):
         if label not in data: data[label] = 1
         else: data[label] += 1
 
+    @staticmethod
+    def splitAndFilter(string, splitter):
+        return [v for v in string.split(splitter) if len(v)]
+
     @noisy
     def updateScores(self, teamData, scores):
-        vetos = teamData['Vetos'].split(self.SEP_VETOS)
+        vetos = self.splitAndFilter(teamData['Vetos'], self.SEP_VETOS)
         for veto in vetos: self.updateCountInDict(scores, veto)
 
     @noisy
     def updateConflicts(self, teamData, conflicts):
-        drops = teamData['Drops'].split(self.SEP_DROPS)
+        drops = self.splitAndFilter(teamData['Drops'], self.SEP_DROPS)
         for drop in drops: conflicts.add(drop)
 
     @noisy
@@ -2839,26 +2840,31 @@ class League(object):
         conflicts = None
         for matching in matchingsDict:
             tempConf = matchingsDict[matching]['conflicts']
-            if conflicts is None:
-                conflicts = tempConf
-            else:
-                conflicts = conflicts.intersection(tempConf)
+            if conflicts is None: conflicts = tempConf
+            else: conflicts.intersection_update(tempConf)
         return conflicts
+
+    @staticmethod
+    def getNewMatchings(matchingsDict, templatesDict):
+        if len(templatesDict): return assign_templates(matchingsDict,
+                                                       templatesDict)
+        return set()
 
     @noisy
     def makeBatch(self, matchings):
-        gamesToCreate = len(matchings)
-        matchingsDict = self.makeMatchingsDict(matchings)
-        allConflicts = self.getUniversalConflicts(matchingsDict)
-        templatesDict = self.makeTemplatesDict(gamesToCreate, allConflicts)
+        gamesToCreate, templatesDict = len(matchings), None
         unhandled, batch = copy.copy(matchings), list()
-        while (len(unhandled) and len(templatesDict)):
-            newMatchings = assign_templates(matchingsDict, templatesDict)
+        while (len(unhandled) and (templatesDict is None or
+               len(templatesDict))):
+            matchingsDict = self.makeMatchingsDict(unhandled)
+            allConflicts = self.getUniversalConflicts(matchingsDict)
+            templatesDict = self.makeTemplatesDict(gamesToCreate,
+                                                   allConflicts)
+            newMatchings = self.getNewMatchings(matchingsDict, templatesDict)
             for match in newMatchings:
                 sides, temp = match
-                if temp not in matchingsDict[sides]['conflicts']:
-                    batch.append({'Sides': sides, 'Template': temp})
-                    unhandled.remove(sides)
+                batch.append({'Sides': sides, 'Template': temp})
+                unhandled.remove(sides)
         return batch
 
     @noisy
@@ -2869,14 +2875,13 @@ class League(object):
                 self.games.addEntity({'ID': currentID, 'WarlightID': '',
                                       'Created': '', 'Winners': '',
                                       'Sides': game['Sides'], 'Vetos': 0,
-                                      'Vetoed': '',
+                                      'Vetoed': '', 'Finished': '',
                                       'Template': game['Template']})
+                self.makeGame(currentID)
+                currentID += 1
             except (SheetErrors.DataError, SheetErrors.SheetError) as e:
                 self.parent.log(("Failed to add game to sheet due to %s" %
                                  str(e)), self.name, error=True)
-            try:
-                self.makeGame(currentID)
-                currentID += 1
             except APIError as e:
                 self.parent.log(("Failed to create game with ID %d" %
                                  (currentID)), self.name, error=True)

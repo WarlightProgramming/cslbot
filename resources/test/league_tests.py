@@ -4,6 +4,7 @@
 # imports
 import time
 import sheetDB
+import wl_api
 from unittest import TestCase, main as run_tests
 from nose.tools import assert_equals, assert_not_equal, assert_true,\
 assert_raises, assert_false, assert_almost_equal
@@ -2775,10 +2776,129 @@ class TestLeague(TestCase):
 
     def test_getTemplatesList(self):
         tempIDs = {12: {'Games': 8}, 24: {'Games': '9'}, 36: {'Games': 12},
-                   48: {'Games': 93}}
+                   48: {'Games': 93}, 47: {'Games': 41}}
         assert_equals(self.league.getTemplatesList(tempIDs,
-            {47, 59}, 3, 2), [12, 24, 36, 48, 12, 24, 36, 48, 12, 24, 36,
-            48, 12, 24])
+            {47, 59}), [12, 24, 36, 48])
+
+    def test_makeTemplatesDict(self):
+        self.templates.findEntities.return_value = {12: {'Games': 8},
+            24: {'Games': '9'}, 36: {'Games': 12}, 48: {'Games': 93}}
+        assert_equals(self.league.makeTemplatesDict(43, {12, 24, 36, 48}),
+                      dict())
+        assert_equals(self.league.makeTemplatesDict(4904, {24,}),
+                      {'12': {'count': 1635}, '36': {'count': 1635},
+                       '48': {'count': 1634}})
+
+    def test_makeMatchingsDict(self):
+        data = {1: -94, 3: 8}
+        self.league.updateCountInDict(data, 1)
+        self.league.updateCountInDict(data, 2)
+        self.league.updateCountInDict(data, 3)
+        assert_equals(data, {1: -93, 2: 1, 3: 9})
+        scores = {'8': 4, '9': 1}
+        self.league.updateScores({'Vetos': '49/3'}, scores)
+        self.league.updateScores({'Vetos': '89/8'}, scores)
+        self.league.updateScores({'Vetos': ''}, scores)
+        assert_equals(scores, {'8': 5, '9': 1, '3': 1, '49': 1, '89': 1})
+        conflicts = {'13', '49'}
+        self.league.updateConflicts({'Drops': '13/39/239/4'}, conflicts)
+        self.league.updateConflicts({'Drops': ''}, conflicts)
+        assert_equals(conflicts, {'13', '49', '39', '239', '4'})
+        self.templates.findEntities.return_value = {12: {'Games': 8},
+            24: {'Games': '9'}, 36: {'Games': 12}, 48: {'Games': 93}}
+        self.teams.findEntities.return_value = [{'Vetos': '23/32',
+            'Drops': '25/65'},]
+        assert_equals(self.league.makeMatchingsDict({'1,3,5/7,9,12',
+            '12,24,36/48,3,1', '31,39,73/48,65,21'}),
+            {'1,3,5/7,9,12': {'scores': {'23': 6, '32': 6},
+             'conflicts': {'25', '65'}, 'count': 1},
+             '12,24,36/48,3,1': {'scores': {'23': 6, '32': 6},
+             'conflicts': {'25', '65'}, 'count': 1},
+             '31,39,73/48,65,21': {'scores': {'23': 6, '32': 6},
+             'conflicts': {'25', '65'}, 'count': 1}})
+        assert_equals(self.league.getUniversalConflicts(
+            self.league.makeMatchingsDict({'1,3,5/7,9,12', '4/12'})),
+            {'25', '65'})
+        self.templates.findEntities.return_value = {'25', '65'}
+        assert_equals(self.league.makeMatchingsDict({'12/23', '11/47'}), {})
+
+    @patch('resources.league.League.makeTemplatesDict')
+    @patch('resources.league.League.getUniversalConflicts')
+    @patch('resources.league.League.makeMatchingsDict')
+    def test_makeBatch(self, matchings, conflicts, temps):
+        matchings.return_value = {'1/2': {'scores': dict(), 'conflicts': {'3'},
+            'count': 1}, '3/4': {'scores': {'3': 2, '4': 1},
+            'conflicts': set(), 'count': 1}}
+        conflicts.return_value = set()
+        temps.return_value = {'3': {'count': 1}, '4': {'count': 8},
+            '5': {'count': 0}, '6': {'count': 2}}
+        assert_equals(self.league.makeBatch({'1/2', '3/4'}),
+                      [{'Sides': '3/4', 'Template': '6'},
+                       {'Sides': '1/2', 'Template': '4'},])
+        temps.return_value = dict()
+        matchings.return_value = {'1/2': {'scores': dict(),
+            'conflicts': {'3', '4', '6'}, 'count': 1}, '3/4':
+            {'scores': {'3': 2, '4': 1}, 'conflicts': {'3', '4', '6'},
+             'count': 1}}
+        assert_equals(self.league.makeBatch({'1/2', '3/4'}), list())
+
+    @patch('resources.league.League.makeGame')
+    def test_createBatch(self, make):
+        batch = [{'Sides': '3/4', 'Template': '6'},
+                 {'Sides': '1/2', 'Template': '4'},]
+        self.games.findValue.return_value = range(33)
+        self.league.createBatch(batch)
+        self.games.addEntity.assert_called_with({'ID': 34, 'WarlightID': '',
+            'Created': '', 'Winners': '', 'Sides': '1/2', 'Vetos': 0,
+            'Vetoed': '', 'Finished': '', 'Template': '4'})
+        make.assert_called_with(34)
+        make.side_effect = wl_api.wl_api.APIError
+        self.league.createBatch(batch)
+        self.parent.log.assert_called_with("Failed to create game with ID 33",
+            self.league.name, error=True)
+        self.games.addEntity.side_effect = sheetDB.errors.DataError
+        self.league.createBatch(batch)
+        failStr = "Failed to add game to sheet due to "
+        self.parent.log.assert_called_with(failStr, self.league.name,
+                                           error=True)
+
+    @patch('resources.league.League.createBatch')
+    @patch('resources.league.League.makeBatch')
+    @patch('resources.league.League.makeMatchings')
+    @patch('resources.league.League.makeSidesDict')
+    @patch('resources.league.League.makeSides')
+    def test_createGames(self, make, makeDict, match, batch, create):
+        self.league._sideSize = [1,]
+        assert_equals(self.league.sideSize, 1)
+        self.league.createGames()
+        make.assert_not_called()
+        makeDict.assert_called_once_with(self.league.teamsDict,
+            self.league.teamsDict)
+        match.assert_called_once_with(makeDict.return_value)
+        batch.assert_called_once_with(match.return_value)
+        create.assert_called_once_with(batch.return_value)
+        self.league._sideSize = [3,]
+        assert_equals(self.league.sideSize, 3)
+        self.league.createGames()
+        make.assert_called_once_with(self.league.teamsDict)
+
+    @patch('resources.league.League.createGames')
+    @patch('resources.league.League.restoreTeams')
+    @patch('resources.league.League.validatePlayers')
+    @patch('resources.league.League.executeOrders')
+    @patch('resources.league.League.updateGames')
+    def test_run(self, update, execute, validate, restore, create):
+        self._setProp(self.league.SET_ACTIVE, "FALSE")
+        self.league.run()
+        create.assert_not_called()
+        for fn in {update, execute, validate, restore}:
+            fn.assert_called_once_with()
+        self._setProp(self.league.SET_ACTIVE, "TRUE")
+        self.teams.findEntities.return_value = [{'Limit': '10'},] * 10
+        self.templates.findEntities.return_value = xrange(5)
+        assert_true(self.league.active)
+        self.league.run()
+        create.assert_called_once_with()
 
 # run tests
 if __name__ == '__main__':
