@@ -1450,6 +1450,12 @@ class League(object):
         dropStr = (self.SEP_DROPS).join(set(str(x) for x in drops))
         self.updateEntityValue(self.teams, teamID, Drops=dropStr)
 
+    def findAndDrop(self, templateNames, existingDrops):
+        for templateName in templateNames:
+            temp = self.findMatchingTemplate(templateName)
+            if temp is None: continue
+            existingDrops.add(str(temp.get('ID')))
+
     @noisy
     def dropTemplates(self, order):
         templateNames = order['orders'][2:]
@@ -1464,10 +1470,7 @@ class League(object):
                        % (teamName, remainingDrops))
             self.parent.log(dataStr, self.name, error=True)
             templateNames = templateNames[:remainingDrops]
-        for templateName in templateNames:
-            temp = self.findMatchingTemplate(templateName)
-            if temp is None: continue
-            existingDrops.add(str(temp.get('ID')))
+        self.findAndDrop(templateNames, existingDrops)
         self.updateTeamDrops(teamID, existingDrops)
 
     @noisy
