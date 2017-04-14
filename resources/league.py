@@ -19,7 +19,8 @@ from wl_parsers import PlayerParser
 from wl_api import APIHandler
 from wl_api.wl_api import APIError
 from sheetDB import errors as SheetErrors
-from resources.constants import API_CREDS, TIMEFORMAT, DEBUG_KEY
+from resources.constants import API_CREDS, TIMEFORMAT, DEBUG_KEY,\
+    ITERATIONS_PER_DAY
 from resources.utility import isInteger
 
 # decorators
@@ -115,7 +116,7 @@ class League(object):
     SET_MIN_LIMIT = "MIN LIMIT"
     SET_AUTOFORMAT = "AUTOFORMAT"
     SET_CONSTRAIN_LIMIT = "CONSTRAIN LIMIT"
-    SET_EXP_THRESH = "EXPIRY THRESHOLD"
+    SET_EXP_THRESH = "ABANDON THRESHOLD"
     SET_VETO_LIMIT = "VETO LIMIT"
     SET_VETO_PENALTY = "VETO PENALTY"
     SET_ELO_K = "ELO K"
@@ -182,6 +183,10 @@ class League(object):
     SET_NAME_LENGTH = "MAX TEAM NAME LENGTH"
     SET_CONSTRAIN_NAME = "CONSTRAIN NAME LENGTH"
     SET_PRESERVE_RECORDS = "PRESERVE RECORDS"
+    SET_MAINTAIN_TOTAL = "MAINTAIN RATING TOTAL"
+    SET_RATING_DECAY = "INACTIVITY PENALTY" # per day
+    SET_PENALTY_FLOOR = "PENALTY FLOOR"
+    SET_RETENTION_RANGE = "EXPIRE GAMES AFTER" # days
     SET_DEBUG = DEBUG_KEY
 
     # rating systems
@@ -238,6 +243,9 @@ class League(object):
     SEP_TEMPSET = "#"
     SEP_SCHEMES = ","
 
+    # markers
+    MARK_DECLINE = "!"
+
     def __init__(self, games, teams, templates, settings, orders,
                  admin, parent, name, thread):
         self.games = games
@@ -256,6 +264,7 @@ class League(object):
         self._currentID, self._gameSize, self._sideSize = None, list(), list()
         self.debug = self.fetchProperty(self.SET_DEBUG, False,
                                         self.getBoolProperty)
+        self.tempTeams = None
 
     def makeRateSysDict(self):
         self.sysDict = {self.RATE_ELO: {'default': self.defaultElo,
@@ -332,7 +341,7 @@ class League(object):
                            'Finished': 'INT',
                            'Limit': 'INT',
                            'Count': 'INT'}
-        if self.minRating is not None:
+        if self.minRating is not None or self.maxRank is not None:
             teamConstraints['Probation Start'] = 'STRING'
         self.checkSheet(self.teams, set(teamConstraints), teamConstraints,
                         self.autoformat)
@@ -399,6 +408,18 @@ class League(object):
                                   self.getBoolProperty)
 
     @property
+    def maintainTotal(self):
+        """
+        whether to maintain the total value of ratings
+        to make sure that the sum of ratings in the league
+        is always equal to the # of active players * the default rating
+        """
+        prohibited = {self.RATE_WINRATE, self.RATE_WINCOUNT}
+        expVal = self.fetchProperty(self.SET_MAINTAIN_TOTAL, False,
+                                    self.getBoolProperty)
+        return (expVal and self.ratingSystem not in prohibited)
+
+    @property
     def autodrop(self):
         """whether to automatically drop templates players can't use"""
         return self.fetchProperty(self.SET_AUTODROP, (self.dropLimit > 0),
@@ -421,6 +442,18 @@ class League(object):
     @property
     def nameLength(self):
         return self.fetchProperty(self.SET_NAME_LENGTH, None, int)
+
+    @property
+    def ratingDecay(self):
+        return self.fetchProperty(self.SET_RATING_DECAY, 0, int)
+
+    @property
+    def penaltyFloor(self):
+        return self.fetchProperty(self.SET_PENALTY_FLOOR, None, int)
+
+    @property
+    def retentionRange(self):
+        return self.fetchProperty(self.SET_RETENTION_RANGE, None, int)
 
     @property
     def constrainName(self):
@@ -1710,9 +1743,10 @@ class League(object):
         return self.findTeamsFromData(gameData, players)
 
     @noisy
-    def setWinners(self, gameID, winningSide):
+    def setWinners(self, gameID, winningSide, declined=False):
         sortedWinners = sorted(team for team in winningSide)
         winStr = (self.SEP_TEAMS).join(str(team) for team in sortedWinners)
+        if declined: winStr = winStr + self.MARK_DECLINE
         finStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
         self.updateEntityValue(self.games, gameID, identifier='ID',
                                Winners=winStr, Finished=finStr)
@@ -1944,8 +1978,10 @@ class League(object):
                 self.adjustTeamGameCount(team, -1, 1)
 
     @noisy
-    def updateResults(self, gameID, sides, winningSide, adj=True):
-        self.setWinners(gameID, sides[winningSide])
+    def updateResults(self, gameID, sides, winningSide, adj=True,
+                      declined=False):
+        adj = (adj and self.retentionRange is None)
+        self.setWinners(gameID, sides[winningSide], declined)
         if adj:
             newRatings = self.getNewRatings(sides, winningSide)
             self.updateRatings(newRatings)
@@ -2001,7 +2037,7 @@ class League(object):
         sides, winningSide = self.makeFakeSides(sides, losingTeams)
         if winningSide is None: self.updateVeto(gameID)
         self.updateResults(gameID, sides, winningSide,
-                           adj=self.penalizeDeclines)
+                           adj=self.penalizeDeclines, declined=False)
 
     @staticmethod
     def removeEntity(table, ID, identifier='ID'):
@@ -2032,6 +2068,8 @@ class League(object):
 
     @noisy
     def getTeamRating(self, team):
+        if (self.tempTeams is not None and team in self.tempTeams):
+            return self.tempTeams[team]
         teamData = self.fetchTeamData(team)
         return teamData['Rating']
 
@@ -2218,7 +2256,7 @@ class League(object):
                        '_GAME_SIDES': sideInfo,
                        '_TEMPLATE_NAME': tempName,
                        '_LEAGUE_ADMIN': adminName,
-                       '_EXPIRY_THRESHOLD': expThresh}
+                       '_ABANDON_THRESHOLD': expThresh}
         return self.adaptMessage(message, replaceDict)
 
     @noisy
@@ -2550,6 +2588,11 @@ class League(object):
     def isInactive(team):
         confirmations, limit = team['Confirmations'], int(team['Limit'])
         return ('FALSE' in confirmations or limit < 1)
+
+    @staticmethod
+    def wasActive(team):
+        count, finished = int(team['Count']), int(team['Finished'])
+        return bool(count + finished)
 
     @runPhase
     def validatePlayers(self):
@@ -2898,6 +2941,111 @@ class League(object):
         batch = self.makeBatch(matchings)
         self.createBatch(batch)
 
+    @staticmethod
+    def reduceToActive(teams):
+        return [t for t in teams if int(t['Limit']) > 0 and
+                'FALSE' not in t['Confirmations']]
+
+    @classmethod
+    def adjustAndPackage(cls, team, adj, floor=None):
+        rtg = cls.splitRating(team['Rating'])
+        rtg[0] = int(round(Decimal(rtg[0]) + Decimal(adj)))
+        if floor is not None: rtg[0] = max(rtg[0], floor)
+        return cls.unsplitRtg(rtg)
+
+    @runPhase
+    def rescaleRatings(self):
+        if not self.maintainTotal: return
+        allTeams = self.allTeams
+        actives = self.reduceToActive(allTeams)
+        total, count = 0, len(actives)
+        for team in actives:
+            total += self.splitRating(team['Rating'])[0]
+        expected = count * self.splitRating(self.defaultRating)[0]
+        adjustment = (Decimal(expected) - Decimal(total)) / Decimal(count)
+        for team in allTeams:
+            rating = self.adjustAndPackage(team, adjustment)
+            self.updateTeamRating(team['ID'], rating)
+
+    @staticmethod
+    def midnight():
+        now = datetime.now()
+        return datetime(year=now.year, month=now.month, day=now.day)
+
+    @property
+    def decayTime(self):
+        HOURS_PER_DAY, MINUTES_PER_HOUR = 24, 60
+        maxHours = Decimal(HOURS_PER_DAY) / Decimal(ITERATIONS_PER_DAY)
+        maxMinutes = (maxHours % 1) * Decimal(MINUTES_PER_HOUR)
+        maxDelta = timedelta(days=0, hours=maxHours, minutes=maxMinutes)
+        return (datetime.now() - self.midnight()) <= maxDelta
+
+    @runPhase
+    def decayRatings(self):
+        if self.ratingDecay == 0 or not self.decayTime: return
+        allTeams = self.allTeams
+        for team in allTeams:
+            if (self.isInactive(team) and self.wasActive(team)):
+                rating = self.adjustAndPackage(team, -self.ratingDecay,
+                                               self.penaltyFloor)
+                self.updateTeamRating(team['ID'], rating)
+
+    @noisy
+    def dateUnexpired(self, finishDate, current):
+        if finishDate == '': return False
+        return (((current -
+                  datetime.strptime(finishDate, self.TIMEFORMAT)).days) <=
+                self.retentionRange)
+
+    @property
+    def unexpiredGames(self):
+        allGames, current = self.getExtantEntities(self.games), datetime.now()
+        return [g for g in allGames if
+                self.dateUnexpired(g['Finished'], current) and
+                len(g['Winners'])]
+
+    @classmethod
+    def unpackDeclineWinners(cls, winners, sides):
+        sides = [winners, sides-winners]
+        return sides, 0, True
+
+    @classmethod
+    def unpackWinners(cls, game):
+        winners, sides = game['Winners'], game['Sides'].split(cls.SEP_SIDES)
+        declined = cls.MARK_DECLINE in winners
+        if cls.MARK_DECLINE in winners:
+            winners = winners.replace(cls.MARK_DECLINE, "")
+        sides = [set(side.split(cls.SEP_TEAMS)) for side in sides]
+        winners = set(winners.split(cls.SEP_TEAMS))
+        if declined: return cls.unpackDeclineWinners(winners, sides)
+        for i in xrange(len(sides)):
+            if len(sides[i] & winners) > 0: winningSide = i
+        return sides, winningSide, declined
+
+    @noisy
+    def runCalculations(self):
+        games = self.unexpiredGames
+        for game in games:
+            sides, winningSide, declined = self.unpackWinners(game)
+            if declined and not self.penalizeDeclines: continue
+            newRatings = self.getNewRatings(sides, winningSide)
+            for team in newRatings:
+                self.tempTeams[team] = newRatings[team]
+
+    @noisy
+    def updateTeamRatings(self):
+        self.updateRatings(self.tempTeams)
+
+    @runPhase
+    def calculateRatings(self):
+        if self.retentionRange is None: return
+        self.tempTeams = dict()
+        for team in self.allTeams:
+            self.tempTeams[str(team)] = self.defaultRating
+        self.runCalculations()
+        self.updateTeamRatings()
+        self.tempTeams = None
+
     def run(self):
         """
         runs the league in four phases
@@ -2910,5 +3058,7 @@ class League(object):
         self.executeOrders()
         self.validatePlayers()
         self.restoreTeams()
-        if self.active:
-            self.createGames()
+        if self.active: self.createGames()
+        self.rescaleRatings()
+        self.decayRatings()
+        self.calculateRatings()

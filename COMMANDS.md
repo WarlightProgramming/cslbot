@@ -25,7 +25,7 @@
       * [Elo](#elo)
       * [Glicko](#glicko)
       * [TrueSkill](#trueskill)
-      * [All Rating Systems](#all-rating-systems)
+      * [General](#general)
     * [Elimination Ladders](#elimination-ladders)
     * [Multischeme Ladders](#multischeme-ladders)
 
@@ -165,6 +165,28 @@ orders, so make sure this actually goes to whoever runs the league cluster.
 
 ___
 
+#### {{DEBUG KEY}}
+
+Whether to log most method calls for the sake of debugging.
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: False (no extra logging)
+
+Setting this to true will cause quite a lot of logging, nearly every time a
+method is called, during each iteration- to help debug any issues with the
+league and determine if there are any issues and where they are occurring.
+
+Given that this logging is primarily in the interest of the person running a
+cslbot instance and that it slows down the instance and increases the number of
+queries it makes to the Google Sheets API, debug keys are kept secret and
+should be retrieved from the cslbot instance's owner. If you do use this
+command, be sure to hide either the commands sheet of the league cluster (not
+recommended) or just the row where you use the debug key, for the sake of
+maintaining secrecy and preventing abuse.
+
+___
+
 ### League Setup
 
 ___
@@ -268,7 +290,7 @@ Here's a list of all of them, with some basic descriptions:
   the game
 * **\_TEMPLATE_NAME**: Name of the template used by the game
 * **\_LEAGUE\_ADMIN**: Username of league's stated admin
-* **\_EXPIRY_THRESHOLD**: The league's **EXPIRY THRESHOLD**
+* **\_ABANDON\_THRESHOLD**: The league's **ABANDON THRESHOLD**
   
 ___
 
@@ -480,6 +502,9 @@ The rating system used by the league.
 
 *Deault*: Elo
 
+Do not change this argument once your league has already started running. It
+will likely have serious side-effects.
+
 If you switch rating systems after a league has already started, you will have
 to manually update the rating for each team to match the format- so it's
 strongly discouraged to do so. On top of that, your ratings will be less
@@ -539,7 +564,7 @@ threshold) from affecting your league rankings.
 
 ___
 
-#### EXPIRY THRESHOLD
+#### ABANDON THRESHOLD
 
 Number of days until a game is considered abandoned.
 
@@ -1282,7 +1307,7 @@ ___
 
 ### Vetos and Drops
 
-If a game has been in the lobby too long (past the [**EXPIRY THRESHOLD**](#expiry-threshold)) with
+If a game has been in the lobby too long (past the [**ABANDON THRESHOLD**](#expiry-threshold)) with
 no one accepting their invite or has had all of its players Vote to End, it
 will be considered abandoned. This gives players a mechanism to veto
 templates/games they dislike- vetoing makes players less likely to be assigned
@@ -1488,7 +1513,7 @@ teams get to start out with.
 
 ___
 
-### All Rating Systems
+### General
 
 ___
 
@@ -1519,6 +1544,100 @@ If your league creates sides (i.e., if your value of
 you want those automatically-created sides to have as much variance in skill as
 possible- i.e., you want to group higher-skilled teams with lower-skilled teams
 instead of having roughly uniform skill within a side grouping.
+
+___
+
+#### MAINTAIN RATING TOTAL
+
+Whether to adjust ratings to maintain a consistent sum.
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: False
+
+This command is unavailable if you're using win rates or win counts as your
+league's rating system.
+
+When players enter a league and play games in it, they make an impact on other
+players' ratings- generally decreasing them in wins and increasing them in
+losses. However, when those players leave, they don't take those changes back-
+so every time your league loses a player, unless their rating was precisely
+equal to your default, your league has "gained" or "lost" some points based on
+how below or above average they were. Setting this to True will regularly
+adjust *everyone*'s rating (even if they're inactive) to make sure that the
+sum of all active players' ratings (i.e., the total rating points in your
+system) remains the same at all times. This keeps your mean rating from
+drifting as your league progresses.
+
+For multi-part ratings (e.g., Glicko or TrueSkill ratings), this only affects
+the actual rating itself- not the rating deviation.
+
+This is also useful if you change your league's default rating and want to
+adjust existing ratings to match that.
+
+___
+
+#### INACTIVITY PENALTY
+
+Number of rating points to subtract from each formerly-active team every day.
+
+*Sample Args*: "0", "10", "20"
+
+*Default*: 0 (no penalty)
+
+For every day of inactivity, each formerly active team (i.e., any team that was
+once playing games in your league but is no longer participating) will lose
+this amount of points. If you want teams to not be penalized if their rating is
+at or below a certain value, you can set the
+[**PENALTY FLOOR**](#penalty-floor) to that value. Teams that were forcibly removed (e.g.,
+due to a ban, prereqs, or culling in an elimination ladder) will still be
+subject to this penalty. Note, though, that teams that were culled in an
+elimination ladder will be restored to the ladder default rating if you've
+enabled restoration to the ladder.
+
+For multi-part ratings (e.g., Glicko or TrueSkill ratings), this only affects
+the actual rating itself- not the rating deviation.
+
+In general, using this setting in conjunction with an elimination ladder or
+another scenario where players above your penalty floor are frequently forcibly
+removed from the league is strongly advised against.
+
+___
+
+#### PENALTY FLOOR
+
+The rating at which a formerly-active team can no longer be penalized.
+
+*Sample Args*: "1200", "1500", "2000"
+
+*Default*: (no floor)
+
+If you've enabled an [**INACTIVITY PENALTY**](#inactivity-penalty), you might
+want to set this to a specific value if you want to prevent formerly-active
+teams from being penalized incredibly harshly and watching their ratings slowly
+trudge towards negative infinity.
+
+___
+
+#### RETENTION RANGE
+
+Number of days after which games are considered expired (with regard to rating
+calculation).
+
+*Sample Args*: "10", "200", "500"
+
+*Default*: (no expiry)
+
+If you set this to a value of X, only games that were finished in the past X
+days (at the time of each iteration) will be used to calculate player ratings.
+Expiry not only keeps players from having potentially-not-representative games
+from their early career in your league considered as part of their ratings but
+also mitigates the drift of your league's mean rating away from the default
+rating of the league. At each iteration of the league, ratings will be
+calculated from scratch starting from the very first un-expired game, so this
+will slow down your league considerably. If you set a retention range, it's
+recommended to keep the value low enough that on average your league does not
+have too many unexpired games (>1000) at any given point.
 
 ___
 

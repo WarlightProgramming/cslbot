@@ -310,6 +310,15 @@ class TestLeague(TestCase):
         self._boolPropertyTest("preserveRecords",
                                 self.league.SET_PRESERVE_RECORDS, True)
 
+    def test_maintainTotal(self):
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
+        self._boolPropertyTest("maintainTotal",
+                               self.league.SET_MAINTAIN_TOTAL, False)
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_WINRATE)
+        values = {'TRUE': False, 'FALSE': False}
+        self._propertyTest("maintainTotal", self.league.SET_MAINTAIN_TOTAL,
+                           False, values)
+
     def test_autodrop(self):
         self._boolPropertyTest("autodrop", self.league.SET_AUTODROP,
                                (self.league.dropLimit > 0))
@@ -329,6 +338,17 @@ class TestLeague(TestCase):
 
     def test_nameLength(self):
         self._intPropertyTest("nameLength", self.league.SET_NAME_LENGTH, None)
+
+    def test_ratingDecay(self):
+        self._intPropertyTest("ratingDecay", self.league.SET_RATING_DECAY, 0)
+
+    def test_penaltyFloor(self):
+        self._intPropertyTest("penaltyFloor", self.league.SET_PENALTY_FLOOR,
+                              None)
+
+    def test_retentionRange(self):
+        self._intPropertyTest("retentionRange",
+                              self.league.SET_RETENTION_RANGE, None)
 
     def test_constrainName(self):
         self._boolPropertyTest("constrainName", self.league.SET_CONSTRAIN_NAME,
@@ -2019,11 +2039,11 @@ class TestLeague(TestCase):
     @patch('resources.league.League.setWinners')
     def test_updateResults(self, setWin, getNew, update, finish):
         self.league.updateResults(3, [{1, 2}, {3, 4}], 0)
-        setWin.assert_called_once_with(3, {1, 2})
+        setWin.assert_called_once_with(3, {1, 2}, False)
         update.assert_called_once_with(getNew.return_value)
         finish.assert_called_once_with([{1, 2}, {3, 4}])
         self.league.updateResults(12, [{1,}, {3,}], 1, False)
-        setWin.assert_called_with(12, {3,})
+        setWin.assert_called_with(12, {3,}, False)
         assert_equals(update.call_count, 1)
         finish.assert_called_with([{1,}, {3,}])
 
@@ -2082,7 +2102,7 @@ class TestLeague(TestCase):
         self.league.updateDecline('ID', 'decliners')
         veto.assert_not_called()
         updateRes.assert_called_once_with('ID', set(), 0,
-                                          adj=self.league.penalizeDeclines)
+            adj=self.league.penalizeDeclines, declined=False)
         make.return_value = set(), None
         self.league.updateDecline('ID', 'decliners')
         veto.assert_called_once_with('ID')
@@ -2258,7 +2278,7 @@ class TestLeague(TestCase):
         assert_equals(self.league.processMessage("{{_TEMPLATE_NAME}}",
             gameData), "TEMP NAME")
         self._setProp(self.league.SET_EXP_THRESH, 8)
-        assert_equals(self.league.processMessage("{{_EXPIRY_THRESHOLD}}",
+        assert_equals(self.league.processMessage("{{_ABANDON_THRESHOLD}}",
             gameData), "8")
 
     def test_updateHistories(self):
