@@ -2980,15 +2980,18 @@ class League(object):
         maxDelta = timedelta(days=0, hours=maxHours, minutes=maxMinutes)
         return (datetime.now() - self.midnight()) <= maxDelta
 
+    @noisy
+    def decayRating(self, team):
+        if (self.isInactive(team) and self.wasActive(team)):
+            rating = self.adjustAndPackage(team, -self.ratingDecay,
+                                           self.penaltyFloor)
+            self.updateTeamRating(team['ID'], rating)
+
     @runPhase
     def decayRatings(self):
         if self.ratingDecay == 0 or not self.decayTime: return
         allTeams = self.allTeams
-        for team in allTeams:
-            if (self.isInactive(team) and self.wasActive(team)):
-                rating = self.adjustAndPackage(team, -self.ratingDecay,
-                                               self.penaltyFloor)
-                self.updateTeamRating(team['ID'], rating)
+        for team in allTeams: self.decayRating(team)
 
     @noisy
     def dateUnexpired(self, finishDate, current):
@@ -3009,12 +3012,20 @@ class League(object):
         sides = [winners, sides-winners]
         return sides, 0, True
 
+    @staticmethod
+    def removeMark(string, mark):
+        if mark in string: return string.replace(mark, "")
+        return string
+
+    @classmethod
+    def removeDeclineMark(cls, winners):
+        return cls.removeMark(winners, cls.MARK_DECLINE)
+
     @classmethod
     def unpackWinners(cls, game):
         winners, sides = game['Winners'], game['Sides'].split(cls.SEP_SIDES)
         declined = cls.MARK_DECLINE in winners
-        if cls.MARK_DECLINE in winners:
-            winners = winners.replace(cls.MARK_DECLINE, "")
+        winners = cls.removeDeclineMark(winners)
         sides = [set(side.split(cls.SEP_TEAMS)) for side in sides]
         winners = set(winners.split(cls.SEP_TEAMS))
         if declined: return cls.unpackDeclineWinners(winners, sides)
