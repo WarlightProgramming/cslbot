@@ -2948,15 +2948,13 @@ class League(object):
         batch = self.makeBatch(matchings)
         self.createBatch(batch)
 
-    @staticmethod
-    def reduceToActive(teams):
-        return [t for t in teams if int(t['Limit']) > 0 and
-                'FALSE' not in t['Confirmations']]
+    @classmethod
+    def reduceToActive(cls, teams):
+        return [t for t in teams if not cls.isInactive(t)]
 
     @classmethod
     def onceActive(cls, t):
-        return ((int(t['Limit']) > 0 and 'FALSE' not in t['Confirmations']) or
-                cls.wasActive(t))
+        return ((not cls.isInactive(t) or cls.wasActive(t)))
 
     @classmethod
     def reduceToOnceActive(cls, teams):
