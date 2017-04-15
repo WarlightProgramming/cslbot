@@ -56,7 +56,7 @@ def test_noisy():
     runStr = ("Calling method testFn with args (6, 'these', 'are', 'just',"
               " 'args', 'and') and kwargs {'a': 'kwarg'}")
     t.parent.log.assert_called_once_with(runStr, "name", False)
-    t.testFn(0)
+    assert_raises(ZeroDivisionError, t.testFn, 0)
     assert_equals(t.parent.log.call_count, 3)
     failStr = ("Call to testFn failed due to "
                "ZeroDivisionError('integer division or modulo by zero',)")
@@ -92,6 +92,7 @@ class TestLeague(TestCase):
         assert_equals(self.league.thread, 'THREADURL')
         assert_equals(self.league.handler, self.handler)
         assert_equals(self.league.debug, False)
+        assert_equals(self.league.tempTeams, None)
 
     @patch('resources.league.json.load')
     @patch('resources.league.APIHandler')
@@ -612,8 +613,8 @@ class TestLeague(TestCase):
         assert_equals(self.league.defaultTrueSkill, expVal)
 
     def test_defaultWinCount(self):
-        assert_equals(self.league.sysDict[self.league.RATE_WINCOUNT]['default'],
-                      "0")
+        val = self.league.sysDict[self.league.RATE_WINCOUNT]['default']()
+        assert_equals(val, "0")
 
     def test_defaultWinRate(self):
         assert_equals(self.league.defaultWinRate, "0" + self.league.SEP_RTG +
@@ -1324,10 +1325,11 @@ class TestLeague(TestCase):
     def test_defaultRating(self):
         self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
         assert_equals(self.league.defaultRating,
-                      self.league.sysDict[self.league.RATE_ELO]['default'])
+                      self.league.sysDict[self.league.RATE_ELO]['default']())
         self._setProp(self.league.SET_SYSTEM, self.league.RATE_WINRATE)
         assert_equals(self.league.defaultRating,
-                      self.league.sysDict[self.league.RATE_WINRATE]['default'])
+                      self.league.sysDict[self.league.RATE_WINRATE][
+                         'default']())
 
     def test_teamPlayers(self):
         self.teams.findEntities.return_value = [{'Name': "A",
@@ -1861,6 +1863,9 @@ class TestLeague(TestCase):
         self.league.setWinners(48, {12, 13, 43})
         self.games.updateMatchingEntities.assert_called_with({'ID': {'value':
             48, 'type': 'positive'}}, {'Winners': '12,13,43', 'Finished': ''})
+        self.league.setWinners(48, {12, 13, 14}, True)
+        self.games.updateMatchingEntities.assert_called_with({'ID': {'value':
+            48, 'type': 'positive'}}, {'Winners': '12,13,14!', 'Finished': ''})
 
     @patch('resources.league.League.fetchTeamData')
     def test_adjustTeamGameCount(self, fetch):
@@ -2102,7 +2107,7 @@ class TestLeague(TestCase):
         self.league.updateDecline('ID', 'decliners')
         veto.assert_not_called()
         updateRes.assert_called_once_with('ID', set(), 0,
-            adj=self.league.penalizeDeclines, declined=False)
+            adj=self.league.penalizeDeclines, declined=True)
         make.return_value = set(), None
         self.league.updateDecline('ID', 'decliners')
         veto.assert_called_once_with('ID')
@@ -2136,6 +2141,10 @@ class TestLeague(TestCase):
 
     def test_getTeamRating(self):
         self.teams.findEntities.return_value = [{'Rating': '43'},]
+        assert_equals(self.league.getTeamRating(44), '43')
+        self.league.tempTeams = {'12': '4903/4'}
+        assert_equals(self.league.getTeamRating('12'), '4903/4')
+        assert_equals(self.league.getTeamRating(12), '4903/4')
         assert_equals(self.league.getTeamRating(44), '43')
 
     def test_adjustRating(self):
@@ -2624,6 +2633,12 @@ class TestLeague(TestCase):
                       True)
         change.assert_called_once_with('team', 0)
 
+    def test_wasActive(self):
+        assert_true(self.league.wasActive({'Count': 1, 'Finished': '0'}))
+        assert_true(self.league.wasActive({'Count': '0', 'Finished': '8'}))
+        assert_true(self.league.wasActive({'Count': '4', 'Finished': 93}))
+        assert_false(self.league.wasActive({'Count': 0, 'Finished': 0}))
+
     @patch('resources.league.League.updatePlayerCounts')
     @patch('resources.league.League.validatePlayerGroup')
     @patch('resources.league.League.validateTeam')
@@ -2902,16 +2917,87 @@ class TestLeague(TestCase):
         self.league.createGames()
         make.assert_called_once_with(self.league.teamsDict)
 
+    def test_rescaleRatings(self):
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
+        self._setProp(self.league.SET_ELO_DEFAULT, "30")
+        assert_equals(self.league.defaultRating, "30")
+        self._setProp(self.league.SET_MAINTAIN_TOTAL, "FALSE")
+        oldCount = self.teams.updateMatchingEntities.call_count
+        self.teams.findEntities.return_value = [{'ID': 1, 'Limit': '-3',
+            'Confirmations': 'TRUE,TRUE,TRUE', 'Count': '3', 'Finished': '0',
+            'Rating': '35/8'},
+            {'ID': 2, 'Limit': '2', 'Confirmations': 'TRUE,TRUE,FALSE',
+             'Count': '0', 'Finished': '3', 'Rating': '31/5'}, {'ID': 3,
+             'Limit': '3', 'Confirmations': 'TRUE,TRUE,TRUE', 'Count': '1',
+             'Finished': '8', 'Rating': '28/3'}, {'ID': 4, 'Limit': '3',
+             'Confirmations': 'TRUE,TRUE,TRUE', 'Count': '1',
+             'Finished': '9', 'Rating': '28/3'}, {'ID': 5, 'Limit': '2',
+             'Confirmations': 'TRUE,TRUE,FALSE', 'Count': '0',
+             'Finished': '0', 'Rating': '30/9'}]
+        self.league.rescaleRatings()
+        assert_equals(self.teams.updateMatchingEntities.call_count, oldCount)
+        self._setProp(self.league.SET_MAINTAIN_TOTAL, "TRUE")
+        assert_true(self.league.maintainTotal)
+        self.league.rescaleRatings()
+        assert_equals(self.teams.updateMatchingEntities.call_count, oldCount+4)
+        self.teams.updateMatchingEntities.assert_called_with({'ID': {'type':
+            'positive', 'value': 4}}, {'Rating': '30/3'})
+
+    def test_decayTime(self):
+        now = datetime.now()
+        iterations = 24 / (now.hour + 1)
+        assert_true(self.league.decayTime(iterations))
+        assert_false(self.league.decayTime(2881))
+
+    @patch('resources.league.League.decayTime')
+    def test_decayRatings(self, decayTime):
+        oldCount = self.teams.updateMatchingEntities.call_count
+        self._setProp(self.league.SET_RATING_DECAY, "0")
+        decayTime.return_value = False
+        self.league.decayRatings()
+        self._setProp(self.league.SET_RATING_DECAY, "10")
+        self.league.decayRatings()
+        assert_equals(self.teams.updateMatchingEntities.call_count, oldCount)
+        decayTime.return_value = True
+        self.teams.findEntities.return_value = [{'ID': 1, 'Rating': '33/5',
+            'Count': '0', 'Finished': '8', 'Limit': '0', 'Confirmations': ''},
+            {'ID': 2, 'Rating': '34/8', 'Count': '1', 'Finished': '0',
+             'Limit': '3', 'Confirmations': 'TRUE,FALSE,FALSE'},
+            {'ID': 3, 'Rating': '39/1', 'Count': '2', 'Finished': '121',
+             'Limit': '12', 'Confirmations': 'TRUE,TRUE,TRUE'},
+            {'ID': 4, 'Rating': '12/0', 'Count': '0', 'Finished': '0',
+             'Limit': '0', 'Confirmations': 'FALSE,FALSE,FALSE'}]
+        self.league.decayRatings()
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': 2, 'type': 'positive'}}, {'Rating': '24/8'})
+        assert_equals(self.teams.updateMatchingEntities.call_count, 2)
+
+    def test_dateUnexpired(self):
+        self._setProp(self.league.SET_RETENTION_RANGE, 10)
+        assert_true(self.league.dateUnexpired('2014-05-20 01:02:33',
+                    datetime(year=2014, month=5, day=30)))
+        assert_true(self.league.dateUnexpired('2014-05-20 01:00:00',
+                    datetime(year=2014, month=5, day=20, hour=2)))
+        assert_true(self.league.dateUnexpired('2014-05-20 01:00:00',
+                    datetime(year=2014, month=5, day=28)))
+        assert_false(self.league.dateUnexpired('2014-05-20 01:00:00',
+                     datetime(year=2014, month=5, day=31)))
+
+    @patch('resources.league.League.calculateRatings')
+    @patch('resources.league.League.decayRatings')
+    @patch('resources.league.League.rescaleRatings')
     @patch('resources.league.League.createGames')
     @patch('resources.league.League.restoreTeams')
     @patch('resources.league.League.validatePlayers')
     @patch('resources.league.League.executeOrders')
     @patch('resources.league.League.updateGames')
-    def test_run(self, update, execute, validate, restore, create):
+    def test_run(self, update, execute, validate, restore, create,
+                 rescale, decay, calculate):
         self._setProp(self.league.SET_ACTIVE, "FALSE")
         self.league.run()
         create.assert_not_called()
-        for fn in {update, execute, validate, restore}:
+        for fn in {update, execute, validate, restore, rescale, decay,
+                   calculate}:
             fn.assert_called_once_with()
         self._setProp(self.league.SET_ACTIVE, "TRUE")
         self.teams.findEntities.return_value = [{'Limit': '10'},] * 10

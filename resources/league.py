@@ -28,18 +28,19 @@ from resources.utility import isInteger
 def makeFailStr(func, err):
     return ("Call to %s failed due to %s" % (func.__name__, repr(err)))
 
-def tryOrLog(func, self, *args, **kwargs):
+def tryOrLog(func, self, reraise=False, *args, **kwargs):
     try:
         return func(self, *args, **kwargs)
     except Exception as e:
         self.parent.log(makeFailStr(func, e), self.name, True)
+        if reraise: raise
 
 def runPhase(func):
     """
     function decorator to log failures if phase fails
     """
     def func_wrapper(self, *args, **kwargs):
-        return tryOrLog(func, self, *args, **kwargs)
+        return tryOrLog(func, self, False, *args, **kwargs)
     return func_wrapper
 
 def noisy(func):
@@ -51,7 +52,7 @@ def noisy(func):
         runStr = ("Calling method %s with args %s and kwargs %s" %
                   (func.__name__, str(args), str(kwargs)))
         self.parent.log(runStr, self.name, False)
-        return tryOrLog(func, self, *args, **kwargs)
+        return tryOrLog(func, self, True, *args, **kwargs)
     return func_wrapper
 
 # errors
@@ -260,6 +261,7 @@ class League(object):
         self.thread = thread
         self.handler = self._makeHandler()
         self.checkFormat()
+        self.sysDict = None
         self.makeRateSysDict()
         self._currentID, self._gameSize, self._sideSize = None, list(), list()
         self.debug = self.fetchProperty(self.SET_DEBUG, False,
@@ -267,27 +269,31 @@ class League(object):
         self.tempTeams = None
 
     def makeRateSysDict(self):
-        self.sysDict = {self.RATE_ELO: {'default': self.defaultElo,
+        self.sysDict = {self.RATE_ELO: {'default':
+                                        lambda: str(self.defaultElo),
                                         'update': self.getNewEloRatings,
                                         'prettify': str,
                                         'parity': self.getEloParity},
-                        self.RATE_GLICKO: {'default': self.defaultGlicko,
+                        self.RATE_GLICKO: {'default':
+                                           lambda: self.defaultGlicko,
                                            'update': self.getNewGlickoRatings,
                                            'prettify':
                                            self.getPrettyGlickoRating,
                                            'parity': self.getGlickoParity},
-                        self.RATE_TRUESKILL: {'default': self.defaultTrueSkill,
+                        self.RATE_TRUESKILL: {'default':
+                                              lambda:  self.defaultTrueSkill,
                                               'update':
                                               self.getNewTrueSkillRatings,
                                               'prettify':
                                               self.getPrettyTrueSkillRating,
                                               'parity':
                                               self.getTrueSkillParity},
-                        self.RATE_WINCOUNT: {'default': str(0),
+                        self.RATE_WINCOUNT: {'default': lambda: str(0),
                                              'update': self.getNewWinCounts,
                                              'prettify': str,
                                              'parity': self.getWinCountParity},
-                        self.RATE_WINRATE: {'default': self.defaultWinRate,
+                        self.RATE_WINRATE: {'default':
+                                            lambda: self.defaultWinRate,
                                             'update': self.getNewWinRates,
                                             'prettify': (lambda r:
                                             str(r.split(self.SEP_RTG)[0])),
@@ -1286,7 +1292,7 @@ class League(object):
 
     @property
     def defaultRating(self):
-        return self.sysDict[self.ratingSystem]['default']
+        return self.sysDict[self.ratingSystem]['default']()
 
     @property
     def teamPlayers(self):
@@ -2037,7 +2043,7 @@ class League(object):
         sides, winningSide = self.makeFakeSides(sides, losingTeams)
         if winningSide is None: self.updateVeto(gameID)
         self.updateResults(gameID, sides, winningSide,
-                           adj=self.penalizeDeclines, declined=False)
+                           adj=self.penalizeDeclines, declined=True)
 
     @staticmethod
     def removeEntity(table, ID, identifier='ID'):
@@ -2068,6 +2074,7 @@ class League(object):
 
     @noisy
     def getTeamRating(self, team):
+        team = str(team)
         if (self.tempTeams is not None and team in self.tempTeams):
             return self.tempTeams[team]
         teamData = self.fetchTeamData(team)
@@ -2947,8 +2954,17 @@ class League(object):
                 'FALSE' not in t['Confirmations']]
 
     @classmethod
+    def onceActive(cls, t):
+        return ((int(t['Limit']) > 0 and 'FALSE' not in t['Confirmations']) or
+                cls.wasActive(t))
+
+    @classmethod
+    def reduceToOnceActive(cls, teams):
+        return [t for t in teams if cls.onceActive(t)]
+
+    @classmethod
     def adjustAndPackage(cls, team, adj, floor=None):
-        rtg = cls.splitRating(team['Rating'])
+        rtg = list(cls.splitRating(team['Rating']))
         rtg[0] = int(round(Decimal(rtg[0]) + Decimal(adj)))
         if floor is not None: rtg[0] = max(rtg[0], floor)
         return cls.unsplitRtg(rtg)
@@ -2963,22 +2979,19 @@ class League(object):
             total += self.splitRating(team['Rating'])[0]
         expected = count * self.splitRating(self.defaultRating)[0]
         adjustment = (Decimal(expected) - Decimal(total)) / Decimal(count)
-        for team in allTeams:
+        for team in self.reduceToOnceActive(allTeams):
             rating = self.adjustAndPackage(team, adjustment)
             self.updateTeamRating(team['ID'], rating)
 
     @staticmethod
-    def midnight():
-        now = datetime.now()
-        return datetime(year=now.year, month=now.month, day=now.day)
-
-    @property
-    def decayTime(self):
-        HOURS_PER_DAY, MINUTES_PER_HOUR = 24, 60
-        maxHours = Decimal(HOURS_PER_DAY) / Decimal(ITERATIONS_PER_DAY)
-        maxMinutes = (maxHours % 1) * Decimal(MINUTES_PER_HOUR)
+    def decayTime(iterations):
+        HOURS_PER_DAY, MINUTES_PER_HOUR, now = 24, 60, datetime.now()
+        midnight = datetime(year=now.year, month=now.month, day=now.day)
+        maxHours = Decimal(HOURS_PER_DAY) / Decimal(iterations)
+        maxMinutes = int(round((maxHours % 1) * Decimal(MINUTES_PER_HOUR)))
+        maxHours = int(round(maxHours))
         maxDelta = timedelta(days=0, hours=maxHours, minutes=maxMinutes)
-        return (datetime.now() - self.midnight()) <= maxDelta
+        return ((now - midnight) <= maxDelta)
 
     @noisy
     def decayRating(self, team):
@@ -2989,16 +3002,17 @@ class League(object):
 
     @runPhase
     def decayRatings(self):
-        if self.ratingDecay == 0 or not self.decayTime: return
+        if (self.ratingDecay == 0 or
+            not self.decayTime(ITERATIONS_PER_DAY)): return
         allTeams = self.allTeams
         for team in allTeams: self.decayRating(team)
 
     @noisy
     def dateUnexpired(self, finishDate, current):
         if finishDate == '': return False
-        return (((current -
-                  datetime.strptime(finishDate, self.TIMEFORMAT)).days) <=
-                self.retentionRange)
+        return ((current -
+                  datetime.strptime(finishDate, self.TIMEFORMAT)) <=
+                timedelta(days=self.retentionRange))
 
     @property
     def unexpiredGames(self):
@@ -3041,7 +3055,7 @@ class League(object):
             if declined and not self.penalizeDeclines: continue
             newRatings = self.getNewRatings(sides, winningSide)
             for team in newRatings:
-                self.tempTeams[team] = newRatings[team]
+                self.tempTeams[str(team)] = newRatings[team]
 
     @noisy
     def updateTeamRatings(self):
