@@ -3069,6 +3069,11 @@ class League(object):
         self.updateTeamRatings()
         self.tempTeams = None
 
+    def applyRatingAdjustments(self):
+        self.rescaleRatings()
+        self.decayRatings()
+        self.calculateRatings()
+
     def run(self):
         """
         runs the league in four phases
@@ -3082,6 +3087,4 @@ class League(object):
         self.validatePlayers()
         self.restoreTeams()
         if self.active: self.createGames()
-        self.rescaleRatings()
-        self.decayRatings()
-        self.calculateRatings()
+        self.applyRatingAdjustments()
