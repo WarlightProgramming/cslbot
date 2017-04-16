@@ -155,7 +155,7 @@ class TestLeague(TestCase):
                                'History': 'STRING',
                                'Finished': 'INT',
                                'Limit': 'INT',
-                               'Count': 'INT'}
+                               'Ongoing': 'INT'}
         checkSheet.assert_called_once_with(self.league.teams,
                                            set(expectedConstraints),
                                            expectedConstraints,
@@ -192,7 +192,7 @@ class TestLeague(TestCase):
                                'Name': 'UNIQUE STRING',
                                'WarlightID': 'INT',
                                'Active': 'BOOL',
-                               'Games': 'INT'}
+                               'Usage': 'INT'}
         self.league.checkTemplatesSheet()
         checkSheet.assert_called_once_with(self.league.templates,
                                            set(expectedConstraints),
@@ -319,6 +319,10 @@ class TestLeague(TestCase):
         values = {'TRUE': False, 'FALSE': False}
         self._propertyTest("maintainTotal", self.league.SET_MAINTAIN_TOTAL,
                            False, values)
+
+    def test_favorNewTemplates(self):
+        self._boolPropertyTest("favorNewTemplates",
+                               self.league.SET_FAVOR_NEW_TEMPLATES, False)
 
     def test_autodrop(self):
         self._boolPropertyTest("autodrop", self.league.SET_AUTODROP,
@@ -1399,7 +1403,7 @@ class TestLeague(TestCase):
                                                  'Confirmations':
                                                  'TRUE,FALSE,FALSE,TRUE',
                                                  'Vetos': "", 'Drops': "",
-                                                 'Count': 0, 'Finished': 0,
+                                                 'Ongoing': 0, 'Finished': 0,
                                                  'Rating':
                                                  self.league.defaultRating})
         assert_equals(self.league.currentID, oldCurr + 1)
@@ -1557,10 +1561,10 @@ class TestLeague(TestCase):
         assert_equals(self.league.gameIDs, self.games.findValue.return_value)
 
     def test_templateRanks(self):
-        self.templates.findEntities.return_value = [{'ID': 3, 'Games': 3},
-                                                    {'ID': 4, 'Games': 4},
-                                                    {'ID': 5, 'Games': 2},
-                                                    {'ID': 1, 'Games': 0}]
+        self.templates.findEntities.return_value = [{'ID': 3, 'Usage': 3},
+                                                    {'ID': 4, 'Usage': 4},
+                                                    {'ID': 5, 'Usage': 2},
+                                                    {'ID': 1, 'Usage': 0}]
         assert_equals(self.league.templateRanks, [(1,0), (5,2), (3,3), (4,4)])
 
     def test_findMatchingTemplate(self):
@@ -1671,7 +1675,14 @@ class TestLeague(TestCase):
         assert_equals(update.call_count, 2)
         update.assert_called_with(3, ['FALSE', 'FALSE'])
 
-    def test_addTemplate(self):
+    def test_getNewTempGameCount(self):
+        self.templates.findEntities.return_value = [{'Usage': 8},
+            {'Usage': 12}, {'Usage': 12}, {'Usage': 8}, {'Usage': 11}]
+        assert_equals(self.league.getNewTempGameCount(), 10)
+
+    @patch('resources.league.League.getNewTempGameCount')
+    def test_addTemplate(self, getCount):
+        getCount.return_value = 0
         self.league.admin = 43
         self.games.findEntities.return_value = [{'Template': '12'},
             {'Template': '43'}, {'Template': '91'}]
@@ -1689,7 +1700,7 @@ class TestLeague(TestCase):
         self.league.addTemplate(order)
         self.templates.addEntity.assert_called_with({'ID': 92,
             'Name': 'Template Name', 'WarlightID': '4902494',
-            'Active': 'TRUE', 'Games': 0, 'SET_Setting#Sub': 'Val',
+            'Active': 'TRUE', 'Usage': 0, 'SET_Setting#Sub': 'Val',
             'OVERRIDE_Mexico': 3})
         self._setProp(self.league.SET_GAME_SIZE, "5,7,6")
         assert_true(self.league.multischeme)
@@ -1698,7 +1709,7 @@ class TestLeague(TestCase):
         self.league.addTemplate(order)
         self.templates.addEntity.assert_called_with({'ID': 92,
             'Name': 'Template Name', 'WarlightID': '4902494',
-            'Active': 'TRUE', 'Games': 0, 'SET_Setting#Sub': 'Val',
+            'Active': 'TRUE', 'Usage': 0, 'SET_Setting#Sub': 'Val',
             'OVERRIDE_Mexico': 3, 'Schemes': '1v1,2v2,3v3'})
 
     @patch('resources.league.League.fetchMatchingTeam')
@@ -1869,17 +1880,18 @@ class TestLeague(TestCase):
 
     @patch('resources.league.League.fetchTeamData')
     def test_adjustTeamGameCount(self, fetch):
-        fetch.return_value = {'Count': 3, 'Finished': 5}
+        fetch.return_value = {'Ongoing': 3, 'Finished': 5}
         self.league.adjustTeamGameCount(3, 5, 4)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 3, 'type': 'positive'}}, {'Count': '8', 'Finished': '9'})
+            {'value': 3, 'type': 'positive'}}, {'Ongoing': '8',
+             'Finished': '9'})
 
     @patch('resources.league.League.fetchTemplateData')
     def test_adjustTemplateGameCount(self, fetch):
-        fetch.return_value = {'Games': 8}
+        fetch.return_value = {'Usage': 8}
         self.league.adjustTemplateGameCount(12, 43)
         self.templates.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 12, 'type': 'positive'}}, {'Games': '51'})
+            {'value': 12, 'type': 'positive'}}, {'Usage': '51'})
 
     @patch('resources.league.League.eloEnv')
     def test_getEloDiff(self, eloEnv):
@@ -2163,22 +2175,22 @@ class TestLeague(TestCase):
     def test_vetoCurrentTemplate(self):
         gameData = {'ID': '8', 'Vetoed': '12/38/349', 'Vetos': '3',
                     'Template': '420'}
-        self.templates.findEntities.return_value = [{'Games': '10'},]
+        self.templates.findEntities.return_value = [{'Usage': '10'},]
         self.league.vetoCurrentTemplate(gameData)
         self.games.updateMatchingEntities.assert_called_with({'ID':
             {'value': '8', 'type': 'positive'}}, {'Vetos': 4,
             'Vetoed': '12/38/349/420', 'Template': ''})
         self.templates.updateMatchingEntities.assert_called_with({'ID':
-            {'value': '420', 'type': 'positive'}}, {'Games': '9'})
+            {'value': '420', 'type': 'positive'}}, {'Usage': '9'})
 
     def test_setGameTemplate(self):
-        self.templates.findEntities.return_value = [{'Games': '43'},]
+        self.templates.findEntities.return_value = [{'Usage': '43'},]
         gameData = {'ID': 'gameID'}
         self.league.setGameTemplate(gameData, 'tempID')
         self.games.updateMatchingEntities.assert_called_with({'ID':
             {'value': 'gameID', 'type': 'positive'}}, {'Template': 'tempID'})
         self.templates.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 'tempID', 'type': 'positive'}}, {'Games': '44'})
+            {'value': 'tempID', 'type': 'positive'}}, {'Usage': '44'})
         assert_equals(gameData['Template'], 'tempID')
 
     def test_getTeamPlayers(self):
@@ -2336,7 +2348,7 @@ class TestLeague(TestCase):
             'Sides': '1/2', 'Vetos': '8', 'ID': 'gameID'},]
         self.templates.findEntities.return_value = [{'ID': 'tempID',
             'WarlightID': 4904, 'SET_A#B': '490', 'SET_SETTING': 314,
-            'OVERRIDE_Bonus': 12, 'Games': '8', 'Name': 'TempName'},]
+            'OVERRIDE_Bonus': 12, 'Usage': '8', 'Name': 'TempName'},]
         self.teams.findEntities.return_value = [{'ID': '1', 'Players':
             '3022124041', 'Name': 'Team Name', 'Rating': '4034', 'Rank': '1'},]
         self.handler.createGame.return_value = "WLID"
@@ -2363,7 +2375,7 @@ class TestLeague(TestCase):
         update.assert_not_called()
         create.return_value = {'Sides': '1,4/8,49/3/6,9'}
         self.teams.findEntities.return_value = [{'History': '',
-            'Count': '4', 'Finished': '400'},]
+            'Ongoing': '4', 'Finished': '400'},]
         self.league.makeGame('gameID')
         assert_equals(self.teams.updateMatchingEntities.call_count,
                       oldCount+7)
@@ -2381,9 +2393,9 @@ class TestLeague(TestCase):
     @patch('resources.league.League.getGameVetos')
     def test_updateTemplate(self, vetos, create, delete):
         vetos.return_value = {1, 33, 2, 48}
-        self.templates.findEntities.return_value = [{'ID': 1, 'Games': 12},
-            {'ID': 2, 'Games': 23}, {'ID': 3, 'Games': 2}, {'ID': 33,
-             'Games': 4}]
+        self.templates.findEntities.return_value = [{'ID': 1, 'Usage': 12},
+            {'ID': 2, 'Usage': 23}, {'ID': 3, 'Usage': 2}, {'ID': 33,
+             'Usage': 4}]
         self.league.updateTemplate({'ID': 43})
         create.assert_called_once_with({'ID': 43, 'Template': 3})
         vetos.return_value = {1, 2, 3, 33}
@@ -2634,10 +2646,10 @@ class TestLeague(TestCase):
         change.assert_called_once_with('team', 0)
 
     def test_wasActive(self):
-        assert_true(self.league.wasActive({'Count': 1, 'Finished': '0'}))
-        assert_true(self.league.wasActive({'Count': '0', 'Finished': '8'}))
-        assert_true(self.league.wasActive({'Count': '4', 'Finished': 93}))
-        assert_false(self.league.wasActive({'Count': 0, 'Finished': 0}))
+        assert_true(self.league.wasActive({'Ongoing': 1, 'Finished': '0'}))
+        assert_true(self.league.wasActive({'Ongoing': '0', 'Finished': '8'}))
+        assert_true(self.league.wasActive({'Ongoing': '4', 'Finished': 93}))
+        assert_false(self.league.wasActive({'Ongoing': 0, 'Finished': 0}))
 
     @patch('resources.league.League.updatePlayerCounts')
     @patch('resources.league.League.validatePlayerGroup')
@@ -2748,11 +2760,12 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_REMATCH_LIMIT, "ALL")
         self._setProp(self.league.SET_REMATCH_CAP, "1")
         self.teams.findEntities.return_value = [{'ID': 3, 'Limit': '-3',
-            'Rating': '1500', 'Confirmations': 'TRUE,TRUE,TRUE', 'Count': '1',
-            'Players': '12,13,14'}, {'ID': 4, 'Limit': '2', 'Count': '2',
+            'Rating': '1500', 'Confirmations': 'TRUE,TRUE,TRUE',
+            'Ongoing': '1',
+            'Players': '12,13,14'}, {'ID': 4, 'Limit': '2', 'Ongoing': '2',
             'Rating': '1600', 'Players': '1,23,7', 'History': '4,5,6',
             'Confirmations': 'TRUE,TRUE,FALSE'}, {'ID': 5, 'Limit': '3',
-            'Count': 2, 'Rating': '1950', 'Confirmations': 'TRUE,TRUE',
+            'Ongoing': 2, 'Rating': '1950', 'Confirmations': 'TRUE,TRUE',
             'Players': '12,23,91', 'History': '12,13,9'}]
         assert_equals(self.league.teamsDict, {'5': {'rating': '1950',
             'count': 1, 'conflicts': {12, 13, 9, 4, 5}}})
@@ -2809,20 +2822,11 @@ class TestLeague(TestCase):
         assert_equals(self.league.turnNoneIntoMutable(4, set), 4)
         assert_equals(self.league.turnNoneIntoMutable(None, set), set())
 
-    def test_getTemplatesList(self):
-        tempIDs = {12: {'Games': 8}, 24: {'Games': '9'}, 36: {'Games': 12},
-                   48: {'Games': 93}, 47: {'Games': 41}}
-        assert_equals(self.league.getTemplatesList(tempIDs,
-            {47, 59}), [12, 24, 36, 48])
-
-    def test_makeTemplatesDict(self):
-        self.templates.findEntities.return_value = {12: {'Games': 8},
-            24: {'Games': '9'}, 36: {'Games': 12}, 48: {'Games': 93}}
-        assert_equals(self.league.makeTemplatesDict(43, {12, 24, 36, 48}),
-                      dict())
-        assert_equals(self.league.makeTemplatesDict(4904, {24,}),
-                      {'12': {'count': 1635}, '36': {'count': 1635},
-                       '48': {'count': 1634}})
+    def test_templatesDict(self):
+        self.templates.findEntities.return_value = {12: {'Usage': 8},
+            24: {'Usage': '9'}, 36: {'Usage': 12}, 48: {'Usage': 93}}
+        assert_equals(self.league.templatesDict, {'12': {'usage': 8},
+            '36': {'usage': 12}, '48': {'usage': 93}, '24': {'usage': 9}})
 
     def test_makeMatchingsDict(self):
         data = {1: -94, 3: 8}
@@ -2839,8 +2843,8 @@ class TestLeague(TestCase):
         self.league.updateConflicts({'Drops': '13/39/239/4'}, conflicts)
         self.league.updateConflicts({'Drops': ''}, conflicts)
         assert_equals(conflicts, {'13', '49', '39', '239', '4'})
-        self.templates.findEntities.return_value = {12: {'Games': 8},
-            24: {'Games': '9'}, 36: {'Games': 12}, 48: {'Games': 93}}
+        self.templates.findEntities.return_value = {12: {'Usage': 8},
+            24: {'Usage': '9'}, 36: {'Usage': 12}, 48: {'Usage': 93}}
         self.teams.findEntities.return_value = [{'Vetos': '23/32',
             'Drops': '25/65'},]
         assert_equals(self.league.makeMatchingsDict({'1,3,5/7,9,12',
@@ -2851,26 +2855,21 @@ class TestLeague(TestCase):
              'conflicts': {'25', '65'}, 'count': 1},
              '31,39,73/48,65,21': {'scores': {'23': 6, '32': 6},
              'conflicts': {'25', '65'}, 'count': 1}})
-        assert_equals(self.league.getUniversalConflicts(
-            self.league.makeMatchingsDict({'1,3,5/7,9,12', '4/12'})),
-            {'25', '65'})
         self.templates.findEntities.return_value = {'25', '65'}
         assert_equals(self.league.makeMatchingsDict({'12/23', '11/47'}), {})
 
-    @patch('resources.league.League.makeTemplatesDict')
-    @patch('resources.league.League.getUniversalConflicts')
+    @patch('resources.league.random.shuffle')
     @patch('resources.league.League.makeMatchingsDict')
-    def test_makeBatch(self, matchings, conflicts, temps):
+    def test_makeBatch(self, matchings, shuffle):
         matchings.return_value = {'1/2': {'scores': dict(), 'conflicts': {'3'},
             'count': 1}, '3/4': {'scores': {'3': 2, '4': 1},
             'conflicts': set(), 'count': 1}}
-        conflicts.return_value = set()
-        temps.return_value = {'3': {'count': 1}, '4': {'count': 8},
-            '5': {'count': 0}, '6': {'count': 2}}
+        self.templates.findEntities.return_value = {'3': {'Usage': 1},
+            '4': {'Usage': 8}, '5': {'Usage': 0}, '6': {'Usage': 2}}
         assert_equals(self.league.makeBatch({'1/2', '3/4'}),
-                      [{'Sides': '3/4', 'Template': '6'},
-                       {'Sides': '1/2', 'Template': '4'},])
-        temps.return_value = dict()
+                      [{'Sides': '1/2', 'Template': '5'},
+                       {'Sides': '3/4', 'Template': '5'},])
+        self.templates.findEntities.return_value = dict()
         matchings.return_value = {'1/2': {'scores': dict(),
             'conflicts': {'3', '4', '6'}, 'count': 1}, '3/4':
             {'scores': {'3': 2, '4': 1}, 'conflicts': {'3', '4', '6'},
@@ -2924,15 +2923,15 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_MAINTAIN_TOTAL, "FALSE")
         oldCount = self.teams.updateMatchingEntities.call_count
         self.teams.findEntities.return_value = [{'ID': 1, 'Limit': '-3',
-            'Confirmations': 'TRUE,TRUE,TRUE', 'Count': '3', 'Finished': '0',
+            'Confirmations': 'TRUE,TRUE,TRUE', 'Ongoing': '3', 'Finished': '0',
             'Rating': '35/8'},
             {'ID': 2, 'Limit': '2', 'Confirmations': 'TRUE,TRUE,FALSE',
-             'Count': '0', 'Finished': '3', 'Rating': '31/5'}, {'ID': 3,
-             'Limit': '3', 'Confirmations': 'TRUE,TRUE,TRUE', 'Count': '1',
+             'Ongoing': '0', 'Finished': '3', 'Rating': '31/5'}, {'ID': 3,
+             'Limit': '3', 'Confirmations': 'TRUE,TRUE,TRUE', 'Ongoing': '1',
              'Finished': '8', 'Rating': '28/3'}, {'ID': 4, 'Limit': '3',
-             'Confirmations': 'TRUE,TRUE,TRUE', 'Count': '1',
+             'Confirmations': 'TRUE,TRUE,TRUE', 'Ongoing': '1',
              'Finished': '9', 'Rating': '28/3'}, {'ID': 5, 'Limit': '2',
-             'Confirmations': 'TRUE,TRUE,FALSE', 'Count': '0',
+             'Confirmations': 'TRUE,TRUE,FALSE', 'Ongoing': '0',
              'Finished': '0', 'Rating': '30/9'}]
         self.league.rescaleRatings()
         assert_equals(self.teams.updateMatchingEntities.call_count, oldCount)
@@ -2960,12 +2959,12 @@ class TestLeague(TestCase):
         assert_equals(self.teams.updateMatchingEntities.call_count, oldCount)
         decayTime.return_value = True
         self.teams.findEntities.return_value = [{'ID': 1, 'Rating': '33/5',
-            'Count': '0', 'Finished': '8', 'Limit': '0', 'Confirmations': ''},
-            {'ID': 2, 'Rating': '34/8', 'Count': '1', 'Finished': '0',
+            'Ongoing': '0', 'Finished': '8', 'Limit': '0', 'Confirmations': ''},
+            {'ID': 2, 'Rating': '34/8', 'Ongoing': '1', 'Finished': '0',
              'Limit': '3', 'Confirmations': 'TRUE,FALSE,FALSE'},
-            {'ID': 3, 'Rating': '39/1', 'Count': '2', 'Finished': '121',
+            {'ID': 3, 'Rating': '39/1', 'Ongoing': '2', 'Finished': '121',
              'Limit': '12', 'Confirmations': 'TRUE,TRUE,TRUE'},
-            {'ID': 4, 'Rating': '12/0', 'Count': '0', 'Finished': '0',
+            {'ID': 4, 'Rating': '12/0', 'Ongoing': '0', 'Finished': '0',
              'Limit': '0', 'Confirmations': 'FALSE,FALSE,FALSE'}]
         self.league.decayRatings()
         self.teams.updateMatchingEntities.assert_called_with({'ID':

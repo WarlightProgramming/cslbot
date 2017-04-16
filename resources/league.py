@@ -4,13 +4,12 @@
 #########################
 
 # imports
-import copy
 import json
 import math
 import time
 import random
+import pair
 from decimal import Decimal
-from pair import group_teams, assign_templates
 from elo import Elo
 from glicko2.glicko2 import Player
 from trueskill import TrueSkill
@@ -188,6 +187,7 @@ class League(object):
     SET_RATING_DECAY = "INACTIVITY PENALTY" # per day
     SET_PENALTY_FLOOR = "PENALTY FLOOR"
     SET_RETENTION_RANGE = "EXPIRE GAMES AFTER" # days
+    SET_FAVOR_NEW_TEMPLATES = "FAVOR NEW TEMPLATES"
     SET_DEBUG = DEBUG_KEY
 
     # rating systems
@@ -346,7 +346,7 @@ class League(object):
                            'History': 'STRING',
                            'Finished': 'INT',
                            'Limit': 'INT',
-                           'Count': 'INT'}
+                           'Ongoing': 'INT'}
         if self.minRating is not None or self.maxRank is not None:
             teamConstraints['Probation Start'] = 'STRING'
         self.checkSheet(self.teams, set(teamConstraints), teamConstraints,
@@ -372,7 +372,7 @@ class League(object):
                                 'Name': 'UNIQUE STRING',
                                 'WarlightID': 'INT',
                                 'Active': 'BOOL',
-                                'Games': 'INT'}
+                                'Usage': 'INT'}
         if self.multischeme: templatesConstraints['Schemes'] = 'STRING'
         self.checkSheet(self.templates, set(templatesConstraints),
                         templatesConstraints, self.autoformat)
@@ -424,6 +424,11 @@ class League(object):
         expVal = self.fetchProperty(self.SET_MAINTAIN_TOTAL, False,
                                     self.getBoolProperty)
         return (expVal and self.ratingSystem not in prohibited)
+
+    @property
+    def favorNewTemplates(self):
+        return self.fetchProperty(self.SET_FAVOR_NEW_TEMPLATES, False,
+                                  self.getBoolProperty)
 
     @property
     def autodrop(self):
@@ -1343,7 +1348,7 @@ class League(object):
                               'Players': members,
                               'Confirmations': confirms,
                               'Vetos': "", 'Drops': forcedDrops,
-                              'Count': 0, 'Finished': 0,
+                              'Ongoing': 0, 'Finished': 0,
                               'Rating': self.defaultRating})
         self._currentID += 1
 
@@ -1463,7 +1468,7 @@ class League(object):
     @property
     def templateRanks(self):
         tempData = self.activeTemplates
-        tempInfo = [(int(temp['ID']), int(temp['Games'])) for temp in tempData]
+        tempInfo = [(int(temp['ID']), int(temp['Usage'])) for temp in tempData]
         tempInfo.sort(key = lambda x: x[1])
         return tempInfo
 
@@ -1586,13 +1591,21 @@ class League(object):
                                 (ordType))
 
     @noisy
+    def getNewTempGameCount(self):
+        if self.favorNewTemplates: return 0
+        existingTemps = self.activeTemplates
+        countSum = sum(t['Usage'] for t in existingTemps)
+        return int(round(Decimal(countSum) / Decimal(len(existingTemps))))
+
+    @noisy
     def addTemplate(self, order):
         self.confirmAdmin(int(order['author']), order['type'])
         used, nexti, orders = self.usedTemplates, 3, order['orders']
         tempName, warlightID = orders[1:3]
         ID = (max(used) + 1) if len(used) else 0
+        gameCount = self.getNewTempGameCount()
         tempDict = {'ID': ID, 'Name': tempName, 'WarlightID': warlightID,
-                    'Active': 'TRUE', 'Games': 0}
+                    'Active': 'TRUE', 'Usage': gameCount}
         if self.multischeme: tempDict['Schemes'], nexti = orders[3], 4
         for i in xrange(nexti+1, len(orders), 2):
             tempDict[orders[i-1]] = orders[i]
@@ -1760,16 +1773,16 @@ class League(object):
     @noisy
     def adjustTeamGameCount(self, teamID, adj, totalAdj=0):
         teamData = self.fetchTeamData(teamID)
-        oldCount = int(teamData['Count'])
+        oldCount = int(teamData['Ongoing'])
         oldFin = int(teamData['Finished'])
-        self.updateEntityValue(self.teams, teamID, Count=str(oldCount+adj),
+        self.updateEntityValue(self.teams, teamID, Ongoing=str(oldCount+adj),
                                Finished=str(oldFin+totalAdj))
 
     @noisy
     def adjustTemplateGameCount(self, templateID, adj):
-        oldCount = int(self.fetchTemplateData(templateID)['Games'])
+        oldCount = int(self.fetchTemplateData(templateID)['Usage'])
         self.updateEntityValue(self.templates, templateID,
-                               Games=str(oldCount+adj))
+                               Usage=str(oldCount+adj))
 
     @noisy
     def getEloDiff(self, rating, events, count):
@@ -2598,7 +2611,7 @@ class League(object):
 
     @staticmethod
     def wasActive(team):
-        count, finished = int(team['Count']), int(team['Finished'])
+        count, finished = int(team['Ongoing']), int(team['Finished'])
         return bool(count + finished)
 
     @runPhase
@@ -2748,7 +2761,8 @@ class League(object):
             if ('FALSE' in team['Confirmations']): continue
             teamDict = {'rating': team['Rating'],
                         'count': max(0,
-                                 (int(team['Limit']) - int(team['Count'])))}
+                                 (int(team['Limit']) -
+                                  int(team['Ongoing'])))}
             conflicts = set()
             ID = str(team['ID'])
             players = self.getPlayers(team)
@@ -2771,8 +2785,8 @@ class League(object):
             score_fn = lambda *args: 1.0 - self.getParityScore(args)
         else:
             score_fn = lambda *args: self.getParityScore(args)
-        groups = group_teams(groupingDict, score_fn=score_fn,
-                             game_size=groupSize)
+        groups = pair.group_teams(groupingDict, score_fn=score_fn,
+                                  game_size=groupSize)
         return {groupSep.join([str(x) for x in group])
                 for group in groups}
 
@@ -2827,22 +2841,11 @@ class League(object):
         if val is None: return mutable()
         return val
 
-    @staticmethod
-    def getTemplatesList(templateIDs, skipTemps):
-        templatesList = [temp for temp in templateIDs if temp not in skipTemps]
-        templatesList.sort(key = lambda x: int(templateIDs[x]['Games']))
-        return templatesList
-
-    @noisy
-    def makeTemplatesDict(self, gameCount, skipTemps=None):
-        skipTemps = self.turnNoneIntoMutable(skipTemps, set)
+    @property
+    def templatesDict(self):
         templateIDs, result = self.usableTemplateIDs, dict()
-        length = len(templateIDs) - len(skipTemps)
-        if length < 1: return result
-        times, mod = gameCount / length, gameCount % length
-        templatesList = self.getTemplatesList(templateIDs, skipTemps)
-        for i in xrange(len(templatesList)):
-            result[str(templatesList[i])] = {'count': times + (i < mod)}
+        for ID in templateIDs:
+            result[str(ID)] = {'usage': int(templateIDs[ID]['Usage'])}
         return result
 
     @staticmethod
@@ -2888,37 +2891,12 @@ class League(object):
             result[matching] = matchDict
         return result
 
-    @staticmethod
-    def getUniversalConflicts(matchingsDict):
-        conflicts = None
-        for matching in matchingsDict:
-            tempConf = matchingsDict[matching]['conflicts']
-            if conflicts is None: conflicts = tempConf
-            else: conflicts.intersection_update(tempConf)
-        return conflicts
-
-    @staticmethod
-    def getNewMatchings(matchingsDict, templatesDict):
-        if len(templatesDict): return assign_templates(matchingsDict,
-                                                       templatesDict)
-        return set()
-
     @noisy
     def makeBatch(self, matchings):
-        gamesToCreate, templatesDict = len(matchings), None
-        unhandled, batch = copy.copy(matchings), list()
-        while (len(unhandled) and (templatesDict is None or
-               len(templatesDict))):
-            matchingsDict = self.makeMatchingsDict(unhandled)
-            allConflicts = self.getUniversalConflicts(matchingsDict)
-            templatesDict = self.makeTemplatesDict(gamesToCreate,
-                                                   allConflicts)
-            newMatchings = self.getNewMatchings(matchingsDict, templatesDict)
-            for match in newMatchings:
-                sides, temp = match
-                batch.append({'Sides': sides, 'Template': temp})
-                unhandled.remove(sides)
-        return batch
+        templatesDict = self.templatesDict
+        matchingsDict = self.makeMatchingsDict(matchings)
+        assignments = pair.assign_templates(matchingsDict, templatesDict, True)
+        return [{'Sides': a[0], 'Template': a[1]} for a in assignments]
 
     @noisy
     def createBatch(self, batch):

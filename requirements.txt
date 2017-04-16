@@ -1,7 +1,7 @@
 sheetDB>=0.1.7
 wl_parsers>=0.1.1
 wl_api>=0.1.4
-pair>=0.1.1
+pair>=0.2.0
 elo>=0.1
 trueskill>=0.4.4
 glicko2>=1.2

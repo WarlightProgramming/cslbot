@@ -703,6 +703,29 @@ teams).
 
 ___
 
+#### FAVOR NEW TEMPLATES
+
+Whether to strongly favor any new templates added to the league until they get
+as many games as the average template.
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: False
+
+If this command is set to True, any new template added to the league will be
+favored in template assignments until it gets used about as much as any other
+template in the league. Normally, new templates' Usage value is set to the mean
+value among existing active templates in the league so they do not get strongly
+favored in new games created. If this is set to True, new templates' Usage
+parameter will start off at 0- so the longer the league has been going on, the
+more games for which new templates will be favored.
+
+In case you've got a league going on for some time and want to keep your teams
+from having to wait to experience the newest templates added to your league,
+this could serve as a useful feature to keep things fresh.
+
+___
+
 ### Participation Control
 
 Requirements are checked every time a league is run, so players can't evade bans by
