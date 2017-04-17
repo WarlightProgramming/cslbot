@@ -917,7 +917,19 @@ class League(object):
         return self.fetchProperty(self.SET_MIN_LIMIT_TO_RANK, 1, int)
 
     @staticmethod
-    def getExtantEntities(table, restrictions=None):
+    def applyRestrictions(matchDict, restrictions):
+        if restrictions is not None:
+            for restriction in restrictions:
+                matchDict[restriction] = restrictions[restriction]
+
+    @classmethod
+    def getExtantMatchDict(cls, restrictions):
+        matchDict = {'ID': {'value': '', 'type': 'negative'}}
+        cls.applyRestrictions(matchDict, restrictions)
+        return matchDict
+
+    @classmethod
+    def getExtantEntities(cls, table, restrictions=None):
         """
         :param table: table to fetch entities from
         :param restrictions: dictionary matching elements to
@@ -926,11 +938,13 @@ class League(object):
         :rtype list[dict]:
         :retval: matching entities in table
         """
-        matchDict = {'ID': {'value': '', 'type': 'negative'}}
-        if restrictions is not None:
-            for restriction in restrictions:
-                matchDict[restriction] = restrictions[restriction]
+        matchDict = cls.getExtantMatchDict(restrictions)
         return table.findEntities(matchDict)
+
+    @classmethod
+    def getLabeledEntities(cls, table, restrictions, keyLabel):
+        matchDict = cls.getExtantMatchDict(restrictions)
+        return table.findEntities(matchDict, keyLabel=keyLabel)
 
     @property
     def activeTeams(self):
@@ -1440,11 +1454,8 @@ class League(object):
 
     @property
     def templateIDs(self):
-        return self.templates.findEntities({'ID': {'value': '',
-                                                   'type': 'negative'},
-                                           'Active': {'value': 'TRUE',
-                                                    'type': 'positive'}},
-                                           keyLabel="ID")
+        return self.getLabeledEntities(self.templates,
+            {'Active': {'value': 'TRUE', 'type': 'positive'}}, "ID")
 
     @noisy
     def validScheme(self, tempData):
@@ -1653,11 +1664,8 @@ class League(object):
 
     @property
     def unfinishedGames(self):
-        return self.games.findEntities({'ID': {'value': '',
-                                               'type': 'negative'},
-                                        'Finished': {'value': '',
-                                                     'type': 'positive'}},
-                                        keyLabel='WarlightID')
+        return self.getLabeledEntities(self.games,
+            {'Finished': {'value': '', 'type': 'positive'}}, 'WarlightID')
 
     @staticmethod
     def isAbandoned(players):

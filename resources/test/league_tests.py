@@ -899,7 +899,7 @@ class TestLeague(TestCase):
         table.findEntities.assert_called_with({'ID': {'value': '',
                                                       'type': 'negative'},
                                                'Ra Ra': {'value': 'Rasputin',
-                                                         'type': 'positive'}})
+                                                         'type': 'positive'}},)
 
     @patch('resources.league.League.getExtantEntities')
     def test_activityCounts(self, getExtant):
