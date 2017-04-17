@@ -347,7 +347,7 @@ class League(object):
                            'Finished': 'INT',
                            'Limit': 'INT',
                            'Ongoing': 'INT'}
-        if self.minRating is not None or self.maxRank is not None:
+        if not self.cullingDisabled:
             teamConstraints['Probation Start'] = 'STRING'
         self.checkSheet(self.teams, set(teamConstraints), teamConstraints,
                         self.autoformat)
@@ -807,10 +807,15 @@ class League(object):
         return self.fetchProperty(self.SET_RESTORATION_PERIOD, None,
                                   process_fn)
 
+    @property
+    def cullingDisabled(self):
+        return (self.minRating is None and self.maxRank is None)
+
     @runPhase
     def restoreTeams(self):
         restPd = self.restorationPeriod
-        if self.minRating is None or restPd is None: return
+        if self.cullingDisabled: restPd = 0
+        if restPd is None: return
         deadTeams = self.getExtantEntities(self.teams,
                                            {'Limit': {'value': '0',
                                                       'type': 'positive'},
@@ -819,7 +824,7 @@ class League(object):
         for team in deadTeams:
             probStart = team['Probation Start']
             probStart = datetime.strptime(probStart, self.TIMEFORMAT)
-            if ((datetime.now() - probStart).days >= self.restorationPeriod):
+            if ((datetime.now() - probStart).days >= restPd):
                 self.teams.updateMatchingEntities({'ID': {'value': team['ID'],
                                                           'type': 'positive'}},
                                                  {'Rating': self.defaultRating,
@@ -1437,7 +1442,7 @@ class League(object):
     def templateIDs(self):
         return self.templates.findEntities({'ID': {'value': '',
                                                    'type': 'negative'},
-                                           'Active': {'values': ['TRUE', True],
+                                           'Active': {'value': 'TRUE',
                                                     'type': 'positive'}},
                                            keyLabel="ID")
 
@@ -2126,10 +2131,13 @@ class League(object):
         self.adjustTemplateGameCount(tempID, 1)
         gameData['Template'] = tempID
 
+    @classmethod
+    def getPlayersFromData(cls, data):
+        return [int(p) for p in data['Players'].split(cls.SEP_PLYR)]
+
     @noisy
     def getTeamPlayers(self, team):
-        teamData = self.fetchTeamData(team)
-        return [int(p) for p in teamData['Players'].split(self.SEP_PLYR)]
+        return self.getPlayersFromData(self.fetchTeamData(team))
 
     @noisy
     def getSidePlayers(self, side):
@@ -2574,8 +2582,7 @@ class League(object):
                  self.valueInRange(teamRank, None, self.maxRank)))
 
     @noisy
-    def checkTeamRating(self, teamID):
-        teamData = self.fetchTeamData(teamID)
+    def checkTeamRatingUsingData(self, teamID, teamData):
         start = teamData['Probation Start']
         if self.meetsRetention(teamData):
             if len(start) > 0: self.wipeProbation(teamID)
@@ -2587,10 +2594,17 @@ class League(object):
                 raise ImproperInput("Team %s has been culled" % (str(teamID)))
 
     @noisy
+    def checkTeamRating(self, teamID):
+        teamData = self.fetchTeamData(teamID)
+        return self.checkTeamRatingUsingData(teamID, teamData)
+
+    @noisy
     def validateTeam(self, teamID, players):
         """returns True is the team has been dropped from the league"""
+        teamData = self.fetchTeamData(teamID)
+        if int(teamData['Limit']) < 1: return False
         try:
-            self.checkTeamRating(teamID)
+            self.checkTeamRatingUsingData(teamID, teamData)
             self.checkTeam(players, teamID)
             return False
         except ImproperInput as e:
@@ -3091,3 +3105,67 @@ class League(object):
         self.restoreTeams()
         if self.active: self.createGames()
         self.applyRatingAdjustments()
+
+    @classmethod
+    def unpackConfirms(cls, confirms):
+        return [(c.upper() == "TRUE") for c in confirms.split(cls.SEP_CONF)]
+
+    @staticmethod
+    def unpackInts(string, sep):
+        return [int(v) for v in string.split(sep)]
+
+    def packageTeam(self, team):
+        res = {'ID': int(team['ID']),
+               'Name': team['Name'],
+               'Players': self.getPlayersFromData(team),
+               'Confirmations': self.unpackConfirms(team['Confirmations']),
+               'Rating': self.splitRating(team['Rating']),
+               'Vetos': self.getVetoDict(team['Vetos']),
+               'Drops': self.unpackInts(team['Drops'], self.SEP_DROPS),
+               'Rank': int(team['Rank']),
+               'History': self.unpackInts(team['History'], self.SEP_TEAMS),
+               'Finished': int(team['Finished']),
+               'Limit': int(team['Limit']),
+               'Ongoing': int(team['Ongoing'])}
+        if 'Probation Start' in team:
+            res['Probation Start'] = self.unpackDateTime(\
+                                     team['Probation Start'])
+        return res
+
+    @classmethod
+    def unpackDateTime(cls, val):
+        if val == '': return val
+        return datetime.strptime(val, cls.TIMEFORMAT)
+
+    def packageGame(self, game):
+        return {'ID': int(game['ID']),
+                'WarlightID': int(game['WarlightID']),
+                'Created': self.unpackDateTime(game['Created']),
+                'Finished': self.unpackDateTime(game['Finished']),
+                'Sides': self.getGameTeams(game),
+                'Winners': self.unpackInts(game['Winners']),
+                'Vetos': int(game['Vetos']),
+                'Vetoed': self.unpackInts(game['Vetoed']),
+                'Template': int(game['Template'])}
+
+    def packageTemplate(self, template):
+        return {'ID': int(template['ID']),
+                'Name': template['Name'],
+                'WarlightID': int(template['WarlightID']),
+                'Active': self.getBoolProperty(template['Active']),
+                'Usage': int(template['Usage'])}
+
+    def packageEntities(self, entities, packageFn):
+        results = list()
+        for entity in entities:
+            results.append(packageFn(entity))
+        return results
+
+    def packageTeams(self, *teams):
+        return self.packageEntities(teams, self.packageTeam)
+
+    def packageGames(self, *games):
+        return self.packageEntities(games, self.packageGame)
+
+    def packageTemplates(self, *templates):
+        return self.packageEntities(templates, self.packageTemplate)

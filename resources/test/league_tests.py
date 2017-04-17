@@ -765,17 +765,19 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_RESTORATION_PERIOD, None)
         self._setProp(self.league.SET_MIN_RATING, None)
         self._setProp(self.league.SET_MIN_PERCENTILE, None)
+        assert_true(self.league.cullingDisabled)
         self.league.restoreTeams()
-        getExtant.assert_not_called()
+        assert_equals(getExtant.call_count, 1)
         self._setProp(self.league.SET_MIN_RATING, 50)
+        assert_false(self.league.cullingDisabled)
         self.league.restoreTeams()
-        getExtant.assert_not_called()
+        assert_equals(getExtant.call_count, 1)
         self._setProp(self.league.SET_GRACE_PERIOD, 5)
         self._setProp(self.league.SET_RESTORATION_PERIOD, 10)
         assert_equals(self.league.restorationPeriod, 15)
         getExtant.return_value = list()
         self.league.restoreTeams()
-        assert_equals(getExtant.call_count, 1)
+        assert_equals(getExtant.call_count, 2)
         self.teams.updateMatchingEntities.assert_not_called()
         makeProb = lambda x: datetime.strftime(datetime.now() - timedelta(x),
                                                self.league.TIMEFORMAT)
@@ -2645,15 +2647,18 @@ class TestLeague(TestCase):
 
     @patch('resources.league.League.changeLimit')
     @patch('resources.league.League.checkTeam')
-    @patch('resources.league.League.checkTeamRating')
-    def test_validateTeam(self, checkRtg, check, change):
-        assert_equals(self.league.validateTeam('teamID', 'players'), False)
-        checkRtg.assert_called_once_with('teamID')
+    @patch('resources.league.League.checkTeamRatingUsingData')
+    @patch('resources.league.League.fetchTeamData')
+    def test_validateTeam(self, fetch, checkRtg, check, change):
+        assert_false(self.league.validateTeam('teamID', 'players'))
+        checkRtg.assert_called_once_with('teamID', fetch.return_value)
         check.assert_called_once_with('players', 'teamID')
         check.side_effect = ImproperInput()
-        assert_equals(self.league.validateTeam('teamID', 'players'), True)
+        assert_true(self.league.validateTeam('teamID', 'players'))
         self.parent.log.assert_called_with("Removing teamID because: ", 'NAME')
         change.assert_called_once_with('teamID', 0)
+        fetch.return_value = {'Limit': 0}
+        assert_false(self.league.validateTeam('teamID', 'players'))
 
     @patch('resources.league.League.changeLimit')
     @patch('resources.league.League.checkExcess')
@@ -3008,6 +3013,8 @@ class TestLeague(TestCase):
                     datetime(year=2014, month=5, day=28)))
         assert_false(self.league.dateUnexpired('2014-05-20 01:00:00',
                      datetime(year=2014, month=5, day=31)))
+        assert_false(self.league.dateUnexpired('',
+                     datetime(year=2016, month=1, day=1)))
 
     @patch('resources.league.League.dateUnexpired')
     def test_unexpiredGames(self, date):
