@@ -2079,11 +2079,11 @@ class League(object):
         self.finishGameForTeams(sides)
 
     @classmethod
-    def getGameSidesFromData(cls, gameData):
+    def getGameSidesFromData(cls, gameData, processFn=str):
         results = list()
         sides = gameData['Sides'].split(cls.SEP_SIDES)
         for side in sides:
-            results.append(set(side.split(cls.SEP_TEAMS)))
+            results.append(set(processFn(t) for t in side.split(cls.SEP_TEAMS)))
         return results
 
     @noisy
@@ -2133,7 +2133,7 @@ class League(object):
 
     @classmethod
     def getPlayersFromData(cls, data):
-        return [int(p) for p in data['Players'].split(cls.SEP_PLYR)]
+        return cls.unpackInts(data['Players'], cls.SEP_PLYR)
 
     @noisy
     def getTeamPlayers(self, team):
@@ -2421,7 +2421,7 @@ class League(object):
         for temp in vetos.split(cls.SEP_VETOS):
             if len(temp) == 0: continue
             tempID, vetoCt = temp.split(cls.SEP_VETOCT)
-            results[tempID] = int(vetoCt)
+            results[int(tempID)] = int(vetoCt)
         return results
 
     @noisy
@@ -2438,7 +2438,7 @@ class League(object):
     @noisy
     def updateVetoCt(self, oldVetos, template, adj):
         vetoDict = self.getVetoDict(oldVetos)
-        template = str(template)
+        template = int(template)
         if template not in vetoDict: vetoDict[template] = int(adj)
         else: vetoDict[template] += int(adj)
         return self.packageVetoDict(vetoDict)
@@ -2868,9 +2868,9 @@ class League(object):
         return result
 
     @staticmethod
-    def updateCountInDict(data, label):
-        if label not in data: data[label] = 1
-        else: data[label] += 1
+    def updateCountInDict(data, label, count=1):
+        if label not in data: data[label] = count
+        else: data[label] += count
 
     @staticmethod
     def splitAndFilter(string, splitter):
@@ -2878,8 +2878,9 @@ class League(object):
 
     @noisy
     def updateScores(self, teamData, scores):
-        vetos = self.splitAndFilter(teamData['Vetos'], self.SEP_VETOS)
-        for veto in vetos: self.updateCountInDict(scores, veto)
+        vetos = self.getVetoDict(teamData['Vetos'])
+        for veto in vetos: self.updateCountInDict(scores, str(veto),
+                                                  vetos[veto])
 
     @noisy
     def updateConflicts(self, teamData, conflicts):
@@ -3112,17 +3113,30 @@ class League(object):
 
     @staticmethod
     def unpackInts(string, sep):
+        if not len(string): return list()
         return [int(v) for v in string.split(sep)]
+
+    @staticmethod
+    def unpackInt(val):
+        return int(val) if len(str(val)) else val
+
+    @classmethod
+    def zipPlayers(cls, team):
+        players = cls.getPlayersFromData(team)
+        confirms = cls.unpackConfirms(team['Confirmations'])
+        results = dict()
+        for i in xrange(len(players)):
+            results[players[i]] = {'confirmed': confirms[i]}
+        return results
 
     def packageTeam(self, team):
         res = {'ID': int(team['ID']),
                'Name': team['Name'],
-               'Players': self.getPlayersFromData(team),
-               'Confirmations': self.unpackConfirms(team['Confirmations']),
+               'Players': self.zipPlayers(team),
                'Rating': self.splitRating(team['Rating']),
                'Vetos': self.getVetoDict(team['Vetos']),
-               'Drops': self.unpackInts(team['Drops'], self.SEP_DROPS),
-               'Rank': int(team['Rank']),
+               'Drops': set(self.unpackInts(team['Drops'], self.SEP_DROPS)),
+               'Rank': self.unpackInt(team['Rank']),
                'History': self.unpackInts(team['History'], self.SEP_TEAMS),
                'Finished': int(team['Finished']),
                'Limit': int(team['Limit']),
@@ -3137,16 +3151,26 @@ class League(object):
         if val == '': return val
         return datetime.strptime(val, cls.TIMEFORMAT)
 
+    @classmethod
+    def packageWinners(cls, winners):
+        if cls.MARK_DECLINE in winners:
+            winners = cls.removeDeclineMark(winners)
+        return set(cls.unpackInts(winners, cls.SEP_TEAMS))
+
     def packageGame(self, game):
         return {'ID': int(game['ID']),
-                'WarlightID': int(game['WarlightID']),
+                'WarlightID': self.unpackInt(game['WarlightID']),
                 'Created': self.unpackDateTime(game['Created']),
                 'Finished': self.unpackDateTime(game['Finished']),
-                'Sides': self.getGameTeams(game),
-                'Winners': self.unpackInts(game['Winners']),
+                'Ongoing': not(len(game['Finished'])),
+                'Sides': self.getGameSidesFromData(game, int),
+                'Winners': self.packageWinners(game['Winners']),
+                'Declined': (self.MARK_DECLINE in game['Winners']),
+                'EndedInVeto': (not(len(game['Winners']))
+                                and bool(len(game['Finished']))),
                 'Vetos': int(game['Vetos']),
-                'Vetoed': self.unpackInts(game['Vetoed']),
-                'Template': int(game['Template'])}
+                'Vetoed': self.unpackInts(game['Vetoed'], self.SEP_VETOS),
+                'Template': self.unpackInt(game['Template'])}
 
     def packageTemplate(self, template):
         return {'ID': int(template['ID']),
@@ -3169,3 +3193,28 @@ class League(object):
 
     def packageTemplates(self, *templates):
         return self.packageEntities(templates, self.packageTemplate)
+
+    @staticmethod
+    def fetchAndPackage(fetchFn, packageFn, ID):
+        return packageFn(fetchFn(ID))[0]
+
+    def fetchTeam(self, teamID):
+        return self.fetchAndPackage(self.fetchTeamData, self.packageTeams,
+                                    teamID)
+
+    def fetchAllTeams(self):
+        return self.packageTeams(*self.allTeams)
+
+    def fetchGame(self, gameID):
+        return self.fetchAndPackage(self.fetchGameData, self.packageGames,
+                                    gameID)
+
+    def fetchAllGames(self):
+        return self.packageGames(*self.getExtantEntities(self.games))
+
+    def fetchTemplate(self, templateID):
+        return self.fetchAndPackage(self.fetchTemplateData,
+                                    self.packageTemplates, templateID)
+
+    def fetchAllTemplates(self):
+        return self.packageTemplates(*self.getExtantEntities(self.templates))

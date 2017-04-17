@@ -2436,7 +2436,7 @@ class TestLeague(TestCase):
 
     def test_vetoDict(self):
         assert_equals(self.league.getVetoDict('4.3/389.1/39.4/8.1/9.33'),
-                      {'4': 3, '389': 1, '39': 4, '8': 1, '9': 33})
+                      {4: 3, 389: 1, 39: 4, 8: 1, 9: 33})
         self.teams.findEntities.return_value = [{'Vetos': ''},]
         assert_equals(self.league.getTeamVetoDict('teamID'), dict())
         assert_equals(self.league.packageVetoDict({5: 4, 3: 2, 1: 1}),
@@ -2867,17 +2867,17 @@ class TestLeague(TestCase):
         self.league.updateCountInDict(data, 3)
         assert_equals(data, {1: -93, 2: 1, 3: 9})
         scores = {'8': 4, '9': 1}
-        self.league.updateScores({'Vetos': '49/3'}, scores)
-        self.league.updateScores({'Vetos': '89/8'}, scores)
+        self.league.updateScores({'Vetos': '49.3/3.2'}, scores)
+        self.league.updateScores({'Vetos': '89.1/8.3'}, scores)
         self.league.updateScores({'Vetos': ''}, scores)
-        assert_equals(scores, {'8': 5, '9': 1, '3': 1, '49': 1, '89': 1})
+        assert_equals(scores, {'8': 7, '9': 1, '3': 2, '49': 3, '89': 1})
         conflicts = {'13', '49'}
         self.league.updateConflicts({'Drops': '13/39/239/4'}, conflicts)
         self.league.updateConflicts({'Drops': ''}, conflicts)
         assert_equals(conflicts, {'13', '49', '39', '239', '4'})
         self.templates.findEntities.return_value = {12: {'Usage': 8},
             24: {'Usage': '9'}, 36: {'Usage': 12}, 48: {'Usage': 93}}
-        self.teams.findEntities.return_value = [{'Vetos': '23/32',
+        self.teams.findEntities.return_value = [{'Vetos': '23.1/32.1',
             'Drops': '25/65'},]
         assert_equals(self.league.makeMatchingsDict({'1,3,5/7,9,12',
             '12,24,36/48,3,1', '31,39,73/48,65,21'}),
@@ -3089,6 +3089,79 @@ class TestLeague(TestCase):
         assert_true(self.league.active)
         self.league.run()
         create.assert_called_once_with()
+
+    def test_packaging(self):
+        team1 = {'ID': '434', 'Name': 'Team',
+                 'Players': '109,390,853', 'Confirmations': 'TRUE,TRUE,FALSE',
+                 'Rating': '1920/390', 'Vetos': '12.3/49.1/39.2',
+                 'Drops': '5/3/9', 'Rank': '', 'History': '11,22,390',
+                 'Finished': '8', 'Limit': '4', 'Ongoing': '1'}
+        team1_out = {'ID': 434, 'Name': 'Team', 'Players': {109: {'confirmed':
+            True}, 390: {'confirmed': True}, 853: {'confirmed': False}},
+            'Rating': (1920, 390),
+            'Vetos': {12: 3, 49: 1, 39: 2}, 'Drops': {5, 3, 9},
+            'Rank': '', 'History': [11, 22, 390], 'Finished': 8,
+            'Limit': 4, 'Ongoing': 1}
+        team2 = {'ID': '903', 'Name': 'Other Team',
+                 'Players': '490,49,409', 'Confirmations': 'TRUE,TRUE,TRUE',
+                 'Rating': '2393/391', 'Vetos': '',
+                 'Drops': '', 'Rank': '1', 'History': '239',
+                 'Finished': '1', 'Limit': '3', 'Ongoing': '0',
+                 'Probation Start': '2014-03-20 04:20:00'}
+        team2_out = {'ID': 903, 'Name': 'Other Team',
+            'Players': {490: {'confirmed': True}, 49: {'confirmed': True},
+                409: {'confirmed': True}}, 'Rating': (2393, 391),
+            'Vetos': dict(), 'Drops': set(), 'Rank': 1, 'History': [239,],
+            'Finished': 1, 'Limit': 3, 'Ongoing': 0,
+            'Probation Start': datetime(2014, 3, 20, 4, 20)}
+        self.teams.findEntities.return_value = [team1, team2]
+        assert_equals(self.league.fetchTeam(434), team1_out)
+        assert_equals(self.league.fetchAllTeams(), [team1_out, team2_out])
+        game1 = {'ID': '10', 'WarlightID': 94043094,
+            'Created': '2015-05-25 05:05:05',
+            'Finished': "2015-05-30 01:02:03", 'Sides': '1,5/7,9/13,15,19',
+            'Winners': '7,9', 'Vetos': '2', 'Vetoed': '12/13',
+            'Template': '93'}
+        game1_out = {'ID': 10, 'WarlightID': 94043094,
+            'Created': datetime(2015, 5, 25, 5, 5, 5),
+            'Finished': datetime(2015, 5, 30, 1, 2, 3), 'Ongoing': False,
+            'Sides': [{1, 5}, {7, 9}, {13, 15, 19}], 'Winners': {7, 9},
+            'Declined': False, 'EndedInVeto': False, 'Vetos': 2,
+            'Vetoed': [12, 13], 'Template': 93}
+        game2 = {'ID': '11', 'WarlightID': '118999',
+            'Created': '2015-05-25 05:05:15',
+            'Finished': "", 'Sides': '1,9/7,5/13,19',
+            'Winners': '7,9!', 'Vetos': '1', 'Vetoed': '12',
+            'Template': '93'}
+        game2_out = {'ID': 11, 'WarlightID': 118999,
+            'Created': datetime(2015, 5, 25, 5, 5, 15),
+            'Finished': '', 'Ongoing': True,
+            'Sides': [{1, 9}, {7, 5}, {13, 19}], 'Winners': {7, 9},
+            'Declined': True, 'EndedInVeto': False, 'Vetos': 1,
+            'Vetoed': [12,], 'Template': 93}
+        game3 = {'ID': '12', 'WarlightID': 91197253,
+            'Created': '2015-05-25 05:05:25',
+            'Finished': "2015-05-31 01:09:03", 'Sides': '1,5/7,9',
+            'Winners': '', 'Vetos': '2', 'Vetoed': '12/13',
+            'Template': '930'}
+        game3_out = {'ID': 12, 'WarlightID': 91197253,
+            'Created': datetime(2015, 5, 25, 5, 5, 25),
+            'Finished': datetime(2015, 5, 31, 1, 9, 3), 'Ongoing': False,
+            'Sides': [{1, 5}, {7, 9}], 'Winners': set(),
+            'Declined': False, 'EndedInVeto': True, 'Vetos': 2,
+            'Vetoed': [12, 13], 'Template': 930}
+        self.games.findEntities.return_value = [game1, game2, game3]
+        assert_equals(self.league.fetchGame(10), game1_out)
+        assert_equals(self.league.fetchAllGames(), [game1_out, game2_out,
+                      game3_out])
+        template1 = {'ID': 1290, 'Name': 'Elitist Africa',
+            'WarlightID': 19304904, 'Active': 'FALSE',
+            'Usage': '3'}
+        template1_out = {'ID': 1290, 'Name': 'Elitist Africa',
+            'WarlightID': 19304904, 'Active': False, 'Usage': 3}
+        self.templates.findEntities.return_value = [template1,]
+        assert_equals(self.league.fetchTemplate(1290), template1_out)
+        assert_equals(self.league.fetchAllTemplates(), [template1_out,])
 
 # run tests
 if __name__ == '__main__':
