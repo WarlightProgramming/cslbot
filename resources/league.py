@@ -3187,7 +3187,8 @@ class League(object):
                 'Active': self.getBoolProperty(template['Active']),
                 'Usage': int(template['Usage'])}
 
-    def packageEntities(self, entities, packageFn):
+    @staticmethod
+    def packageEntities(entities, packageFn):
         results = list()
         for entity in entities:
             results.append(packageFn(entity))
