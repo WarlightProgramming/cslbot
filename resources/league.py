@@ -410,6 +410,7 @@ class League(object):
     @property
     def preserveRecords(self):
         """whether to keep records of abandoned games"""
+        if self.retentionRange and self.vetoPenalty: return True
         return self.fetchProperty(self.SET_PRESERVE_RECORDS, True,
                                   self.getBoolProperty)
 
@@ -1590,8 +1591,8 @@ class League(object):
             raise ImproperInput("%s orders are only usable by admins" %
                                 (ordType))
 
-    @noisy
-    def getNewTempGameCount(self):
+    @property
+    def newTempGameCount(self):
         if self.favorNewTemplates: return 0
         existingTemps = self.activeTemplates
         countSum = sum(t['Usage'] for t in existingTemps)
@@ -1603,7 +1604,7 @@ class League(object):
         used, nexti, orders = self.usedTemplates, 3, order['orders']
         tempName, warlightID = orders[1:3]
         ID = (max(used) + 1) if len(used) else 0
-        gameCount = self.getNewTempGameCount()
+        gameCount = self.newTempGameCount
         tempDict = {'ID': ID, 'Name': tempName, 'WarlightID': warlightID,
                     'Active': 'TRUE', 'Usage': gameCount}
         if self.multischeme: tempDict['Schemes'], nexti = orders[3], 4
@@ -2086,10 +2087,13 @@ class League(object):
         return self.getGameSidesFromData(gameData)
 
     @noisy
+    def usingTempTeams(self, team):
+        return (self.tempTeams is not None and str(team) in self.tempTeams)
+
+    @noisy
     def getTeamRating(self, team):
         team = str(team)
-        if (self.tempTeams is not None and team in self.tempTeams):
-            return self.tempTeams[team]
+        if self.usingTempTeams(team): return self.tempTeams[str(team)]
         teamData = self.fetchTeamData(team)
         return teamData['Rating']
 
@@ -2097,8 +2101,9 @@ class League(object):
     def adjustRating(self, team, adjustment):
         rating = list(self.splitRating(self.getTeamRating(team)))
         rating[0] += adjustment
-        self.updateEntityValue(self.teams, team,
-                               Rating=self.unsplitRtg(rating))
+        rating = self.unsplitRtg(rating)
+        if self.usingTempTeams(team): self.tempTeams[str(team)] = rating
+        else: self.updateEntityValue(self.teams, team, Rating=rating)
 
     @noisy
     def penalizeVeto(self, gameData):
@@ -2994,12 +2999,16 @@ class League(object):
     def unexpiredGames(self):
         allGames, current = self.getExtantEntities(self.games), datetime.now()
         return [g for g in allGames if
-                self.dateUnexpired(g['Finished'], current) and
-                len(g['Winners'])]
+                self.dateUnexpired(g['Finished'], current)]
+
+    @staticmethod
+    def getAllTeams(sides):
+        return set().union(*sides)
 
     @classmethod
     def unpackDeclineWinners(cls, winners, sides):
-        sides = [winners, sides-winners]
+        allTeams = cls.getAllTeams(sides)
+        sides = [winners, allTeams-winners]
         return sides, 0, True
 
     @staticmethod
@@ -3018,20 +3027,35 @@ class League(object):
         winners = cls.removeDeclineMark(winners)
         sides = [set(side.split(cls.SEP_TEAMS)) for side in sides]
         winners = set(winners.split(cls.SEP_TEAMS))
+        winningSide = None
         if declined: return cls.unpackDeclineWinners(winners, sides)
         for i in xrange(len(sides)):
             if len(sides[i] & winners) > 0: winningSide = i
         return sides, winningSide, declined
 
     @noisy
+    def calculateVetos(self, sides):
+        if not self.vetoPenalty: return
+        for team in self.getAllTeams(sides):
+            self.adjustRating(team, -self.vetoPenalty)
+
+    @noisy
+    def calculateResults(self, sides, winningSide):
+        newRatings = self.getNewRatings(sides, winningSide)
+        for team in newRatings:
+            self.tempTeams[str(team)] = newRatings[team]
+
+    @noisy
     def runCalculations(self):
         games = self.unexpiredGames
         for game in games:
             sides, winningSide, declined = self.unpackWinners(game)
-            if declined and not self.penalizeDeclines: continue
-            newRatings = self.getNewRatings(sides, winningSide)
-            for team in newRatings:
-                self.tempTeams[str(team)] = newRatings[team]
+            if winningSide is None:
+                self.calculateVetos(sides)
+            elif declined and not self.penalizeDeclines:
+                continue
+            else:
+                self.calculateResults(sides, winningSide)
 
     @noisy
     def updateTeamRatings(self):
@@ -3042,11 +3066,12 @@ class League(object):
         if self.retentionRange is None: return
         self.tempTeams = dict()
         for team in self.allTeams:
-            self.tempTeams[str(team)] = self.defaultRating
+            self.tempTeams[str(team['ID'])] = self.defaultRating
         self.runCalculations()
         self.updateTeamRatings()
         self.tempTeams = None
 
+    @noisy
     def applyRatingAdjustments(self):
         self.rescaleRatings()
         self.decayRatings()

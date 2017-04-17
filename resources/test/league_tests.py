@@ -125,6 +125,21 @@ class TestLeague(TestCase):
                       self.league.RATE_WINCOUNT]['prettify']("3"), "3")
         assert_equals(self.league.sysDict[\
                       self.league.RATE_WINRATE]['prettify']("3/41"), "3")
+        self._setProp(self.league.SET_ELO_DEFAULT, "2953")
+        assert_equals(self.league.sysDict[self.league.RATE_ELO]['default'](),
+                      '2953')
+        self._setProp(self.league.SET_GLICKO_DEFAULT, "40")
+        self._setProp(self.league.SET_GLICKO_RD, "3")
+        assert_equals(self.league.sysDict[\
+                      self.league.RATE_GLICKO]['default'](), "40/3")
+        self._setProp(self.league.SET_TRUESKILL_DEFAULT, "4903")
+        self._setProp(self.league.SET_TRUESKILL_SIGMA, "400")
+        assert_equals(self.league.sysDict[\
+                      self.league.RATE_TRUESKILL]['default'](), "4903/400")
+        assert_equals(self.league.sysDict[\
+                      self.league.RATE_WINCOUNT]['default'](), "0")
+        assert_equals(self.league.sysDict[\
+                      self.league.RATE_WINRATE]['default'](), "0/0")
 
     def test_checkSheet(self):
         table = MagicMock()
@@ -308,8 +323,15 @@ class TestLeague(TestCase):
         self._boolPropertyTest("autoformat", self.league.SET_AUTOFORMAT, True)
 
     def test_preserveRecords(self):
+        self._setProp(self.league.SET_RETENTION_RANGE, False)
+        self._setProp(self.league.SET_VETO_PENALTY, 0)
         self._boolPropertyTest("preserveRecords",
                                 self.league.SET_PRESERVE_RECORDS, True)
+        self._setProp(self.league.SET_RETENTION_RANGE, True)
+        self._boolPropertyTest("preserveRecords",
+                                self.league.SET_PRESERVE_RECORDS, True)
+        self._setProp(self.league.SET_VETO_PENALTY, 10)
+        assert_true(self.league.preserveRecords)
 
     def test_maintainTotal(self):
         self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
@@ -1675,14 +1697,15 @@ class TestLeague(TestCase):
         assert_equals(update.call_count, 2)
         update.assert_called_with(3, ['FALSE', 'FALSE'])
 
-    def test_getNewTempGameCount(self):
+    def test_newTempGameCount(self):
         self.templates.findEntities.return_value = [{'Usage': 8},
             {'Usage': 12}, {'Usage': 12}, {'Usage': 8}, {'Usage': 11}]
-        assert_equals(self.league.getNewTempGameCount(), 10)
+        assert_equals(self.league.newTempGameCount, 10)
+        self._setProp(self.league.SET_FAVOR_NEW_TEMPLATES, "TRUE")
+        assert_equals(self.league.newTempGameCount, 0)
 
-    @patch('resources.league.League.getNewTempGameCount')
-    def test_addTemplate(self, getCount):
-        getCount.return_value = 0
+    def test_addTemplate(self):
+        self._setProp(self.league.SET_FAVOR_NEW_TEMPLATES, "TRUE")
         self.league.admin = 43
         self.games.findEntities.return_value = [{'Template': '12'},
             {'Template': '43'}, {'Template': '91'}]
@@ -2160,6 +2183,7 @@ class TestLeague(TestCase):
         assert_equals(self.league.getTeamRating(44), '43')
 
     def test_adjustRating(self):
+        self.league.tempTeams = None
         self.teams.findEntities.return_value = [{'Rating': '33/43/490'},]
         self.league.adjustRating(43, 4)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
@@ -2171,6 +2195,9 @@ class TestLeague(TestCase):
         assert_equals(self.teams.updateMatchingEntities.call_count, oldCount+8)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': '8', 'type': 'positive'}}, {'Rating': '42/43/490'})
+        self.league.tempTeams = {'3': '43/4/3/2/1'}
+        self.league.adjustRating('3', -12)
+        assert_equals(self.league.tempTeams, {'3': '31/4/3/2/1'})
 
     def test_vetoCurrentTemplate(self):
         gameData = {'ID': '8', 'Vetoed': '12/38/349', 'Vetos': '3',
@@ -2981,6 +3008,57 @@ class TestLeague(TestCase):
                     datetime(year=2014, month=5, day=28)))
         assert_false(self.league.dateUnexpired('2014-05-20 01:00:00',
                      datetime(year=2014, month=5, day=31)))
+
+    @patch('resources.league.League.dateUnexpired')
+    def test_unexpiredGames(self, date):
+        date.return_value = False
+        self.games.findEntities.return_value = [{'ID': 0, 'Finished': '',
+            'Winners': ''}, {'ID': 1, 'Finished': '', 'Winners': '1,2'},
+            {'ID': 2, 'Finished': '', 'Winners': '3,4'}]
+        assert_equals(self.league.unexpiredGames, list())
+        date.return_value = True
+        assert_equals(self.league.unexpiredGames,
+            self.games.findEntities.return_value)
+
+    @patch('resources.league.League.dateUnexpired')
+    def test_calculateRatings(self, date):
+        self._setProp(self.league.SET_ELO_DEFAULT, "1500")
+        oldCount = self.teams.updateMatchingEntities.call_count
+        date.return_value = True
+        self._setProp(self.league.SET_RETENTION_RANGE, "")
+        self.league.calculateRatings()
+        assert_equals(self.teams.updateMatchingEntities.call_count, oldCount)
+        self._setProp(self.league.SET_RETENTION_RANGE, 3)
+        self.games.findEntities.return_value = [{'ID': 0, 'Finished': '',
+            'Winners': '1,2!', 'Sides': '1,2/3,4/5,6'}, {'ID': 1,
+            'Finished': '', 'Winners': '2,4', 'Sides': '1,3/2,4/5,6'},
+            {'ID': 2, 'Finished': '', 'Winners': '3,5,6,1!',
+             'Sides': '1,2/3,4/5,6'}, {'ID': 3, 'Finished': '',
+             'Winners': '', 'Sides': '3,5/1,2/4,6'}]
+        self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
+        self.teams.findEntities.return_value = [{'ID': '1'}, {'ID': '2'},
+            {'ID': '3'}, {'ID': '4'}, {'ID': '5'}, {'ID': '6'}]
+        assert_equals(self.league.unexpiredGames,
+                      self.games.findEntities.return_value)
+        assert_equals(self.league.retentionRange, 3)
+        self.league.calculateRatings()
+        assert_equals(self.teams.updateMatchingEntities.call_count,
+                      oldCount+6)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': '6', 'type': 'positive'}}, {'Rating': '1463'})
+        self._setProp(self.league.SET_PENALIZE_DECLINES, "False")
+        assert_false(self.league.penalizeDeclines)
+        self.league.calculateRatings()
+        assert_equals(self.teams.updateMatchingEntities.call_count,
+                      oldCount+12)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': '6', 'type': 'positive'}}, {'Rating': '1471'})
+        self._setProp(self.league.SET_VETO_PENALTY, "0")
+        self.league.calculateRatings()
+        assert_equals(self.teams.updateMatchingEntities.call_count,
+                      oldCount+18)
+        self.teams.updateMatchingEntities.assert_called_with({'ID':
+            {'value': '6', 'type': 'positive'}}, {'Rating': '1496'})
 
     @patch('resources.league.League.calculateRatings')
     @patch('resources.league.League.decayRatings')
