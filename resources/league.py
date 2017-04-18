@@ -1356,8 +1356,8 @@ class League(object):
         if not self.joinsAllowed:
             raise ImproperInput("This league is not open to new teams")
 
-    @noisy
-    def checkConsistentClan(self, members, required):
+    @staticmethod
+    def checkConsistentClan(members, required):
         if not required: return
         clans = {PlayerParser(member).clanID for member in members}
         if len(clans) > 1:
