@@ -3109,11 +3109,11 @@ class League(object):
         4. create new games
         """
         self.updateGames()
+        self.applyRatingAdjustments()
+        self.restoreTeams()
         self.executeOrders()
         self.validatePlayers()
-        self.restoreTeams()
         if self.active: self.createGames()
-        self.applyRatingAdjustments()
 
     @classmethod
     def unpackConfirms(cls, confirms):
