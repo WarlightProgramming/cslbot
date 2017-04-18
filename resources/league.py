@@ -188,6 +188,10 @@ class League(object):
     SET_PENALTY_FLOOR = "PENALTY FLOOR"
     SET_RETENTION_RANGE = "EXPIRE GAMES AFTER" # days
     SET_FAVOR_NEW_TEMPLATES = "FAVOR NEW TEMPLATES"
+    SET_REQUIRE_SAME_CLAN = "REQUIRE CONSISTENT CLAN FOR NEW TEAMS"
+    SET_MAINTAIN_SAME_CLAN = "REQUIRE CONSISTENT CLAN FOR ALL TEAMS"
+    SET_FORBID_CLAN_MATCHUPS = "AVOID SAME-CLAN MATCHUPS"
+    SET_ONLY_MODS_CAN_ADD = "ONLY MODS CAN ADD TEAMS"
     SET_DEBUG = DEBUG_KEY
 
     # rating systems
@@ -429,6 +433,27 @@ class League(object):
     @property
     def favorNewTemplates(self):
         return self.fetchProperty(self.SET_FAVOR_NEW_TEMPLATES, False,
+                                  self.getBoolProperty)
+
+    @property
+    def requireSameClan(self):
+        exp =  self.fetchProperty(self.SET_REQUIRE_SAME_CLAN, False,
+                                  self.getBoolProperty)
+        return (exp or self.maintainSameClan)
+
+    @property
+    def maintainSameClan(self):
+        return self.fetchProperty(self.SET_MAINTAIN_SAME_CLAN, False,
+                                  self.getBoolProperty)
+
+    @property
+    def forbidClanMatchups(self):
+        return self.fetchProperty(self.SET_FORBID_CLAN_MATCHUPS, False,
+                                  self.getBoolProperty)
+
+    @property
+    def onlyModsCanAdd(self):
+        return self.fetchProperty(self.SET_ONLY_MODS_CAN_ADD, False,
                                   self.getBoolProperty)
 
     @property
@@ -1332,10 +1357,21 @@ class League(object):
             raise ImproperInput("This league is not open to new teams")
 
     @noisy
+    def checkConsistentClan(self, members, required):
+        if not required: return
+        clans = {PlayerParser(member).clanID for member in members}
+        if len(clans) > 1:
+            failStr = "All members of a team must belong to the same clan"
+            raise ImproperInput(failStr)
+
+    @noisy
     def checkAuthorAndMembers(self, order):
         author = int(order['author'])
+        if self.onlyModsCanAdd and author not in self.mods:
+            raise ImproperInput("Only mods or above can add teams")
         members = [int(member) for member in order['orders'][3:]]
         self.checkTeamCreator(author, members)
+        self.checkConsistentClan(members, self.requireSameClan)
         confirms = [(m == author) for m in members]
         return self.checkTeam(members), members, confirms
 
@@ -2614,6 +2650,7 @@ class League(object):
         try:
             self.checkTeamRatingUsingData(teamID, teamData)
             self.checkTeam(players, teamID)
+            self.checkConsistentClan(players, self.maintainSameClan)
             return False
         except ImproperInput as e:
             self.parent.log(("Removing %s because: %s" % (str(teamID),
@@ -2764,13 +2801,16 @@ class League(object):
 
     @noisy
     def makePlayersDict(self, teams):
-        result = dict()
+        playerDict, clanDict = dict(), dict()
         for team in teams:
             players = self.getPlayers(team)
             ID = int(team['ID'])
             for player in players:
-                self.addToSetWithinDict(result, player, ID)
-        return result
+                self.addToSetWithinDict(playerDict, player, ID)
+                if self.forbidClanMatchups:
+                    self.addToSetWithinDict(clanDict,
+                                            PlayerParser(player).clanID, ID)
+        return playerDict, clanDict
 
     @noisy
     def narrowHistory(self, history):
@@ -2780,10 +2820,16 @@ class League(object):
                 results.add(int(item))
         return results
 
+    @noisy
+    def updateClanConflicts(self, conflicts, player, clansDict):
+        if not self.forbidClanMatchups: return
+        playerClan = PlayerParser(player).clanID
+        conflicts.update(clansDict.get(playerClan, set()))
+
     @property
     def teamsDict(self):
         result, allTeams = dict(), self.activeTeams
-        playersDict = self.makePlayersDict(allTeams)
+        playersDict, clansDict = self.makePlayersDict(allTeams)
         for team in allTeams:
             if ('FALSE' in team['Confirmations']): continue
             teamDict = {'rating': team['Rating'],
@@ -2795,6 +2841,7 @@ class League(object):
             players = self.getPlayers(team)
             for player in players:
                 conflicts.update(playersDict[player])
+                self.updateClanConflicts(conflicts, player, clansDict)
             fullHistory = self.getHistory(team)
             if self.rematchLimit == self.KW_ALL:
                 history = fullHistory

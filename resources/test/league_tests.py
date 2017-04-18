@@ -346,6 +346,29 @@ class TestLeague(TestCase):
         self._boolPropertyTest("favorNewTemplates",
                                self.league.SET_FAVOR_NEW_TEMPLATES, False)
 
+    def test_requireSameClan(self):
+        self._setProp(self.league.SET_MAINTAIN_SAME_CLAN, "FALSE")
+        assert_false(self.league.maintainSameClan)
+        self._boolPropertyTest('requireSameClan',
+                               self.league.SET_REQUIRE_SAME_CLAN, False)
+        self._setProp(self.league.SET_MAINTAIN_SAME_CLAN, "TRUE")
+        assert_true(self.league.maintainSameClan)
+        values = {'TRUE': True, 'FALSE': True}
+        self._propertyTest('requireSameClan',
+                           self.league.SET_REQUIRE_SAME_CLAN, True, values)
+
+    def test_maintainSameClan(self):
+        self._boolPropertyTest('maintainSameClan',
+                               self.league.SET_MAINTAIN_SAME_CLAN, False)
+
+    def test_forbidClanMatchups(self):
+        self._boolPropertyTest('forbidClanMatchups',
+                               self.league.SET_FORBID_CLAN_MATCHUPS, False)
+
+    def test_onlyModsCanAdd(self):
+        self._boolPropertyTest('onlyModsCanAdd',
+                               self.league.SET_ONLY_MODS_CAN_ADD, False)
+
     def test_autodrop(self):
         self._boolPropertyTest("autodrop", self.league.SET_AUTODROP,
                                (self.league.dropLimit > 0))
@@ -1381,14 +1404,38 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_ALLOW_JOINS, "FALSE")
         assert_raises(ImproperInput, self.league.checkJoins)
 
+    @patch('resources.league.PlayerParser')
+    def test_checkConsistentClan(self, parser):
+        parser.return_value.clanID = None
+        assert_equals(self.league.checkConsistentClan([1, 2, 3, 4, 5], False),
+                      None)
+        assert_equals(self.league.checkConsistentClan([1, 2, 3, 4, 5], True),
+                      None)
+        class FakeParser(object):
+            def __init__(self, val):
+                self.clanID = val
+        parser.side_effect = [FakeParser(x) for x in xrange(5)]
+        assert_equals(self.league.checkConsistentClan([1, 2, 3, 4, 5], False),
+                      None)
+        assert_raises(ImproperInput, self.league.checkConsistentClan,
+                      [1, 2, 3, 4, 5], True)
+
+    @patch('resources.league.League.checkConsistentClan')
     @patch('resources.league.League.checkTeam')
-    def test_checkAuthorAndMembers(self, check):
+    def test_checkAuthorAndMembers(self, check, checkClan):
+        self._setProp(self.league.SET_ONLY_MODS_CAN_ADD, "FALSE")
         order = {'author': 1403, 'orders': ['1v1', 'teamName', '3', '40', '2']}
         self.league.mods = {1403,}
         assert_equals(self.league.checkAuthorAndMembers(order),
                       (check.return_value, [40, 2], [False, False]))
         self.league.mods = set()
         assert_raises(ImproperInput, self.league.checkAuthorAndMembers, order)
+        order['author'] = 40
+        assert_equals(self.league.checkAuthorAndMembers(order),
+                      (check.return_value, [40, 2], [True, False]))
+        self._setProp(self.league.SET_ONLY_MODS_CAN_ADD, "TRUE")
+        assert_raises(ImproperInput, self.league.checkAuthorAndMembers, order)
+        assert_equals(checkClan.call_count, 2)
 
     @patch('resources.league.League.checkLimit')
     @patch('resources.league.League.checkAuthorAndMembers')
@@ -2646,13 +2693,16 @@ class TestLeague(TestCase):
         assert_raises(ImproperInput, self.league.checkTeamRating, 'teamID')
 
     @patch('resources.league.League.changeLimit')
+    @patch('resources.league.League.checkConsistentClan')
     @patch('resources.league.League.checkTeam')
     @patch('resources.league.League.checkTeamRatingUsingData')
     @patch('resources.league.League.fetchTeamData')
-    def test_validateTeam(self, fetch, checkRtg, check, change):
+    def test_validateTeam(self, fetch, checkRtg, check, checkClan, change):
         assert_false(self.league.validateTeam('teamID', 'players'))
         checkRtg.assert_called_once_with('teamID', fetch.return_value)
         check.assert_called_once_with('players', 'teamID')
+        checkClan.assert_called_once_with('players',
+                                          self.league.maintainSameClan)
         check.side_effect = ImproperInput()
         assert_true(self.league.validateTeam('teamID', 'players'))
         self.parent.log.assert_called_with("Removing teamID because: ", 'NAME')
@@ -2776,21 +2826,47 @@ class TestLeague(TestCase):
         self.league.addToSetWithinDict(data, 6, 4)
         assert_equals(data, {4: {3, 2, 1}, 5: {3,}, 6: {4,}})
 
-    def test_makePlayersDict(self):
+    @patch('resources.league.PlayerParser')
+    def test_makePlayersDict(self, parser):
+        parser.return_value.clanID = 8
+        self._setProp(self.league.SET_FORBID_CLAN_MATCHUPS, "FALSE")
         teams = [{'ID': 3, 'Players': '3,6,9'}, {'ID': 2, 'Players': '2,4,6'},
                  {'ID': 6, 'Players': '6,12,18'}]
-        assert_equals(self.league.makePlayersDict(teams), {2: {2,}, 3: {3,},
-                      4: {2,}, 6: {2, 3, 6}, 9: {3,}, 12: {6,}, 18: {6,}})
+        assert_equals(self.league.makePlayersDict(teams), ({2: {2,}, 3: {3,},
+                      4: {2,}, 6: {2, 3, 6}, 9: {3,}, 12: {6,}, 18: {6,}},
+                      {}))
+        self._setProp(self.league.SET_FORBID_CLAN_MATCHUPS, "TRUE")
+        assert_equals(self.league.makePlayersDict(teams), ({2: {2,}, 3: {3,},
+                      4: {2,}, 6: {2, 3, 6}, 9: {3,}, 12: {6,}, 18: {6,}},
+                      {8: {2, 3, 6}}))
 
     def test_narrowHistory(self):
         self._setProp(self.league.SET_REMATCH_CAP, 3)
         assert_equals(self.league.narrowHistory([1,1,2,3,4,3,3,2,1,2,4,9,49]),
                       {1, 2, 3})
 
+    @patch('resources.league.PlayerParser')
+    def test_updateClanConflicts(self, parser):
+        conflicts = set()
+        parser.return_value.clanID = 1
+        clansDict = {1: {2, 3, 4}, 2: {12, 21, 33}, None: {4, 12}}
+        self._setProp(self.league.SET_FORBID_CLAN_MATCHUPS, "FALSE")
+        self.league.updateClanConflicts(conflicts, 40, clansDict)
+        parser.return_value.clanID = 2
+        self._setProp(self.league.SET_FORBID_CLAN_MATCHUPS, "TRUE")
+        self.league.updateClanConflicts(conflicts, 121, clansDict)
+        assert_equals(conflicts, {12, 21, 33})
+        parser.return_value.clanID = None
+        self.league.updateClanConflicts(conflicts, 120, clansDict)
+        parser.return_value.clanID = 8
+        self.league.updateClanConflicts(conflicts, 409, clansDict)
+        assert_equals(conflicts, {12, 21, 33, 4, 12})
+
     def test_teamsDict(self):
         self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
         self._setProp(self.league.SET_REMATCH_LIMIT, "ALL")
         self._setProp(self.league.SET_REMATCH_CAP, "1")
+        self._setProp(self.league.SET_FORBID_CLAN_MATCHUPS, "FALSE")
         self.teams.findEntities.return_value = [{'ID': 3, 'Limit': '-3',
             'Rating': '1500', 'Confirmations': 'TRUE,TRUE,TRUE',
             'Ongoing': '1',

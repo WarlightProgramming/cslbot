@@ -206,6 +206,21 @@ for teams they don't belong to, and toggle the activity status of templates.
 
 ___
 
+#### ONLY MODS CAN ADD TEAMS
+
+Whether to restrict adding new teams to just mods (and above).
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: False
+
+Set this to True if you want to only allow an authorized subset of players (your
+league's mods) to add new teams. This is useful for manager-style leagues, for
+example, or leagues where you need to have different players act as
+representatives for larger groups from which they'll add teams.
+
+___
+
 #### AUTOFORMAT
 
 Whether to automatically format the league sheets.
@@ -723,6 +738,48 @@ more games for which new templates will be favored.
 In case you've got a league going on for some time and want to keep your teams
 from having to wait to experience the newest templates added to your league,
 this could serve as a useful feature to keep things fresh.
+
+___
+
+#### REQUIRE CONSISTENT CLAN FOR NEW TEAMS
+
+Whether to require all members of any new team to belong to a single clan.
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: False
+
+If this is set to True, any new teams (but not necessarily any previously-added
+teams) will have to have their members belong to only one clan.
+
+___
+
+#### REQUIRE CONSISTENT CLAN FOR ALL TEAMS
+
+Whether to require all members of any new or participating team to belong to a
+single clan.
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: False
+
+If this is set to True, all teams in the league will have to have all their
+players belong to the same clan. Teams with their members coming from multiple
+clans will be forbidden.
+
+___
+
+#### AVOID SAME-CLAN MATCHUPS
+
+Whether to prevent any matchups where members of the same clan face off against
+one another.
+
+*Possible Args*: "TRUE", "FALSE"
+
+*Default*: False
+
+If this is set to True, the league will not create any matchups where players
+belonging to the same clan appear on multiple sides.
 
 ___
 
