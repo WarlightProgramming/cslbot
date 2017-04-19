@@ -5,7 +5,6 @@
 
 # imports
 import datetime
-import string
 from resources.utility import isInteger
 from resources.order_parser import OrderParser
 from resources.league import League
@@ -108,7 +107,7 @@ class LeagueManager(object):
         searchStr, splitter = '/Forum/', '-'
         if searchStr not in thread: raise ThreadError("Invalid forum URL")
         thread = thread.split(searchStr)[1]
-        thread = thread.split('-')[0]
+        thread = thread.split(splitter)[0]
         if not isInteger(thread): raise ThreadError("Missing thread ID")
         return int(thread)
 
@@ -116,27 +115,25 @@ class LeagueManager(object):
         return ForumThreadParser(self._fetchThreadID(thread))
 
     def _fetchLeagueThread(self, offset=0):
-        thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
+        thread = self.commands.findEntities({self.TITLE_CMD: 'THREAD'})
         if len(thread) > 0:
             try:
                 threadName = thread[0][self.TITLE_ARG]
-                parser = self._makeForumThreadParser(threadName, offset)
+                parser = self._makeForumThreadParser(threadName)
                 self._validateThread(parser)
                 return parser
             except ThreadError as err:
                 self.log(str(err), error=False)
 
     def _handleSpecifiedAdmin(self, found):
-        if len(found) > 0:
-            return found[0][TITLE_ARG]
-        else:
-            self.log("Unable to find admin", error=True)
+        if len(found): return found[0][self.TITLE_ARG]
+        else: self.log("Unable to find admin", error=True)
 
     def _getAdmin(self):
         """fetches the league admin's ID"""
-        found = self.commands.findEntities({TITLE_CMD: 'ADMIN'})
+        found = self.commands.findEntities({self.TITLE_CMD: 'ADMIN'})
         parser = self._fetchLeagueThread()
-        if ((len(found) == 0 or not isInteger(found[0][TITLE_ARG])) and
+        if ((len(found) == 0 or not isInteger(found[0][self.TITLE_ARG])) and
             parser is not None):
             try: return parser.getPosts()[0]['author']['ID']
             except Exception: self._logThreadFailure(parser.ID)
@@ -152,15 +149,15 @@ class LeagueManager(object):
         if error: self.events['error'] = True
 
     def getDefaultResults(self, league):
-        if league is not LG_ALL:
-            return self.fetchLeagueCommands(LG_ALL)
+        if league is not self.LG_ALL:
+            return self.fetchLeagueCommands(self.LG_ALL)
         return dict()
 
-    @staticmethod
-    def getCommandArgs(commands, command):
-        args = commands[command][TITLE_ARG].upper()
+    @classmethod
+    def getCommandArgs(cls, commands, command):
+        args = commands[command][cls.TITLE_ARG].upper()
         if len(args):
-            if SEP_CMD in args: return args.split(SEP_CMD)
+            if cls.SEP_CMD in args: return args.split(cls.SEP_CMD)
             return args
 
     def addArgToResults(self, results, commands, command):
@@ -174,15 +171,15 @@ class LeagueManager(object):
         containing all commands for that league
         league-specific commands override commands given to all leagues
         """
-        commands = self.commands.getAllEntities(keyLabel=TITLE_CMD)
+        commands = self.commands.getAllEntities(keyLabel=self.TITLE_CMD)
         results = self.getDefaultResults(league)
         for command in commands:
-            if (commands[command][TITLE_LG] == league):
+            if (commands[command][self.TITLE_LG] == league):
                 self.addArgToResults(results, commands, command)
         return results
 
     def fetchThreadOrderData(self, thread, offset):
-        thread = self._getThreadName([{TITLE_ARG: thread},])
+        thread = self._getThreadName([{self.TITLE_ARG: thread},])
         threadParser = OrderParser(thread)
         self._validateThread(threadParser)
         try:
@@ -202,23 +199,23 @@ class LeagueManager(object):
             self.log(str(e), error=False)
             return set()
 
-    @staticmethod
-    def _narrowOrders(orders, league):
+    @classmethod
+    def _narrowOrders(cls, orders, league):
         """
         narrows a thread orders list to only orders that relate to a league
         """
         return [order for order in orders if
                 (order['orders'][0] == league or
-                 order['orders'][0] == LG_ALL)]
+                 order['orders'][0] == cls.LG_ALL)]
 
-    @staticmethod
-    def _getNonSpecificOrders(orders, leagues):
+    @classmethod
+    def _getNonSpecificOrders(cls, orders, leagues):
         """
         retrieves only orders that don't specify a league
         """
         return [order for order in orders if
                 (order['orders'][0] not in leagues and
-                 order['orders'][0] != LG_ALL)]
+                 order['orders'][0] != cls.LG_ALL)]
 
     def _runOrders(self, orders):
         """runs orders that are not specific to any league"""
@@ -233,19 +230,19 @@ class LeagueManager(object):
 
     def getLeagueSheets(self, league):
         suffix = " (%s)" % (self.league)
-        gamesTitle = SHEET_GAMES + suffix
-        teamsTitle = SHEET_TEAMS + suffix
-        templatesTitle = SHEET_TEMPLATES + suffix
+        gamesTitle = self.SHEET_GAMES + suffix
+        teamsTitle = self.SHEET_TEAMS + suffix
+        templatesTitle = self.SHEET_TEMPLATES + suffix
         gamesSheet = self.database.fetchTable(gamesTitle)
         teamsSheet = self.database.fetchTable(teamsTitle)
         templatesSheet = self.databse.fetchTable(templatesTitle)
         return gamesSheet, teamsSheet, templatesSheet
 
-    @staticmethod
-    def _retrieveOffset(found):
+    @classmethod
+    def _retrieveOffset(cls, found):
         if len(found) == 0:
             return 0
-        return found[0][TITLE_ARG]
+        return found[0][cls.TITLE_ARG]
 
     def _handleInterfaces(self, league, interfaces):
         if len(interfaces) == 0: return "(no league interface specified)"
@@ -258,13 +255,13 @@ class LeagueManager(object):
         if (isinstance(thread, int) or (isinstance(thread, str) and
             isInteger(thread))):
             return 'https://www.warlight.net/Forum/' + str(thread)
-        interfaces = self.commands.findEntities({TITLE_CMD: 'INTERFACE'})
+        interfaces = self.commands.findEntities({self.TITLE_CMD: 'INTERFACE'})
         return self._handleInterfaces(league, interfaces)
 
     def run(self):
         """runs leagues and updates"""
-        thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
-        offset = self.commands.findEntities({TITLE_CMD: 'OFFSET'})
+        thread = self.commands.findEntities({self.TITLE_CMD: 'THREAD'})
+        offset = self.commands.findEntities({self.TITLE_CMD: 'OFFSET'})
         orders, offset = set(), 0
         if (len(thread) > 0):
             thread, offset = (self._getThreadName(thread),
@@ -285,6 +282,7 @@ class LeagueManager(object):
                 failStr = "Failed to run league %s: %s" % (str(league), errStr)
                 self.log(failStr, league=league, error=True)
         newOffset = offset + len(orders)
-        self.commands.updateMatchingEntities({TITLE_CMD: {'value': 'OFFSET',
-                                                          'type': 'positive'}},
-                                             {TITLE_ARG: str(newOffset)})
+        self.commands.updateMatchingEntities({self.TITLE_CMD:
+                                              {'value': 'OFFSET',
+                                               'type': 'positive'}},
+                                             {self.TITLE_ARG: str(newOffset)})
