@@ -221,6 +221,23 @@ representatives for larger groups from which they'll add teams.
 
 ___
 
+#### AUTHORIZED INTERFACES
+
+A comma-separated list of Warlight ID's corresponding to Interfaces authorized
+to execute Orders for your league.
+
+*Sample Args*: "", "ALL", "3022124041", "3022124041,62456969"
+
+*Default*: (none)
+
+Any time an Interface sends an order to your league, the order will only be
+executed if the Interface's owner has their Warlight ID in this list. You can
+also set this to the "ALL" keyword to allow all Interfaces to affect your
+league, but that leaves your league vulnerable to abuse by Interfaces you
+haven't authorized.
+
+___
+
 #### AUTOFORMAT
 
 Whether to automatically format the league sheets.

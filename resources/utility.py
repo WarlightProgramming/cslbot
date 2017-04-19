@@ -1,5 +1,5 @@
 # utility.py
-## utility functions
+## helper functions
 
 # imports
 import string
@@ -8,6 +8,5 @@ import string
 def isInteger(num):
     """checks whether a string can be converted to an int"""
     for x in num:
-        if x not in string.digits:
-            return False
+        if x not in string.digits: return False
     return True

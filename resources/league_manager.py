@@ -5,7 +5,7 @@
 
 # imports
 import datetime
-from resources.utility import *
+from resources.utility import isInteger
 from resources.order_parser import OrderParser
 from resources.league import League
 from resources.constants import TIMEFORMAT
@@ -63,13 +63,13 @@ class LeagueManager(object):
                                 constraints=LOG_CONSTRAINTS)
         self.leagues = self.commands.findEntities({TITLE_CMD: CMD_MAKE})\
                        [0][TITLE_ARG].split(',')
-        self.admin = self_validateAdmin(self._getAdmin())
+        self.admin = self._validateAdmin(self._getAdmin())
 
     def _validateAdmin(self, adminID):
         adminID = int(adminID)
         parser = PlayerParser(adminID)
         if not parser.isMember:
-            self.log("League admin is not a member. Quitting.", error=True)
+            self.log("League admin is not a Member. Quitting.", error=True)
             raise LeagueError("League admin is not a Member")
         return adminID
 
@@ -151,7 +151,7 @@ class LeagueManager(object):
         if ((len(found) == 0 or not isInteger(found[0][TITLE_ARG])) and
             parser is not None):
             try: return parser.getPosts()[0]['author']['ID']
-            except Exception: self.logThreadFailure(thread)
+            except Exception: self.logThreadFailure(parser.ID)
         else: return self._handleSpecifiedAdmin(found)
 
     def log(self, description, league="", error=False):
@@ -231,20 +231,6 @@ class LeagueManager(object):
                 (order['orders'][0] not in leagues and
                  order['orders'][0] != LG_ALL)]
 
-    def _setLeagueState(self, newState):
-        """changes the global league state"""
-        if newState not in ["RUNNING", "NO_GAMES", "NO_COMMANDS",
-                            "ENDING", "ENDED"]:
-            raise OrderError("Invalid league state: %s" % (newState))
-        self.commands.updateMatchingEntities({TITLE_CMD: CMD_STATE,
-                                              TITLE_LG: LG_ALL},
-                                             {TITLE_ARG: newState})
-        if (len(self.commands.findEntities({TITLE_CMD: CMD_STATE,
-                                            TITLE_LG: LG_ALL})) == 0):
-            self.commands.addEntity({TITLE_CMD: CMD_STATE, TITLE_LG: LG_ALL,
-                                     TITLE_ARG: newState})
-        self.log("Set global league state to %s" % (newState))
-
     def _runOrders(self, orders):
         """runs orders that are not specific to any league"""
         for order in orders:
@@ -272,7 +258,7 @@ class LeagueManager(object):
             return 0
         return found[0][TITLE_ARG]
 
-    def _handleInterfaces(self, interfaces):
+    def _handleInterfaces(self, league, interfaces):
         if len(interfaces) == 0: return "(no league interface specified)"
         elif len(interfaces) > 1:
             return self.fetchLeagueCommands(league).get('INTERFACE',
@@ -282,9 +268,9 @@ class LeagueManager(object):
     def _getInterfaceName(self, thread, league):
         if (isinstance(thread, int) or (isinstance(thread, str) and
             isInteger(thread))):
-            return 'https://www.warlight.net/Forum/' + str(threadID)
+            return 'https://www.warlight.net/Forum/' + str(thread)
         interfaces = self.commands.findEntities({TITLE_CMD: 'INTERFACE'})
-        return self._handleInterfaces(interfaces)
+        return self._handleInterfaces(league, interfaces)
 
     def run(self):
         """runs leagues and updates"""

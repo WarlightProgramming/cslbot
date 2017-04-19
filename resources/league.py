@@ -192,6 +192,7 @@ class League(object):
     SET_MAINTAIN_SAME_CLAN = "REQUIRE CONSISTENT CLAN FOR ALL TEAMS"
     SET_FORBID_CLAN_MATCHUPS = "AVOID SAME-CLAN MATCHUPS"
     SET_ONLY_MODS_CAN_ADD = "ONLY MODS CAN ADD TEAMS"
+    SET_AGENTS = "AUTHORIZED INTERFACES"
     SET_DEBUG = DEBUG_KEY
 
     # rating systems
@@ -1094,6 +1095,13 @@ class League(object):
     @classmethod
     def getGroup(cls, val):
         return cls.getIDGroup(val, process_fn=str)
+
+    @property
+    def agents(self):
+        return self.fetchProperty(self.SET_AGENTS, set(), self.getGroup)
+
+    def agentAllowed(self, agentID):
+        return (str(agentID) in self.agents or self.KW_ALL in self.agents)
 
     @property
     def bannedPlayers(self):
