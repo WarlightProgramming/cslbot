@@ -5,38 +5,12 @@
 
 # imports
 import datetime
+import string
 from resources.utility import isInteger
 from resources.order_parser import OrderParser
 from resources.league import League
 from resources.constants import TIMEFORMAT
 from wl_parsers import ForumThreadParser, PlayerParser
-
-# constants
-
-## settings
-COMMANDS_TITLE = "Settings"
-TITLE_LG = "League"
-TITLE_CMD = "Command"
-TITLE_ARG = "Args"
-LG_ALL = "ALL"
-COMMANDS_HEADER = [TITLE_LG, TITLE_CMD, TITLE_ARG]
-CMD_MAKE = 'LEAGUES'
-SEP_CMD = ","
-ABUSE_THRESHOLD = 5
-
-## log
-LOG_TITLE = "Log"
-TITLE_TIME = "Time"
-TITLE_STATUS = "Error"
-TITLE_LEAGUE = "League"
-TITLE_DESC = "Description"
-LOG_HEADER = [TITLE_TIME, TITLE_STATUS, TITLE_DESC]
-LOG_CONSTRAINTS = ["", "BOOL", ""]
-
-## sheets
-SHEET_GAMES = "Game Data"
-SHEET_TEMPLATES = "Template Data"
-SHEET_TEAMS = "Team Data"
 
 # errors
 class ThreadError(Exception):
@@ -47,30 +21,59 @@ class OrderError(Exception):
     """error for high-level order issues"""
     pass
 
-class LeagueError(Exception):
-    """catch-all"""
-    pass
-
 # main LeagueManager class
 class LeagueManager(object):
+
+    # constants
+
+    ## settings
+    COMMANDS_TITLE = "Settings"
+    TITLE_LG = "League"
+    TITLE_CMD = "Command"
+    TITLE_ARG = "Args"
+    LG_ALL = "ALL"
+    COMMANDS_HEADER = [TITLE_LG, TITLE_CMD, TITLE_ARG]
+    CMD_MAKE = 'LEAGUES'
+    SEP_CMD = ","
+    ABUSE_THRESHOLD = 5
+
+    ## log
+    LOG_TITLE = "Log"
+    TITLE_TIME = "Time"
+    TITLE_STATUS = "Error"
+    TITLE_LEAGUE = "League"
+    TITLE_DESC = "Description"
+    LOG_HEADER = [TITLE_TIME, TITLE_STATUS, TITLE_DESC]
+    LOG_CONSTRAINTS = ["", "BOOL", ""]
+
+    ## sheets
+    SHEET_GAMES = "Game Data"
+    SHEET_TEMPLATES = "Template Data"
+    SHEET_TEAMS = "Team Data"
 
     def __init__(self, database):
         """takes a sheetDB Database object"""
         self.database = database
-        self.commands = self.database.fetchTable(COMMANDS_TITLE,
-                                         header=COMMANDS_HEADER)
-        self.logSheet = self.database.fetchTable(LOG_TITLE,
-                                constraints=LOG_CONSTRAINTS)
-        self.leagues = self.commands.findEntities({TITLE_CMD: CMD_MAKE})\
-                       [0][TITLE_ARG].split(',')
+        self.commands = self.database.fetchTable(self.COMMANDS_TITLE,
+                                         header=self.COMMANDS_HEADER)
+        self.logSheet = self.database.fetchTable(self.LOG_TITLE,
+                                constraints=self.LOG_CONSTRAINTS)
+        self.leagues = self._fetchLeagueNames()
         self.admin = self._validateAdmin(self._getAdmin())
+        self.events = {'error': False, 'events': list()}
+
+    def _fetchLeagueNames(self):
+        matches = self.commands.findEntities({self.TITLE_CMD: {'type':
+            'positive', 'value': self.CMD_MAKE}})
+        if len(matches): return matches[0][self.TITLE_ARG].split(',')
+        else: return list()
 
     def _validateAdmin(self, adminID):
         adminID = int(adminID)
         parser = PlayerParser(adminID)
         if not parser.isMember:
             self.log("League admin is not a Member. Quitting.", error=True)
-            raise LeagueError("League admin is not a Member")
+            return None
         return adminID
 
     @property
@@ -81,58 +84,43 @@ class LeagueManager(object):
     @staticmethod
     def _getUniqueAuthors(posts):
         authors = set()
-        for post in posts:
-            author = post['author']
-            authors.add(author)
+        for post in posts: authors.add(post['author'])
         return authors
 
     def _validateThread(self, parser):
         posts = parser.getPosts()
         authorCount = len(self._getUniqueAuthors(posts))
-        if authorCount < ABUSE_THRESHOLD:
+        if authorCount < self.ABUSE_THRESHOLD:
             errStr = ("Thread must have posts by at least %d unique authors" %
-                      (ABUSE_THRESHOLD))
+                      (self.ABUSE_THRESHOLD))
             raise ThreadError(errStr)
         firstPost = posts[0]['message']
         if self.validationStr not in firstPost:
-            raise ThreadError("Thread does not confirm league. Quitting.")
+            raise ThreadError("Thread missing validation order. Quitting.")
 
-    def logThreadFailure(self, thread):
-        self.log("Unable to scan thread. Quitting.", error=True)
-        raise ThreadError("Unable to parse thread: %s" % (str(thread)))
-
-    def _makeForumThreadParser(self, thread):
-        if isInteger(thread):
-            return ForumThreadParser(int(thread))
-        else:
-            searchStr = '/Forum/'
-            start = thread.find(searchStr)
-            if start < 0:
-                self.logThreadFailure(thread)
-            start = start + len(searchStr)
-            end = start
-            while isInteger(thread[end:]):
-                end += 1
-            if end == start:
-                self.logThreadFailure(thread)
-            return ForumThreadParser(int(thread[start:end]))
+    def _logThreadFailure(self, thread):
+        self.log("Unable to scan thread %s. Quitting." % (str(thread)),
+                 error=True)
 
     @staticmethod
-    def _getThreadName(thread):
-        arg = thread[0][TITLE_ARG]
-        if isInteger(arg):
-            return int(arg)
-        else:
-            arg = arg.split('/Forum/')[1]
-            arg = arg.split('-')[0]
-            return int(arg)
+    def _fetchThreadID(thread):
+        if isInteger(thread): return int(thread)
+        searchStr, splitter = '/Forum/', '-'
+        if searchStr not in thread: raise ThreadError("Invalid forum URL")
+        thread = thread.split(searchStr)[1]
+        thread = thread.split('-')[0]
+        if not isInteger(thread): raise ThreadError("Missing thread ID")
+        return int(thread)
+
+    def _makeForumThreadParser(self, thread):
+        return ForumThreadParser(self._fetchThreadID(thread))
 
     def _fetchLeagueThread(self, offset=0):
         thread = self.commands.findEntities({TITLE_CMD: 'THREAD'})
         if len(thread) > 0:
             try:
-                threadName = self._getThreadName(thread)
-                parser = self._makeForumThreaParser(threadName, offset)
+                threadName = thread[0][self.TITLE_ARG]
+                parser = self._makeForumThreadParser(threadName, offset)
                 self._validateThread(parser)
                 return parser
             except ThreadError as err:
@@ -151,16 +139,17 @@ class LeagueManager(object):
         if ((len(found) == 0 or not isInteger(found[0][TITLE_ARG])) and
             parser is not None):
             try: return parser.getPosts()[0]['author']['ID']
-            except Exception: self.logThreadFailure(parser.ID)
+            except Exception: self._logThreadFailure(parser.ID)
         else: return self._handleSpecifiedAdmin(found)
 
     def log(self, description, league="", error=False):
         """logs an entry onto the sheet"""
         time = datetime.datetime.strftime(datetime.datetime.now(), TIMEFORMAT)
-        self.logSheet.addEntity({TITLE_TIME: time,
-                                 TITLE_LEAGUE: league,
-                                 TITLE_STATUS: error,
-                                 TITLE_DESC: description})
+        entity = {self.TITLE_TIME: time, self.TITLE_LEAGUE: league,
+                  self.TITLE_STATUS: error, self.TITLE_DESC: description}
+        self.logSheet.addEntity(entity)
+        self.events['events'].append(entity)
+        if error: self.events['error'] = True
 
     def getDefaultResults(self, league):
         if league is not LG_ALL:
