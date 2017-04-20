@@ -2190,34 +2190,34 @@ class TestLeague(TestCase):
     def test_makeFakeSides(self):
         sides = [{1, 2, 3}, {4, 5}, {6, 7, 8}]
         losingTeams = {4, 6, 7}
-        assert_equals(self.league.makeFakeSides(sides, losingTeams),
+        assert_equals(self.league._makeFakeSides(sides, losingTeams),
                       ([{4, 6, 7}, {1, 2, 3, 5, 8}], 1))
-        assert_equals(self.league.makeFakeSides(sides, set(xrange(1, 9))),
+        assert_equals(self.league._makeFakeSides(sides, set(xrange(1, 9))),
                       ([set(xrange(1, 9)),], None))
 
     @patch('resources.league.League._getGameSidesFromData')
     @patch('resources.league.League._findTeamsFromData')
     @patch('resources.league.League._fetchGameData')
     @patch('resources.league.League._handleSpecialDeclines')
-    @patch('resources.league.League.makeFakeSides')
+    @patch('resources.league.League._makeFakeSides')
     @patch('resources.league.League.updateVeto')
     @patch('resources.league.League._updateResults')
     def test_updateDecline(self, updateRes, veto, make, handle,
                            fetch, find, get):
         make.return_value = set(), 0
-        self.league.updateDecline('ID', 'decliners')
+        self.league._updateDecline('ID', 'decliners')
         veto.assert_not_called()
         updateRes.assert_called_once_with('ID', set(), 0,
             adj=self.league.penalizeDeclines, declined=True)
         make.return_value = set(), None
-        self.league.updateDecline('ID', 'decliners')
+        self.league._updateDecline('ID', 'decliners')
         veto.assert_called_once_with('ID')
 
     @patch('resources.league.League._finishGameForTeams')
     @patch('resources.league.League._getGameSidesFromData')
     def test_deleteGame(self, get, finish):
         self._setProp(self.league.SET_PRESERVE_RECORDS, "FALSE")
-        self.league.deleteGame({'ID': 'ID'})
+        self.league._deleteGame({'ID': 'ID'})
         self.games.removeMatchingEntities.assert_called_with({'ID':
                                                     {'value': 'ID',
                                                      'type': 'positive'}})
@@ -2225,7 +2225,7 @@ class TestLeague(TestCase):
         finish.assert_called_once_with(get.return_value)
         self._setProp(self.league.SET_PRESERVE_RECORDS, "TRUE")
         old = self.games.updateMatchingEntities.call_count
-        self.league.deleteGame({'ID': 'NewID'})
+        self.league._deleteGame({'ID': 'NewID'})
         self.games.removeMatchingEntities.assert_called_with({'ID':
                                                     {'value': 'ID',
                                                      'type': 'positive'}})
@@ -2481,7 +2481,7 @@ class TestLeague(TestCase):
         assert_equals(self.league.getGameVetos(gameData), {1,5,9,390})
         assert_equals(update.call_count, 5)
 
-    @patch('resources.league.League.deleteGame')
+    @patch('resources.league.League._deleteGame')
     @patch('resources.league.League.createGameFromData')
     @patch('resources.league.League.getGameVetos')
     def test_updateTemplate(self, vetos, create, delete):
@@ -2533,7 +2533,7 @@ class TestLeague(TestCase):
     @patch('resources.league.League.updateTemplate')
     @patch('resources.league.League.updateGameVetos')
     @patch('resources.league.League.vetoCurrentTemplate')
-    @patch('resources.league.League.deleteGame')
+    @patch('resources.league.League._deleteGame')
     @patch('resources.league.League.penalizeVeto')
     def test_updateVeto(self, penalize, delete, veto, gameVetos, temp):
         gameData = {'Vetos': '9', 'Template': 3, 'Sides': '1/2'}
@@ -2555,7 +2555,7 @@ class TestLeague(TestCase):
         assert_equals(oneArg(2309505095), (2309505095 * 4 * 48 / 3))
 
     @patch('resources.league.League.updateVeto')
-    @patch('resources.league.League.updateDecline')
+    @patch('resources.league.League._updateDecline')
     @patch('resources.league.League._updateWinners')
     @patch('resources.league.League._fetchGameStatus')
     def test_updateGame(self, fetch, win, decline, veto):

@@ -410,14 +410,14 @@ class League(object):
     def autoformat(self):
         """whether to automatically format sheets"""
         return self._fetchProperty(self.SET_AUTOFORMAT, True,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def preserveRecords(self):
         """whether to keep records of abandoned games"""
         if self.retentionRange and self.vetoPenalty: return True
         return self._fetchProperty(self.SET_PRESERVE_RECORDS, True,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def maintainTotal(self):
@@ -428,46 +428,46 @@ class League(object):
         """
         prohibited = {self.RATE_WINRATE, self.RATE_WINCOUNT}
         expVal = self._fetchProperty(self.SET_MAINTAIN_TOTAL, False,
-                                    self._getBoolProperty)
+                                     self._getBoolProperty)
         return (expVal and self.ratingSystem not in prohibited)
 
     @property
     def favorNewTemplates(self):
         return self._fetchProperty(self.SET_FAVOR_NEW_TEMPLATES, False,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def requireSameClan(self):
         exp = self._fetchProperty(self.SET_REQUIRE_SAME_CLAN, False,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
         return (exp or self.maintainSameClan)
 
     @property
     def maintainSameClan(self):
         return self._fetchProperty(self.SET_MAINTAIN_SAME_CLAN, False,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def forbidClanMatchups(self):
         return self._fetchProperty(self.SET_FORBID_CLAN_MATCHUPS, False,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def onlyModsCanAdd(self):
         return self._fetchProperty(self.SET_ONLY_MODS_CAN_ADD, False,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def autodrop(self):
         """whether to automatically drop templates players can't use"""
         return self._fetchProperty(self.SET_AUTODROP, (self.dropLimit > 0),
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def teamless(self):
         return self._fetchProperty(self.SET_TEAMLESS, (self.teamSize == 1
-                                  and self.sideSize == 1),
-                                  self._getBoolProperty)
+                                   and self.sideSize == 1),
+                                   self._getBoolProperty)
 
     @property
     def leagueAcronym(self):
@@ -496,7 +496,7 @@ class League(object):
     @property
     def constrainName(self):
         return self._fetchProperty(self.SET_CONSTRAIN_NAME, True,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def leagueMessage(self):
@@ -543,22 +543,22 @@ class League(object):
     @property
     def removeDeclines(self):
         return self._fetchProperty(self.SET_REMOVE_DECLINES, True,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def removeBoots(self):
         return self._fetchProperty(self.SET_REMOVE_BOOTS, True,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def penalizeDeclines(self):
         return self._fetchProperty(self.SET_PENALIZE_DECLINES, True,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def countDeclinesAsVetos(self):
         return self._fetchProperty(self.SET_VETO_DECLINES, False,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def vetoPenalty(self):
@@ -662,7 +662,7 @@ class League(object):
         limits outside range are set to the min or max limit
         """
         return self._fetchProperty(self.SET_CONSTRAIN_LIMIT, True,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @staticmethod
     def _valueInRange(val, rangeMin, rangeMax):
@@ -678,7 +678,7 @@ class League(object):
     def ratingSystem(self):
         """rating system to use"""
         system = self._fetchProperty(self.SET_SYSTEM, self.RATE_ELO,
-                                    lambda x: x.upper())
+                                     lambda x: x.upper())
         if system not in self.sysDict:
             raise ImproperInput("Unrecognized rating system. Aborting.")
         return system
@@ -744,12 +744,12 @@ class League(object):
     @property
     def reverseParity(self):
         return self._fetchProperty(self.SET_REVERSE_PARITY, False,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def reverseSideParity(self):
         return self._fetchProperty(self.SET_REVERSE_GROUPING, False,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def maxBoot(self):
@@ -762,7 +762,7 @@ class League(object):
     @property
     def membersOnly(self):
         exp = self._fetchProperty(self.SET_MEMBERS_ONLY, False,
-                                 self._getBoolProperty)
+                                  self._getBoolProperty)
         return (exp or (self.minMemberAge > 0))
 
     @staticmethod
@@ -870,18 +870,18 @@ class League(object):
     @classmethod
     def _valueBelowCapacity(cls, value, capacity):
         return cls._valueInRange(value, None,
-                                (capacity-1 if isinstance(capacity, int)
-                                 else capacity))
+                                 (capacity-1 if isinstance(capacity, int)
+                                  else capacity))
 
     @property
     def activeFull(self):
         return (not self._valueBelowCapacity(len(self.activeTeams),
-                                            self.activeCapacity))
+                                             self.activeCapacity))
 
     @property
     def leagueFull(self):
         return (not self._valueBelowCapacity(len(self.allTeams),
-                                            self.leagueCapacity))
+                                             self.leagueCapacity))
 
     @classmethod
     def _getDateTimeProperty(cls, val):
@@ -891,21 +891,17 @@ class League(object):
     @property
     def joinPeriodStart(self):
         return self._fetchProperty(self.SET_JOIN_PERIOD_START, None,
-                                  self._getDateTimeProperty)
+                                   self._getDateTimeProperty)
 
     @property
     def joinPeriodEnd(self):
         return self._fetchProperty(self.SET_JOIN_PERIOD_END, None,
-                                  self._getDateTimeProperty)
+                                   self._getDateTimeProperty)
 
-    @staticmethod
-    def _currentTimeWithinRange(start, end):
+    @classmethod
+    def _currentTimeWithinRange(cls, start, end):
         now = datetime.now()
-        if (start is not None and
-            now < start): return False
-        elif (end is not None and
-            now > end): return False
-        return True
+        return cls._valueInRange(now, start, end)
 
     @property
     def joinsAllowed(self):
@@ -920,7 +916,7 @@ class League(object):
     @property
     def minSize(self):
         return self._fetchProperty(self.SET_MIN_SIZE, (self.sideSize *
-                                  self.gameSize), int)
+                                   self.gameSize), int)
 
     @property
     def minToCull(self):
@@ -971,15 +967,15 @@ class League(object):
     @property
     def activeTeams(self):
         teams = self._getExtantEntities(self.teams,
-                                       {'Limit': {'value': '0',
-                                                  'type': 'negative'}})
+                                        {'Limit': {'value': '0',
+                                                   'type': 'negative'}})
         return [team for team in teams if int(team['Limit']) > 0]
 
     @property
     def activeTemplates(self):
         return self._getExtantEntities(self.templates,
-                                      {'Active': {'value': 'TRUE',
-                                                  'type': 'positive'}})
+                                       {'Active': {'value': 'TRUE',
+                                                   'type': 'positive'}})
 
     @property
     def size(self):
@@ -996,12 +992,12 @@ class League(object):
     @property
     def activityStart(self):
         return self._fetchProperty(self.SET_START_DATE, None,
-                                  self._getDateTimeProperty)
+                                   self._getDateTimeProperty)
 
     @property
     def activityEnd(self):
         return self._fetchProperty(self.SET_END_DATE, None,
-                                  self._getDateTimeProperty)
+                                   self._getDateTimeProperty)
 
     @property
     def active(self):
@@ -1013,7 +1009,7 @@ class League(object):
     @property
     def allowRemoval(self):
         return self._fetchProperty(self.SET_ALLOW_REMOVAL, False,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @property
     def minOngoingGames(self):
@@ -1027,7 +1023,7 @@ class League(object):
     def _gameCountInRange(self, player):
         ongoing = player.currentGames
         return self._valueInRange(ongoing, self.minOngoingGames,
-                                 self.maxOngoingGames)
+                                  self.maxOngoingGames)
 
     @property
     def minRTPercent(self):
@@ -1106,41 +1102,41 @@ class League(object):
     def bannedPlayers(self):
         """set containing IDs of banned players"""
         return self._fetchProperty(self.SET_BANNED_PLAYERS, set(),
-                                  self.getGroup)
+                                   self.getGroup)
 
     @property
     def bannedClans(self):
         """set containing IDs of banned clans"""
         return self._fetchProperty(self.SET_BANNED_CLANS, set(),
-                                  self.getGroup)
+                                   self.getGroup)
 
     @property
     def bannedLocations(self):
         return self._fetchProperty(self.SET_BANNED_LOCATIONS, set(),
-                                  self.getGroup)
+                                   self.getGroup)
 
     @property
     def allowedPlayers(self):
         """set containing IDs of allowed players"""
         return self._fetchProperty(self.SET_ALLOWED_PLAYERS, set(),
-                                  self.getGroup)
+                                   self.getGroup)
 
     @property
     def allowedClans(self):
         """set containing IDs of allowed clans"""
         return self._fetchProperty(self.SET_ALLOWED_CLANS, set(),
-                                  self.getGroup)
+                                   self.getGroup)
 
     @property
     def allowedLocations(self):
         return self._fetchProperty(self.SET_ALLOWED_LOCATIONS, set(),
-                                  self.getGroup)
+                                   self.getGroup)
 
     @property
     def requireClan(self):
         default = (self.KW_ALL in self.bannedClans)
         return self._fetchProperty(self.SET_REQUIRE_CLAN, default,
-                                  self._getBoolProperty)
+                                   self._getBoolProperty)
 
     @noisy
     def _clanAllowed(self, player):
@@ -1478,7 +1474,7 @@ class League(object):
         if not self.allowRemoval:
             raise ImproperInput("Team removal has been disabled.")
         matchingTeam = self.fetchMatchingTeam(order)[0]
-        self.removeEntity(self.teams, matchingTeam['ID'])
+        self._removeEntity(self.teams, matchingTeam['ID'])
 
     @noisy
     def checkLimitChange(self, teamID, newLimit):
@@ -1987,7 +1983,7 @@ class League(object):
         for side in updated:
             for team in side:
                 results[team] = self._unsplitRtg([side[team].mu,
-                                                 side[team].sigma])
+                                                  side[team].sigma])
         return results
 
     @noisy
@@ -2094,7 +2090,7 @@ class League(object):
                 self.changeLimit(team, 0)
 
     @staticmethod
-    def makeFakeSides(sides, losingTeams):
+    def _makeFakeSides(sides, losingTeams):
         winningSide, results, winningTeams = None, [losingTeams,], set()
         for side in sides:
             for team in side:
@@ -2105,29 +2101,29 @@ class League(object):
         return results, winningSide
 
     @noisy
-    def updateDecline(self, gameID, decliners):
+    def _updateDecline(self, gameID, decliners):
         gameData = self._fetchGameData(gameID)
         sides = self._getGameSidesFromData(gameData)
         losingTeams = self._findTeamsFromData(gameData, decliners)
         template = str(gameData['Template'])
         self._handleSpecialDeclines(losingTeams, template)
-        sides, winningSide = self.makeFakeSides(sides, losingTeams)
+        sides, winningSide = self._makeFakeSides(sides, losingTeams)
         if winningSide is None: self.updateVeto(gameID)
         self._updateResults(gameID, sides, winningSide,
                             adj=self.penalizeDeclines, declined=True)
 
     @staticmethod
-    def removeEntity(table, ID, identifier='ID'):
+    def _removeEntity(table, ID, identifier='ID'):
         table.removeMatchingEntities({identifier: {'value': ID,
                                                    'type': 'positive'}})
 
     @noisy
-    def deleteGame(self, gameData):
+    def _deleteGame(self, gameData):
         if self.preserveRecords:
             finStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
             self._updateEntityValue(self.games, gameData['ID'],
                                     Finished=finStr)
-        else: self.removeEntity(self.games, gameData['ID'])
+        else: self._removeEntity(self.games, gameData['ID'])
         sides = self._getGameSidesFromData(gameData)
         self._finishGameForTeams(sides)
 
@@ -2432,7 +2428,7 @@ class League(object):
             sides = gameData['Sides']
             self.parent.log("Failed to make game with %s on %d because of %s" %
                             (sides, temp, repr(e)), self.name, error=True)
-            self.removeEntity(self.games, gameData['ID'])
+            self._removeEntity(self.games, gameData['ID'])
 
     @noisy
     def createGame(self, gameID):
@@ -2466,7 +2462,7 @@ class League(object):
             self.setGameTemplate(gameData, newTemp)
             self.createGameFromData(gameData)
         else:
-            self.deleteGame(gameData)
+            self._deleteGame(gameData)
 
     @classmethod
     def getVetoDict(cls, vetos):
@@ -2526,7 +2522,7 @@ class League(object):
         gameData = self._fetchGameData(gameID)
         if int(gameData['Vetos']) >= self.vetoLimit:
             self.penalizeVeto(gameData)
-            self.deleteGame(gameData)
+            self._deleteGame(gameData)
         else:
             template = gameData['Template']
             self.vetoCurrentTemplate(gameData)
@@ -2543,7 +2539,7 @@ class League(object):
         status = self._fetchGameStatus(warlightID, created)
         if status is not None:
             updateWin = self.getOneArgFunc(self._updateWinners, status[1:])
-            updateDecline = self.getOneArgFunc(self.updateDecline, status[1])
+            updateDecline = self.getOneArgFunc(self._updateDecline, status[1])
             {'FINISHED': updateWin, 'DECLINED': updateDecline,
              'ABANDONED': self.updateVeto}.get(status[0])(gameID)
 
