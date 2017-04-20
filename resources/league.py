@@ -3304,8 +3304,8 @@ class League(object):
 
     @checkAgent
     def addTeam(self, order):
-        author, teamName = self._depackageOrder('author', 'teamName')
-        self._addTeam(self._makeDummy('add_team', author, order['limit'],
+        auth, name, limit = self._depackageOrder('author', 'teamName', 'limit')
+        self._addTeam(self._makeDummy('add_team', auth, name, limit,
                                       *(order['players'])))
 
     def _makeConfirmationOrder(self, order, orderType='confirm_team'):
@@ -3322,21 +3322,24 @@ class League(object):
         self._unconfirmTeam(self._makeConfirmationOrder(order,
                             'unconfirm_team'))
 
+    def _executeSimpleOrder(self, order, orderFn, orderType, *args):
+        vals = [order[arg] for arg in args]
+        orderFn(self._makeDummy(orderType, *vals))
+
     @checkAgent
     def setLimit(self, order):
-        author, teamName, limit = self._depackageOrder('author', 'teamName',
-                                                       'limit')
-        self._setLimit(self._makeDummy('set_limit', author, teamName, limit))
+        self._executeSimpleOrder(order, 'set_limit', self._setLimit,
+                                 'author', 'teamName', 'limit')
 
     @checkAgent
     def renameTeam(self, order):
-        auth, name, new = self._depackageOrder('author', 'teamName', 'newName')
-        self._renameTeam(self._makeDummy('rename_team', auth, name, new))
+        self._executeSimpleOrder(order, 'rename_team', self._renameTeam,
+                                 'author', 'teamName', 'newName')
 
     @checkAgent
     def removeTeam(self, order):
-        author, teamName = self._depackageOrder('author', 'teamName')
-        self._removeTeam(self._makeDummy('remove_team', author, teamName))
+        self._executeSimpleOrder(order, 'remove_team', self._removeTeam,
+                                 'author', 'teamName')
 
     def _makeTemplateDropOrder(self, order, orderType='drop_templates'):
         author, teamName = self._depackageOrder('author', 'teamName')
@@ -3395,15 +3398,13 @@ class League(object):
 
     @checkAgent
     def activateTemplate(self, order):
-        author, tempName = self._depackageOrder('author', 'templateName')
-        self._activateTemplate(self._makeDummy('activate_template', author,
-                                               tempName))
+        self._executeSimpleOrder(order, 'activate_template',
+            self._activateTemplate, 'author', 'templateName')
 
     @checkAgent
     def deactivateTemplate(self, order):
-        author, tempName = self._depackageOrder('author', 'templateName')
-        self._deactivateTemplate(self._makeDummy('deactivate_template', author,
-                                                 tempName))
+        self._executeSimpleOrder(order, 'deactivate_template',
+            self._deactivateTemplate, 'author', 'templateName')
 
     @checkAgent
     def quitLeague(self, order):
