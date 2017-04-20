@@ -78,9 +78,8 @@ class TestLeagueManager(TestCase):
         log.assert_called_with("Unable to scan thread thread. Quitting.",
                                error=True)
 
-    @patch('resources.league_manager.LeagueManager._logThreadFailure')
     @patch('resources.league_manager.ForumThreadParser')
-    def test_makeForumThreadParser(self, parser, logThreadFailure):
+    def test_makeForumThreadParser(self, parser):
         assert_false(isInteger(''))
         assert_equals(self.manager._makeForumThreadParser("10390494"),
                       parser.return_value)
@@ -92,6 +91,12 @@ class TestLeagueManager(TestCase):
         assert_equals(self.manager._makeForumThreadParser(URL),
                       parser.return_value)
         parser.assert_called_with(400283)
+
+    @patch('resources.league_manager.LeagueManager.log')
+    @patch('resources.league_manager.PlayerParser')
+    def test_fetchLeagueThread(self, parser, log):
+        self.commands.findEntities.return_value = list()
+        assert_equals(self.manager._fetchLeagueThread(), None)
 
 # run tests
 if __name__ == '__main__':

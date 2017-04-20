@@ -65,7 +65,7 @@ def test_noisy():
 ## League class tests
 class TestLeague(TestCase):
 
-    @patch('resources.league.League.checkFormat')
+    @patch('resources.league.League._checkFormat')
     @patch('resources.league.League._makeHandler')
     @patch('resources.league.League._getMods')
     def setUp(self, getMods, makeHandler, checkFormat):
@@ -107,7 +107,7 @@ class TestLeague(TestCase):
         loadFn.assert_called_once_with(openFn.return_value)
         openFn.assert_called_once_with(apiCreds)
 
-    @patch('resources.league.League.fetchProperty')
+    @patch('resources.league.League._fetchProperty')
     def test_getMods(self, fetch):
         fetch.return_value = set()
         assert_equals(self.league._getMods(), {self.league.admin})
@@ -115,7 +115,7 @@ class TestLeague(TestCase):
                                       self.league.getIDGroup)
 
     def test_sysDict(self):
-        assert_equals(self.league.makeRateSysDict(), None)
+        assert_equals(self.league._makeRateSysDict(), None)
         assert_true(self.league.RATE_ELO in self.league.sysDict)
         assert_true(self.league.RATE_GLICKO in self.league.sysDict)
         assert_true(self.league.RATE_TRUESKILL in self.league.sysDict)
@@ -146,19 +146,19 @@ class TestLeague(TestCase):
         table.reverseHeader = {'Here': 1, 'There': 2}
         header = {'Here', 'There', 'Everywhere', 'Nowhere'}
         constraints = {'Here': 'UNIQUE', 'There': '', 'Everywhere': 'INT'}
-        assert_raises(ImproperLeague, self.league.checkSheet, table, header,
+        assert_raises(ImproperLeague, self.league._checkSheet, table, header,
                       constraints, reformat=False)
         expansions = table.expandHeader.call_count
         updates = table.updateConstraint.call_count
-        self.league.checkSheet(table, header, constraints, reformat=True)
+        self.league._checkSheet(table, header, constraints, reformat=True)
         assert_equals(table.expandHeader.call_count, expansions+2)
         assert_equals(table.updateConstraint.call_count, updates+4)
 
-    @patch('resources.league.League.checkSheet')
+    @patch('resources.league.League._checkSheet')
     def test_checkTeamSheet(self, checkSheet):
         self.league.settings[self.league.SET_MIN_RATING] = None
         assert_equals(self.league.minRating, None)
-        self.league.checkTeamSheet()
+        self.league._checkTeamSheet()
         expectedConstraints = {'ID': 'UNIQUE INT',
                                'Name': 'UNIQUE STRING',
                                'Players': 'UNIQUE STRING',
@@ -177,14 +177,14 @@ class TestLeague(TestCase):
                                            self.league.autoformat)
         self.league.settings[self.league.SET_MIN_RATING] = 5000
         assert_equals(self.league.minRating, 5000)
-        self.league.checkTeamSheet()
+        self.league._checkTeamSheet()
         expectedConstraints['Probation Start'] = 'STRING'
         checkSheet.assert_called_with(self.league.teams,
                                       set(expectedConstraints),
                                       expectedConstraints,
                                       self.league.autoformat)
 
-    @patch('resources.league.League.checkSheet')
+    @patch('resources.league.League._checkSheet')
     def test_checkGamesSheet(self, checkSheet):
         expectedConstraints = {'ID': 'UNIQUE INT',
                                'WarlightID': 'UNIQUE INT',
@@ -195,47 +195,49 @@ class TestLeague(TestCase):
                                'Vetos': 'INT',
                                'Vetoed': 'STRING',
                                'Template': 'INT'}
-        self.league.checkGamesSheet()
+        self.league._checkGamesSheet()
         checkSheet.assert_called_once_with(self.league.games,
                                            set(expectedConstraints),
                                            expectedConstraints,
                                            self.league.autoformat)
 
-    @patch('resources.league.League.checkSheet')
+    @patch('resources.league.League._checkSheet')
     def test_checkTemplatesSheet(self, checkSheet):
         expectedConstraints = {'ID': 'UNIQUE INT',
                                'Name': 'UNIQUE STRING',
                                'WarlightID': 'INT',
                                'Active': 'BOOL',
                                'Usage': 'INT'}
-        self.league.checkTemplatesSheet()
+        self.league._checkTemplatesSheet()
         checkSheet.assert_called_once_with(self.league.templates,
                                            set(expectedConstraints),
                                            expectedConstraints,
                                            self.league.autoformat)
 
-    @patch('resources.league.League.checkTeamSheet')
-    @patch('resources.league.League.checkGamesSheet')
-    @patch('resources.league.League.checkTemplatesSheet')
+    @patch('resources.league.League._checkTeamSheet')
+    @patch('resources.league.League._checkGamesSheet')
+    @patch('resources.league.League._checkTemplatesSheet')
     def test_checkFormat(self, checkTemplates, checkGames, checkTeams):
-        self.league.checkFormat()
+        self.league._checkFormat()
         checkTemplates.assert_called_once_with()
         checkGames.assert_called_once_with()
         checkTeams.assert_called_once_with()
 
     def test_fetchProperty(self):
         self.league.settings = {'label': 'default', 'intlabel': '5'}
-        assert_equals(self.league.fetchProperty('label', 'DEFAULT'), 'default')
-        assert_equals(self.league.fetchProperty('otherlabel', None), None)
-        assert_equals(self.league.fetchProperty('otherlabel', None, int), None)
-        assert_equals(self.league.fetchProperty('intlabel', 12, int), 5)
-        assert_equals(self.league.fetchProperty('label', 12, float), 12)
+        assert_equals(self.league._fetchProperty('label', 'DEFAULT'),
+                      'default')
+        assert_equals(self.league._fetchProperty('otherlabel', None), None)
+        assert_equals(self.league._fetchProperty('otherlabel', None, int),
+                      None)
+        assert_equals(self.league._fetchProperty('intlabel', 12, int), 5)
+        assert_equals(self.league._fetchProperty('label', 12, float), 12)
         failStr = "Couldn't get label due to ValueError, using default of 12"
         self.league.parent.log.assert_called_once_with(failStr, 'NAME',
                                                        error=True)
 
     def test_getBoolProperty(self):
-        getBool = self.league.getBoolProperty
+        getBool = self.league._getBoolProperty
         assert_true(getBool("TRUE"))
         assert_true(getBool("true"))
         assert_true(getBool("tRUE"))
@@ -486,14 +488,15 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_GAME_SIZE, "3,4,5")
         assert_true(self.league.gameSize in {3,4,5})
         oldSize = self.league.gameSize
-        self._posPropertyTest("statedGameSize()", self.league.SET_GAME_SIZE, 2)
+        self._posPropertyTest("_statedGameSize()",
+                              self.league.SET_GAME_SIZE, 2)
         assert_equals(self.league.gameSize, oldSize)
 
     def test_sideSize(self):
         self._setProp(self.league.SET_TEAMS_PER_SIDE, "1,50,100")
         assert_true(self.league.sideSize in {1,50,100})
         oldSize = self.league.sideSize
-        self._posPropertyTest("statedSideSize()",
+        self._posPropertyTest("_statedSideSize()",
                               self.league.SET_TEAMS_PER_SIDE, 1)
         assert_equals(self.league.sideSize, oldSize)
 
@@ -531,23 +534,23 @@ class TestLeague(TestCase):
         player = MagicMock()
         player.ID = "0"
         self.handler.validateToken.return_value = dict()
-        assert_true(self.league.meetsVacation(player))
+        assert_true(self.league._meetsVacation(player))
         self._setMaxVacation(1)
-        assert_true(self.league.meetsVacation(player))
+        assert_true(self.league._meetsVacation(player))
         self._setMaxVacation(0)
-        assert_true(self.league.meetsVacation(player))
+        assert_true(self.league._meetsVacation(player))
         self.handler.validateToken.return_value = {'onVacationUntil':
                                                    self._makeVacationDate(1)}
-        assert_false(self.league.meetsVacation(player))
+        assert_false(self.league._meetsVacation(player))
         self._setMaxVacation(1)
-        assert_true(self.league.meetsVacation(player))
+        assert_true(self.league._meetsVacation(player))
         self._setMaxVacation(2)
-        assert_true(self.league.meetsVacation(player))
+        assert_true(self.league._meetsVacation(player))
         self.handler.validateToken.return_value = {'onVacationUntil':
                                                    self._makeVacationDate(3)}
-        assert_false(self.league.meetsVacation(player))
+        assert_false(self.league._meetsVacation(player))
         self.handler.validateToken.return_value = dict()
-        assert_true(self.league.meetsVacation(player))
+        assert_true(self.league._meetsVacation(player))
 
     def test_minLimit(self):
         values = {"-3": 0, "-5": 0, "0": 0, "10": 10, "204": 204, "None": 0}
@@ -561,18 +564,18 @@ class TestLeague(TestCase):
                                self.league.SET_CONSTRAIN_LIMIT, True)
 
     def test_valueInRange(self):
-        assert_true(self.league.valueInRange(10, None, None))
-        assert_true(self.league.valueInRange(10, 10, None))
-        assert_true(self.league.valueInRange(10, None, 10))
-        assert_true(self.league.valueInRange(10, 10, 10))
-        assert_true(self.league.valueInRange(5, 0, 30))
-        assert_true(self.league.valueInRange(5, 0, None))
-        assert_true(self.league.valueInRange(5, None, 30))
-        assert_true(self.league.valueInRange(0, -1, 1))
-        assert_false(self.league.valueInRange(0, None, -1))
-        assert_false(self.league.valueInRange(0, 1, -1))
-        assert_false(self.league.valueInRange(0, 1, None))
-        assert_false(self.league.valueInRange(0, 1, 2))
+        assert_true(self.league._valueInRange(10, None, None))
+        assert_true(self.league._valueInRange(10, 10, None))
+        assert_true(self.league._valueInRange(10, None, 10))
+        assert_true(self.league._valueInRange(10, 10, 10))
+        assert_true(self.league._valueInRange(5, 0, 30))
+        assert_true(self.league._valueInRange(5, 0, None))
+        assert_true(self.league._valueInRange(5, None, 30))
+        assert_true(self.league._valueInRange(0, -1, 1))
+        assert_false(self.league._valueInRange(0, None, -1))
+        assert_false(self.league._valueInRange(0, 1, -1))
+        assert_false(self.league._valueInRange(0, 1, None))
+        assert_false(self.league._valueInRange(0, 1, 2))
 
     def _setMinLimit(self, val):
         self._setProp(self.league.SET_MIN_LIMIT, val)
@@ -583,9 +586,9 @@ class TestLeague(TestCase):
     def test_limitInRange(self):
         self._setMinLimit(4)
         self._setMaxLimit(20)
-        assert_true(self.league.limitInRange(20))
-        assert_false(self.league.limitInRange(3))
-        assert_false(self.league.limitInRange(21))
+        assert_true(self.league._limitInRange(20))
+        assert_false(self.league._limitInRange(3))
+        assert_false(self.league._limitInRange(21))
 
     def _setSystem(self, val):
         self._setProp(self.league.SET_SYSTEM, val)
@@ -698,21 +701,21 @@ class TestLeague(TestCase):
         player.isMember = False
         self._setMinMemberAge(0)
         self._setProp(self.league.SET_MEMBERS_ONLY, "FALSE")
-        assert_true(self.league.meetsMembership(player))
+        assert_true(self.league._meetsMembership(player))
         self._setMinMemberAge(1)
-        assert_false(self.league.meetsMembership(player))
+        assert_false(self.league._meetsMembership(player))
         self._setProp(self.league.SET_MEMBERS_ONLY, "TRUE")
-        assert_false(self.league.meetsMembership(player))
+        assert_false(self.league._meetsMembership(player))
         self._setMinMemberAge(0)
-        assert_false(self.league.meetsMembership(player))
+        assert_false(self.league._meetsMembership(player))
         player.isMember = True
         player.memberSince = date.today() - timedelta(days=3)
         self._setMinMemberAge(4)
-        assert_false(self.league.meetsMembership(player))
+        assert_false(self.league._meetsMembership(player))
         self._setMinMemberAge(3)
-        assert_true(self.league.meetsMembership(player))
+        assert_true(self.league._meetsMembership(player))
         self._setMinMemberAge(2)
-        assert_true(self.league.meetsMembership(player))
+        assert_true(self.league._meetsMembership(player))
 
     def test_minPoints(self):
         self._intPropertyTest('minPoints', self.league.SET_MIN_POINTS, 0)
@@ -742,20 +745,20 @@ class TestLeague(TestCase):
     def test_findRatingAtPercentile(self):
         oldPrettify = self.league.prettifyRating
         self.league.prettifyRating = int
-        assert_equals(self.league.findRatingAtPercentile(0), None)
+        assert_equals(self.league._findRatingAtPercentile(0), None)
         self.teams.findValue.return_value = ["1", "2", "3", "4", "5",
                                              "6", "7", "8", "9", "10"]
-        assert_equals(self.league.findRatingAtPercentile(0), None)
-        assert_equals(self.league.findRatingAtPercentile(1), 2)
-        assert_equals(self.league.findRatingAtPercentile(10), 2)
-        assert_equals(self.league.findRatingAtPercentile(21), 4)
-        assert_equals(self.league.findRatingAtPercentile(30.5), 5)
-        assert_equals(self.league.findRatingAtPercentile(99.5), 10)
-        assert_equals(self.league.findRatingAtPercentile(1000), 10)
-        assert_equals(self.league.findRatingAtPercentile(50), 6)
+        assert_equals(self.league._findRatingAtPercentile(0), None)
+        assert_equals(self.league._findRatingAtPercentile(1), 2)
+        assert_equals(self.league._findRatingAtPercentile(10), 2)
+        assert_equals(self.league._findRatingAtPercentile(21), 4)
+        assert_equals(self.league._findRatingAtPercentile(30.5), 5)
+        assert_equals(self.league._findRatingAtPercentile(99.5), 10)
+        assert_equals(self.league._findRatingAtPercentile(1000), 10)
+        assert_equals(self.league._findRatingAtPercentile(50), 6)
         self.league.prettifyRating = oldPrettify
 
-    @patch('resources.league.League.findRatingAtPercentile')
+    @patch('resources.league.League._findRatingAtPercentile')
     def test_minPercentileRating(self, findRating):
         values = {"0": findRating.return_value, "": None, "None": None,
                   "hi": None, "10": findRating.return_value,
@@ -764,14 +767,16 @@ class TestLeague(TestCase):
         self._propertyTest('minPercentileRating',
                            self.league.SET_MIN_PERCENTILE, None, values)
 
-    @patch('resources.league.League.findRatingAtPercentile')
+    @patch('resources.league.League._findRatingAtPercentile')
     def test_minRating(self, findRating):
         findRating.return_value = None
         self._setProp(self.league.SET_MIN_RATING, "50")
         assert_equals(self.league.minRating, 50)
         self._setProp(self.league.SET_MIN_PERCENTILE, "30")
         findRating.return_value = 30
-        assert_equals(self.league.minRating, findRating.return_value)
+        assert_equals(self.league.minRating, 50)
+        self._setProp(self.league.SET_MIN_RATING, "20")
+        assert_equals(self.league.minRating, 30)
 
     def test_gracePeriod(self):
         self._intPropertyTest('gracePeriod', self.league.SET_GRACE_PERIOD, 0)
@@ -783,7 +788,7 @@ class TestLeague(TestCase):
         self._propertyTest('restorationPeriod',
                            self.league.SET_RESTORATION_PERIOD, None, values)
 
-    @patch('resources.league.League.getExtantEntities')
+    @patch('resources.league.League._getExtantEntities')
     def test_restoreTeams(self, getExtant):
         self._setProp(self.league.SET_RESTORATION_PERIOD, None)
         self._setProp(self.league.SET_MIN_RATING, None)
@@ -824,22 +829,22 @@ class TestLeague(TestCase):
                               self.league.SET_ACTIVE_CAPACITY, None)
 
     def test_valueBelowCapacity(self):
-        assert_true(self.league.valueBelowCapacity(5, 6))
-        assert_true(self.league.valueBelowCapacity(5, 10))
-        assert_true(self.league.valueBelowCapacity(0, 1))
-        assert_false(self.league.valueBelowCapacity(5, 5))
-        assert_false(self.league.valueBelowCapacity(5, 4))
-        assert_false(self.league.valueBelowCapacity(0, 0))
-        assert_true(self.league.valueBelowCapacity(109303838, None))
+        assert_true(self.league._valueBelowCapacity(5, 6))
+        assert_true(self.league._valueBelowCapacity(5, 10))
+        assert_true(self.league._valueBelowCapacity(0, 1))
+        assert_false(self.league._valueBelowCapacity(5, 5))
+        assert_false(self.league._valueBelowCapacity(5, 4))
+        assert_false(self.league._valueBelowCapacity(0, 0))
+        assert_true(self.league._valueBelowCapacity(109303838, None))
 
-    @patch('resources.league.League.valueBelowCapacity')
+    @patch('resources.league.League._valueBelowCapacity')
     def test_activeFull(self, belowCap):
         belowCap.return_value = False
         assert_true(self.league.activeFull)
         belowCap.return_value = True
         assert_false(self.league.activeFull)
 
-    @patch('resources.league.League.valueBelowCapacity')
+    @patch('resources.league.League._valueBelowCapacity')
     def test_leagueFull(self, belowCap):
         belowCap.return_value = False
         assert_true(self.league.leagueFull)
@@ -850,7 +855,7 @@ class TestLeague(TestCase):
         timeDiff = timedelta(hours=((time.timezone if
                                      (time.localtime().tm_isdst == 0) else
                                      time.altzone)/3600))
-        getProp = self.league.getDateTimeProperty
+        getProp = self.league._getDateTimeProperty
         assert_equals(getProp(datetime(2000, 4, 20, 10, 30, 50)),
                       datetime(2000, 4, 20, 10, 30, 50))
         assert_equals(getProp(datetime.strftime(datetime(2000, 4, 20, 10, 30,
@@ -867,19 +872,19 @@ class TestLeague(TestCase):
                                    self.league.SET_JOIN_PERIOD_END, None)
 
     def test_currentTimeWithinRange(self):
-        assert_true(self.league.currentTimeWithinRange(None, None))
+        assert_true(self.league._currentTimeWithinRange(None, None))
         start = datetime.now() - timedelta(days=1)
         end = datetime.now() + timedelta(days=1)
-        assert_true(self.league.currentTimeWithinRange(start, end))
-        assert_true(self.league.currentTimeWithinRange(None, end))
-        assert_true(self.league.currentTimeWithinRange(start, None))
-        assert_true(self.league.currentTimeWithinRange(None, None))
-        assert_false(self.league.currentTimeWithinRange(None, start))
-        assert_false(self.league.currentTimeWithinRange(end, None))
-        assert_false(self.league.currentTimeWithinRange(end, start))
+        assert_true(self.league._currentTimeWithinRange(start, end))
+        assert_true(self.league._currentTimeWithinRange(None, end))
+        assert_true(self.league._currentTimeWithinRange(start, None))
+        assert_true(self.league._currentTimeWithinRange(None, None))
+        assert_false(self.league._currentTimeWithinRange(None, start))
+        assert_false(self.league._currentTimeWithinRange(end, None))
+        assert_false(self.league._currentTimeWithinRange(end, start))
 
-    @patch('resources.league.League.currentTimeWithinRange')
-    @patch('resources.league.League.valueBelowCapacity')
+    @patch('resources.league.League._currentTimeWithinRange')
+    @patch('resources.league.League._valueBelowCapacity')
     def test_joinsAllowed(self, belowCap, rangeCheck):
         self._setProp(self.league.SET_ALLOW_JOINS, "TRUE")
         belowCap.return_value = False
@@ -914,9 +919,9 @@ class TestLeague(TestCase):
 
     def test_getExtantEntities(self):
         table = MagicMock()
-        assert_equals(self.league.getExtantEntities(table),
+        assert_equals(self.league._getExtantEntities(table),
                       table.findEntities.return_value)
-        assert_equals(self.league.getExtantEntities(table,
+        assert_equals(self.league._getExtantEntities(table,
                       {'Ra Ra': {'value': "Rasputin", 'type': 'positive'}}),
                       table.findEntities.return_value)
         table.findEntities.assert_called_with({'ID': {'value': '',
@@ -924,7 +929,7 @@ class TestLeague(TestCase):
                                                'Ra Ra': {'value': 'Rasputin',
                                                          'type': 'positive'}},)
 
-    @patch('resources.league.League.getExtantEntities')
+    @patch('resources.league.League._getExtantEntities')
     def test_activityCounts(self, getExtant):
         getExtant.return_value = [{'ID': 4, 'Limit': 3},]
         assert_equals(self.league.activeTeams, getExtant.return_value)
@@ -944,8 +949,8 @@ class TestLeague(TestCase):
         self._dateTimePropertyTest('activityEnd', self.league.SET_END_DATE,
                                    None)
 
-    @patch('resources.league.League.currentTimeWithinRange')
-    @patch('resources.league.League.getExtantEntities')
+    @patch('resources.league.League._currentTimeWithinRange')
+    @patch('resources.league.League._getExtantEntities')
     def test_active(self, getExtant, rangeCheck):
         getExtant.return_value = [{'Limit': '-3'},]
         self._setProp(self.league.SET_MIN_TEMPLATES, 10)
@@ -982,14 +987,14 @@ class TestLeague(TestCase):
         player = MagicMock()
         for i in xrange(1, 4):
             player.currentGames = i
-            assert_true(self.league.gameCountInRange(player))
+            assert_true(self.league._gameCountInRange(player))
         player.currentGames = 0
-        assert_false(self.league.gameCountInRange(player))
+        assert_false(self.league._gameCountInRange(player))
         player.currentGames = 5
-        assert_false(self.league.gameCountInRange(player))
+        assert_false(self.league._gameCountInRange(player))
         self._setProp(self.league.SET_MIN_ONGOING_GAMES, 0)
         self._setProp(self.league.SET_MAX_ONGOING_GAMES, None)
-        assert_true(self.league.gameCountInRange(player))
+        assert_true(self.league._gameCountInRange(player))
 
     def test_minRTPercent(self):
         self._floatPropertyTest('minRTPercent', self.league.SET_MIN_RT_PERCENT,
@@ -1004,21 +1009,21 @@ class TestLeague(TestCase):
         player.percentRT = 34
         self._setProp(self.league.SET_MIN_RT_PERCENT, 34)
         self._setProp(self.league.SET_MAX_RT_PERCENT, 34)
-        assert_true(self.league.RTPercentInRange(player))
+        assert_true(self.league._RTPercentInRange(player))
         self._setProp(self.league.SET_MIN_RT_PERCENT, 30)
         self._setProp(self.league.SET_MAX_RT_PERCENT, 35)
-        assert_true(self.league.RTPercentInRange(player))
+        assert_true(self.league._RTPercentInRange(player))
         player.percentRT = 35
-        assert_true(self.league.RTPercentInRange(player))
+        assert_true(self.league._RTPercentInRange(player))
         player.percentRT = 30
-        assert_true(self.league.RTPercentInRange(player))
+        assert_true(self.league._RTPercentInRange(player))
         player.percentRT = 29.9999
-        assert_false(self.league.RTPercentInRange(player))
+        assert_false(self.league._RTPercentInRange(player))
         player.percentRT = 100
-        assert_false(self.league.RTPercentInRange(player))
+        assert_false(self.league._RTPercentInRange(player))
         self._setProp(self.league.SET_MIN_RT_PERCENT, 40)
         player.percentRT = 35
-        assert_false(self.league.RTPercentInRange(player))
+        assert_false(self.league._RTPercentInRange(player))
 
     def test_maxLastSeen(self):
         self._floatPropertyTest('maxLastSeen', self.league.SET_MAX_LAST_SEEN,
@@ -1044,17 +1049,17 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_MIN_1v1_PCT, 39)
         self._setProp(self.league.SET_MIN_2v2_PCT, 30)
         self._setProp(self.league.SET_MIN_3v3_PCT, 30)
-        assert_false(self.league.meetsMinRanked(player))
+        assert_false(self.league._meetsMinRanked(player))
         self._setProp(self.league.SET_MIN_3v3_PCT, 5)
-        assert_true(self.league.meetsMinRanked(player))
+        assert_true(self.league._meetsMinRanked(player))
         self._setProp(self.league.SET_MIN_RANKED, 500)
-        assert_false(self.league.meetsMinRanked(player))
+        assert_false(self.league._meetsMinRanked(player))
         self._setProp(self.league.SET_MIN_RANKED, 400)
         self._setProp(self.league.SET_MIN_1v1_PCT, 50)
-        assert_false(self.league.meetsMinRanked(player))
+        assert_false(self.league._meetsMinRanked(player))
         self._setProp(self.league.SET_MIN_1v1_PCT, 30)
         self._setProp(self.league.SET_MIN_2v2_PCT, 40)
-        assert_false(self.league.meetsMinRanked(player))
+        assert_false(self.league._meetsMinRanked(player))
 
     def test_minGames(self):
         self._intPropertyTest('minGames', self.league.SET_MIN_GAMES, 0)
@@ -1122,74 +1127,74 @@ class TestLeague(TestCase):
         player = MagicMock()
         self._setProp(self.league.SET_BANNED_CLANS, "ALL")
         player.clanID = None
-        assert_false(self.league.clanAllowed(player))
+        assert_false(self.league._clanAllowed(player))
         player.clanID = 30
         self._setProp(self.league.SET_ALLOWED_CLANS, "30,40,50")
-        assert_true(self.league.clanAllowed(player))
+        assert_true(self.league._clanAllowed(player))
         self._setProp(self.league.SET_ALLOWED_CLANS, "ALL")
-        assert_true(self.league.clanAllowed(player))
+        assert_true(self.league._clanAllowed(player))
         self._setProp(self.league.SET_ALLOWED_CLANS, "")
         self._setProp(self.league.SET_BANNED_CLANS, "12,13,14")
-        assert_true(self.league.clanAllowed(player))
+        assert_true(self.league._clanAllowed(player))
         self._setProp(self.league.SET_BANNED_CLANS, "30,40,50")
-        assert_false(self.league.clanAllowed(player))
+        assert_false(self.league._clanAllowed(player))
         self._setProp(self.league.SET_BANNED_CLANS, "ALL")
-        assert_false(self.league.clanAllowed(player))
+        assert_false(self.league._clanAllowed(player))
 
     def test_processLoc(self):
-        assert_equals(self.league.processLoc("    Micronesia    "),
+        assert_equals(self.league._processLoc("    Micronesia    "),
                                              "Micronesia")
-        assert_equals(self.league.processLoc(" United Haitian  Republic   \n"),
+        assert_equals(self.league._processLoc(" United Haitian  Republic   \n"),
                                              "United Haitian Republic")
 
     def test_checkLocation(self):
         self._setProp(self.league.SET_BANNED_LOCATIONS, "")
         self._setProp(self.league.SET_ALLOWED_LOCATIONS, "")
-        assert_equals(self.league.checkLocation("Texas"), None)
+        assert_equals(self.league._checkLocation("Texas"), None)
         self._setProp(self.league.SET_BANNED_LOCATIONS, "Texas")
-        assert_false(self.league.checkLocation("Texas"))
+        assert_false(self.league._checkLocation("Texas"))
         self._setProp(self.league.SET_ALLOWED_LOCATIONS, "Texas")
-        assert_true(self.league.checkLocation("Texas"))
+        assert_true(self.league._checkLocation("Texas"))
         self._setProp(self.league.SET_BANNED_LOCATIONS, "ALL")
-        assert_false(self.league.checkLocation("California"))
+        assert_false(self.league._checkLocation("California"))
         self._setProp(self.league.SET_BANNED_LOCATIONS, "")
-        assert_equals(self.league.checkLocation("California"), None)
+        assert_equals(self.league._checkLocation("California"), None)
         self._setProp(self.league.SET_ALLOWED_LOCATIONS, "ALL")
-        assert_true(self.league.checkLocation("California"))
+        assert_true(self.league._checkLocation("California"))
 
     def test_locationAllowed(self):
         player = MagicMock()
         player.location = "United States of Australia: Texas: Earth"
         self._setProp(self.league.SET_BANNED_LOCATIONS, "ALL")
         self._setProp(self.league.SET_ALLOWED_LOCATIONS, "")
-        assert_false(self.league.locationAllowed(player))
+        assert_false(self.league._locationAllowed(player))
         self._setProp(self.league.SET_ALLOWED_LOCATIONS, "Texas")
-        assert_true(self.league.locationAllowed(player))
+        assert_true(self.league._locationAllowed(player))
         self._setProp(self.league.SET_ALLOWED_LOCATIONS, "")
         self._setProp(self.league.SET_BANNED_LOCATIONS, "")
-        assert_true(self.league.locationAllowed(player))
+        assert_true(self.league._locationAllowed(player))
         self._setProp(self.league.SET_BANNED_LOCATIONS, "United States")
-        assert_true(self.league.locationAllowed(player))
+        assert_true(self.league._locationAllowed(player))
         self._setProp(self.league.SET_BANNED_LOCATIONS, "Earth")
-        assert_false(self.league.locationAllowed(player))
+        assert_false(self.league._locationAllowed(player))
         self._setProp(self.league.SET_ALLOWED_LOCATIONS,
                       "United States of Australia")
-        assert_true(self.league.locationAllowed(player))
+        assert_true(self.league._locationAllowed(player))
         player.location = "United States of Australia"
         self._setProp(self.league.SET_BANNED_LOCATIONS, "ALL")
-        assert_true(self.league.locationAllowed(player))
+        assert_true(self.league._locationAllowed(player))
         player.location = ""
-        assert_false(self.league.locationAllowed(player))
+        assert_false(self.league._locationAllowed(player))
 
     def test_meetsAge(self):
         player = MagicMock()
         player.joinDate = date.today() - timedelta(30)
         self._setProp(self.league.SET_MIN_AGE, 30)
-        assert_true(self.league.meetsAge(player))
+        assert_true(self.league._meetsAge(player))
         player.joinDate = date.today()
-        assert_false(self.league.meetsAge(player))
+        assert_false(self.league._meetsAge(player))
         player.joinDate = date.today() - timedelta(400)
-        assert_true(self.league.meetsAge(player))
+        assert_true(self.league._meetsAge(player))
 
     def test_meetsSpeed(self):
         player = MagicMock()
@@ -1197,29 +1202,29 @@ class TestLeague(TestCase):
                             'Multi-Day Games': 38}
         self._setProp(self.league.SET_MAX_RT_SPEED, 30)
         self._setProp(self.league.SET_MAX_MD_SPEED, 40)
-        assert_false(self.league.meetsSpeed(player))
+        assert_false(self.league._meetsSpeed(player))
         self._setProp(self.league.SET_MAX_RT_SPEED, 60)
-        assert_true(self.league.meetsSpeed(player))
+        assert_true(self.league._meetsSpeed(player))
 
     def test_meetsLastSeen(self):
         player = MagicMock()
         player.lastSeen = 30
         self._setProp(self.league.SET_MAX_LAST_SEEN, 40)
-        assert_true(self.league.meetsLastSeen(player))
+        assert_true(self.league._meetsLastSeen(player))
         player.lastSeen = 40
-        assert_true(self.league.meetsLastSeen(player))
+        assert_true(self.league._meetsLastSeen(player))
         player.lastSeen = 50
-        assert_false(self.league.meetsLastSeen(player))
+        assert_false(self.league._meetsLastSeen(player))
         self._setProp(self.league.SET_MAX_LAST_SEEN, "None")
-        assert_true(self.league.meetsLastSeen(player))
+        assert_true(self.league._meetsLastSeen(player))
 
-    @patch('resources.league.League.meetsMinRanked')
-    @patch('resources.league.League.meetsLastSeen')
-    @patch('resources.league.League.RTPercentInRange')
-    @patch('resources.league.League.gameCountInRange')
-    @patch('resources.league.League.meetsSpeed')
-    @patch('resources.league.League.meetsAge')
-    @patch('resources.league.League.meetsVacation')
+    @patch('resources.league.League._meetsMinRanked')
+    @patch('resources.league.League._meetsLastSeen')
+    @patch('resources.league.League._RTPercentInRange')
+    @patch('resources.league.League._gameCountInRange')
+    @patch('resources.league.League._meetsSpeed')
+    @patch('resources.league.League._meetsAge')
+    @patch('resources.league.League._meetsVacation')
     def test_checkPrereqs(self, vacationCheck, ageCheck, speedCheck,
                           gameCountCheck, rtPercentCheck, lastSeenCheck,
                           minRankedCheck):
@@ -1251,36 +1256,36 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_MIN_GAMES, 30)
         self._setProp(self.league.SET_MIN_ACH, 20)
         player.achievementRate = 25
-        assert_true(self.league.checkPrereqs(player))
+        assert_true(self.league._checkPrereqs(player))
         player.playedGames = 10
-        assert_false(self.league.checkPrereqs(player))
+        assert_false(self.league._checkPrereqs(player))
 
-    @patch('resources.league.League.checkPrereqs')
+    @patch('resources.league.League._checkPrereqs')
     def test_allowed(self, check):
         check.return_value = True
         self._setProp(self.league.SET_ALLOWED_PLAYERS, "40")
         self._setProp(self.league.SET_BANNED_PLAYERS, "40")
-        assert_true(self.league.allowed(40))
+        assert_true(self.league._allowed(40))
         check.return_value = False
-        assert_true(self.league.allowed(40))
-        assert_false(self.league.allowed(43))
+        assert_true(self.league._allowed(40))
+        assert_false(self.league._allowed(43))
         check.return_value = True
-        assert_true(self.league.allowed(43))
+        assert_true(self.league._allowed(43))
         self._setProp(self.league.SET_BANNED_PLAYERS, "40,ALL")
-        assert_false(self.league.allowed(43))
+        assert_false(self.league._allowed(43))
         self._setProp(self.league.SET_ALLOWED_PLAYERS, "ALL,40")
-        assert_true(self.league.allowed(43))
+        assert_true(self.league._allowed(43))
 
-    @patch('resources.league.League.allowed')
+    @patch('resources.league.League._allowed')
     def test_banned(self, allowed):
         allowed.return_value = False
-        assert_true(self.league.banned(40))
+        assert_true(self.league._banned(40))
         allowed.return_value = True
-        assert_false(self.league.banned(40))
+        assert_false(self.league._banned(40))
 
     def test_logFailedOrder(self):
         order = {'type': 'OrderType', 'author': 3940430, 'orders': ['12','13']}
-        self.league.logFailedOrder(order)
+        self.league._logFailedOrder(order)
         expDesc = "Failed to process OrderType order by 3940430"
         self.parent.log.assert_called_once_with(expDesc,
                                                 league=self.league.name,
@@ -1322,7 +1327,7 @@ class TestLeague(TestCase):
             {'value': 2, 'type': 'positive'}}, {'Drops': '11/10/13/12'})
 
     @patch('resources.league.League.checkTemplateAccess')
-    @patch('resources.league.League.banned')
+    @patch('resources.league.League._banned')
     def test_checkTeamMember(self, banCheck, checkTemp):
         banCheck.return_value = True
         assert_raises(ImproperInput, self.league.checkTeamMember, 12, {1,2,3})
@@ -1565,7 +1570,7 @@ class TestLeague(TestCase):
         self.teams.removeMatchingEntities.assert_called_once_with({'ID':
             {'value': fetch.return_value[0]['ID'], 'type': 'positive'}})
 
-    @patch('resources.league.League.fetchTeamData')
+    @patch('resources.league.League._fetchTeamData')
     def test_checkLimitChange(self, fetch):
         assert_equals(self.league.checkLimitChange(400, -3), None)
         assert_equals(self.league.checkLimitChange(100, 0), None)
@@ -1662,7 +1667,7 @@ class TestLeague(TestCase):
         assert_equals(self.league.getExistingDrops('order'),
                       (43, {'12','13','14'}))
 
-    @patch('resources.league.League.updateEntityValue')
+    @patch('resources.league.League._updateEntityValue')
     def test_updateTeamDrops(self, update):
         drops = {'14', '23', '12', '43', '4053', 12}
         self.league.updateTeamDrops(1249, drops)
@@ -1805,7 +1810,7 @@ class TestLeague(TestCase):
             {'value': 3, 'type': 'positive'}}, {'Name': 'New Name'})
 
     @patch('resources.league.League.updateRanks')
-    @patch('resources.league.League.logFailedOrder')
+    @patch('resources.league.League._logFailedOrder')
     @patch('resources.league.League.renameTeam')
     @patch('resources.league.League.addTemplate')
     @patch('resources.league.League.quitLeague')
@@ -1847,216 +1852,216 @@ class TestLeague(TestCase):
     def test_isAbandoned(self):
         players = [{'state': 'VotedToEnd'}, {'state': 'Waiting'},
                    {'state': 'Declined'}, {'state': 'Wyoming'}]
-        assert_true(self.league.isAbandoned(players))
+        assert_true(self.league._isAbandoned(players))
         players = [{'state': 'Declined'}, {'state': 'Won'},
                    {'state': 'Declined'}, {'state': 'Wyoming'}]
-        assert_false(self.league.isAbandoned(players))
+        assert_false(self.league._isAbandoned(players))
         players = list()
-        assert_false(self.league.isAbandoned(players))
+        assert_false(self.league._isAbandoned(players))
         players = [{'state': 'Duck'}, {'state': 'Duck'},
                    {'state': 'Duck'}, {'state': 'Goose'}]
-        assert_false(self.league.isAbandoned(players))
+        assert_false(self.league._isAbandoned(players))
 
     def test_findMatchingPlayers(self):
         players = [{'id': 4, 'state': 'VotedToEnd'},
             {'id': 12, 'state': 'Velociraptor'}, {'id': 1, 'state': 'Won'},
             {'id': 39, 'state': 'Velociraptor'}, {'id': 5, 'state': 'Wyoming'},
             {'id': 40, 'state': 'Won'}, {'id': 3, 'state': 'Velociraptor'}]
-        assert_equals(self.league.findMatchingPlayers(players), list())
-        assert_equals(self.league.findMatchingPlayers(players, 'Won'), [1, 40])
-        assert_equals(self.league.findMatchingPlayers(players, 'Velociraptor'),
+        assert_equals(self.league._findMatchingPlayers(players), list())
+        assert_equals(self.league._findMatchingPlayers(players, 'Won'), [1, 40])
+        assert_equals(self.league._findMatchingPlayers(players, 'Velociraptor'),
                       [3, 12, 39])
-        assert_equals(self.league.findMatchingPlayers(players, 'Won',
+        assert_equals(self.league._findMatchingPlayers(players, 'Won',
                       'Wyoming'), [1, 5, 40])
-        assert_equals(self.league.findWinners(players), [1, 40])
-        assert_equals(self.league.findDecliners(players), list())
-        assert_equals(self.league.findWaiting(players), list())
-        assert_equals(self.league.findBooted(players), list())
+        assert_equals(self.league._findWinners(players), [1, 40])
+        assert_equals(self.league._findDecliners(players), list())
+        assert_equals(self.league._findWaiting(players), list())
+        assert_equals(self.league._findBooted(players), list())
 
-    @patch('resources.league.League.findBooted')
-    @patch('resources.league.League.findDecliners')
-    @patch('resources.league.League.findWinners')
-    @patch('resources.league.League.isAbandoned')
+    @patch('resources.league.League._findBooted')
+    @patch('resources.league.League._findDecliners')
+    @patch('resources.league.League._findWinners')
+    @patch('resources.league.League._isAbandoned')
     def test_handleFinished(self, abandon, find, declines, boots):
         abandon.return_value = True
         gameData = {'players': [{'id': 5, 'state': 'Declined'},
             {'id': 10, 'state': 'Eliminated'}, {'id': 15, 'state': 'Won'}]}
-        assert_equals(self.league.handleFinished(gameData),
+        assert_equals(self.league._handleFinished(gameData),
                       ('ABANDONED', [5, 10, 15]))
         abandon.return_value = False
         declines.return_value = range(3)
-        assert_equals(self.league.handleFinished(gameData),
+        assert_equals(self.league._handleFinished(gameData),
                       ('DECLINED', declines.return_value))
         declines.return_value = list()
-        assert_equals(self.league.handleFinished(gameData),
+        assert_equals(self.league._handleFinished(gameData),
                       ('FINISHED', find.return_value, boots.return_value))
 
-    @patch('resources.league.League.findWaiting')
-    @patch('resources.league.League.findDecliners')
+    @patch('resources.league.League._findWaiting')
+    @patch('resources.league.League._findDecliners')
     def test_handleWaiting(self, decliners, waiting):
         self._setProp(self.league.SET_EXP_THRESH, 3)
         assert_equals(self.league.expiryThreshold, 3)
         gameData = {'players': [1, 2, 3, 4, 5], 'id': '3'}
         created = datetime.now() - timedelta(5)
         decliners.return_value = range(3)
-        assert_equals(self.league.handleWaiting(gameData, created),
+        assert_equals(self.league._handleWaiting(gameData, created),
                       ('DECLINED', range(3)))
         decliners.return_value = xrange(1, 6)
-        assert_equals(self.league.handleWaiting(gameData, created),
+        assert_equals(self.league._handleWaiting(gameData, created),
                       ('ABANDONED', None))
         waiting.return_value = range(3)
         decliners.return_value = list()
         assert_false(len(waiting.return_value) == len(gameData['players']))
-        assert_equals(self.league.handleWaiting(gameData, created),
+        assert_equals(self.league._handleWaiting(gameData, created),
                       ('DECLINED', range(3)))
         waiting.return_value = xrange(1, 6)
-        assert_equals(self.league.handleWaiting(gameData, created),
+        assert_equals(self.league._handleWaiting(gameData, created),
                       ('ABANDONED', None))
         created = datetime.now() - timedelta(1)
         assert_false((datetime.now() - created).days >
                      self.league.expiryThreshold)
-        assert_equals(self.league.handleWaiting(gameData, created), None)
+        assert_equals(self.league._handleWaiting(gameData, created), None)
         assert_equals(self.handler.deleteGame.call_count, 4)
 
-    @patch('resources.league.League.handleWaiting')
-    @patch('resources.league.League.handleFinished')
+    @patch('resources.league.League._handleWaiting')
+    @patch('resources.league.League._handleFinished')
     def test_fetchGameStatus(self, finished, waiting):
         self.handler.queryGame.return_value = {'state': 'Finished'}
-        assert_equals(self.league.fetchGameStatus(3, 'created'),
+        assert_equals(self.league._fetchGameStatus(3, 'created'),
                       finished.return_value)
         self.handler.queryGame.return_value = {'state': 'WaitingForPlayers'}
-        assert_equals(self.league.fetchGameStatus(4, 'created'),
+        assert_equals(self.league._fetchGameStatus(4, 'created'),
                       waiting.return_value)
         self.handler.queryGame.return_value = {'state': 'Massachusetts'}
-        assert_equals(self.league.fetchGameStatus(5, 'created'), None)
+        assert_equals(self.league._fetchGameStatus(5, 'created'), None)
 
     def test_fetchDataByID(self):
         table = MagicMock()
         table.findEntities.return_value = list()
-        assert_raises(NonexistentItem, self.league.fetchDataByID, table, 'ID',
+        assert_raises(NonexistentItem, self.league._fetchDataByID, table, 'ID',
             'itemType')
         table.findEntities.return_value = [1, 2, 3]
-        assert_equals(self.league.fetchDataByID(table, 'ID', 'type'), 1)
+        assert_equals(self.league._fetchDataByID(table, 'ID', 'type'), 1)
         self.games.findEntities.return_value = [2, 4, 6]
-        assert_equals(self.league.fetchGameData('gameID'), 2)
+        assert_equals(self.league._fetchGameData('gameID'), 2)
         self.teams.findEntities.return_value = [3,]
-        assert_equals(self.league.fetchTeamData('gameID'), 3)
+        assert_equals(self.league._fetchTeamData('gameID'), 3)
         self.templates.findEntities.return_value = range(30, 500)
-        assert_equals(self.league.fetchTemplateData('templateID'), 30)
+        assert_equals(self.league._fetchTemplateData('templateID'), 30)
 
     def test_findCorrespondingTeams(self):
         self.games.findEntities.return_value = [{'Sides': '12,43/49,13,11'},]
         findEntities = (lambda x: [{'Players': '1,2,3'},]
             if int(x['ID']['value']) < 15 else [{'Players': '43,45,48'},])
         self.teams.findEntities = findEntities
-        assert_equals(self.league.findCorrespondingTeams(12, [1, 2, 3]),
+        assert_equals(self.league._findCorrespondingTeams(12, [1, 2, 3]),
             {'11', '12', '13'})
 
     @patch('resources.league.datetime')
     def test_setWinners(self, time):
         time.strftime.return_value = ''
-        self.league.setWinners(48, {12, 13, 43})
+        self.league._setWinners(48, {12, 13, 43})
         self.games.updateMatchingEntities.assert_called_with({'ID': {'value':
             48, 'type': 'positive'}}, {'Winners': '12,13,43', 'Finished': ''})
-        self.league.setWinners(48, {12, 13, 14}, True)
+        self.league._setWinners(48, {12, 13, 14}, True)
         self.games.updateMatchingEntities.assert_called_with({'ID': {'value':
             48, 'type': 'positive'}}, {'Winners': '12,13,14!', 'Finished': ''})
 
-    @patch('resources.league.League.fetchTeamData')
+    @patch('resources.league.League._fetchTeamData')
     def test_adjustTeamGameCount(self, fetch):
         fetch.return_value = {'Ongoing': 3, 'Finished': 5}
-        self.league.adjustTeamGameCount(3, 5, 4)
+        self.league._adjustTeamGameCount(3, 5, 4)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': 3, 'type': 'positive'}}, {'Ongoing': '8',
              'Finished': '9'})
 
-    @patch('resources.league.League.fetchTemplateData')
+    @patch('resources.league.League._fetchTemplateData')
     def test_adjustTemplateGameCount(self, fetch):
         fetch.return_value = {'Usage': 8}
-        self.league.adjustTemplateGameCount(12, 43)
+        self.league._adjustTemplateGameCount(12, 43)
         self.templates.updateMatchingEntities.assert_called_with({'ID':
             {'value': 12, 'type': 'positive'}}, {'Usage': '51'})
 
     @patch('resources.league.League.eloEnv')
     def test_getEloDiff(self, eloEnv):
         eloEnv.rate.return_value = 30
-        assert_equals(self.league.getEloDiff(40, xrange(5), 5), -2)
+        assert_equals(self.league._getEloDiff(40, xrange(5), 5), -2)
 
     @patch('resources.league.League.getTeamRating')
     def test_getEloRating(self, getRtg):
         getRtg.return_value = '4098'
-        assert_equals(self.league.getEloRating(43), 4098)
+        assert_equals(self.league._getEloRating(43), 4098)
 
-    @patch('resources.league.League.getEloRating')
+    @patch('resources.league.League._getEloRating')
     def test_getSideEloRating(self, getElo):
         getElo.return_value = 12
-        assert_equals(self.league.getSideEloRating({1, 2, 3}), 36)
+        assert_equals(self.league._getSideEloRating({1, 2, 3}), 36)
 
-    @patch('resources.league.League.getEvent')
-    @patch('resources.league.League.getSideEloRating')
+    @patch('resources.league.League._getEvent')
+    @patch('resources.league.League._getSideEloRating')
     def test_makeOpps(self, getSide, getEvent):
         getSide.return_value = 49
         getEvent.return_value = 'LOSS'
-        assert_equals(self.league.makeOpps([{12, 14, 19}, {49, 4}, {1, 2, 3}],
+        assert_equals(self.league._makeOpps([{12, 14, 19}, {49, 4}, {1, 2, 3}],
             1, 2), [('LOSS', 49), ('LOSS', 49)])
 
     def test_applyEloDiff(self):
         diffs = {12: 94, 13: 49}
-        self.league.applyEloDiff({12, 15, 390}, 43, diffs)
+        self.league._applyEloDiff({12, 15, 390}, 43, diffs)
         expVal = Decimal(43) / Decimal(3)
         assert_equals(diffs, {12: expVal, 13: 49, 15: expVal, 390: expVal})
 
-    @patch('resources.league.League.getEloRating')
-    @patch('resources.league.League.getEloDiff')
-    @patch('resources.league.League.makeOpps')
-    @patch('resources.league.League.getSideEloRating')
+    @patch('resources.league.League._getEloRating')
+    @patch('resources.league.League._getEloDiff')
+    @patch('resources.league.League._makeOpps')
+    @patch('resources.league.League._getSideEloRating')
     def test_getNewEloRatings(self, rtg, opps, diff, teamRtg):
         teamRtg.return_value = 12
         diff.return_value = 3
-        assert_equals(self.league.getNewEloRatings([{1, 2}, {3, 4}, {5,}], 0),
+        assert_equals(self.league._getNewEloRatings([{1, 2}, {3, 4}, {5,}], 0),
                 {1: '14', 2: '14', 3: '14', 4: '14', 5: '15'})
 
     def test_unsplitRtg(self):
-        assert_equals(self.league.unsplitRtg((43, 44, 56, 90)), '43/44/56/90')
+        assert_equals(self.league._unsplitRtg((43, 44, 56, 90)), '43/44/56/90')
 
     @patch('resources.league.League.getTeamRating')
     def test_getGlickoRating(self, getRtg):
         getRtg.return_value = '5/3'
-        assert_equals(self.league.getGlickoRating(43), (5, 3))
-        assert_equals(self.league.getSideGlickoRating({1, 2, 3}), (15, 9))
+        assert_equals(self.league._getGlickoRating(43), (5, 3))
+        assert_equals(self.league._getSideGlickoRating({1, 2, 3}), (15, 9))
 
     def test_getEvent(self):
-        assert_equals(self.league.getEvent(1, 2, 3), None)
-        assert_equals(self.league.getEvent(1, 2, 1), 1)
-        assert_equals(self.league.getEvent(1, 2, 2), 0)
+        assert_equals(self.league._getEvent(1, 2, 3), None)
+        assert_equals(self.league._getEvent(1, 2, 1), 1)
+        assert_equals(self.league._getEvent(1, 2, 2), 0)
 
     def test_updateGlickoMatchup(self):
         side1, side2 = MagicMock(), MagicMock()
         players = [side1, 4, 3, side2, 9]
-        self.league.updateGlickoMatchup(players, 0, 3, 0)
+        self.league._updateGlickoMatchup(players, 0, 3, 0)
         side1.update_player.assert_called_once_with([side2.rating,],
             [side2.rd,], [1,])
         side2.update_player.assert_called_once_with([side1.rating,],
             [side1.rd,], [0,])
-        self.league.updateGlickoMatchup(players, 1, 2, 3)
+        self.league._updateGlickoMatchup(players, 1, 2, 3)
         assert_equals(side1.update_player.call_count, 1)
         assert_equals(side2.update_player.call_count, 1)
 
     @patch('resources.league.Player')
-    @patch('resources.league.League.getSideGlickoRating')
+    @patch('resources.league.League._getSideGlickoRating')
     def test_makeGlickoPlayersFromSides(self, getSideRtg, plyr):
         getSideRtg.return_value = (10, 42)
-        assert_equals(self.league.makeGlickoPlayersFromSides([{1,2,3}, {4,5}]),
+        assert_equals(self.league._makeGlickoPlayersFromSides([{1,2,3}, {4,5}]),
             [plyr.return_value,] * 2)
 
-    @patch('resources.league.League.updateGlickoMatchup')
+    @patch('resources.league.League._updateGlickoMatchup')
     def test_updateGlickoMatchups(self, update):
-        self.league.updateGlickoMatchups([{1,2}, {3,4}, {5,6}], 'playaz', 0)
+        self.league._updateGlickoMatchups([{1,2}, {3,4}, {5,6}], 'playaz', 0)
         assert_equals(update.call_count, 3)
         update.assert_called_with('playaz', 1, 2, 0)
 
-    @patch('resources.league.League.getGlickoRating')
-    @patch('resources.league.League.getSideGlickoRating')
+    @patch('resources.league.League._getGlickoRating')
+    @patch('resources.league.League._getSideGlickoRating')
     def test_getGlickoResultsFromPlayers(self, getSide, getRtg):
         getSide.return_value = 12, 1
         getRtg.return_value = 3, 2
@@ -2064,120 +2069,120 @@ class TestLeague(TestCase):
         player.rating, player.rd = 13, 10
         players = [player,] * 3
         sides = [{1,2}, {3,4}, {5,6}]
-        assert_equals(self.league.getGlickoResultsFromPlayers(sides, players),
+        assert_equals(self.league._getGlickoResultsFromPlayers(sides, players),
                 {1: '3/4', 2: '3/4', 3: '3/4', 4: '3/4', 5: '3/4', 6: '3/4'})
 
-    @patch('resources.league.League.getGlickoResultsFromPlayers')
-    @patch('resources.league.League.updateGlickoMatchups')
-    @patch('resources.league.League.makeGlickoPlayersFromSides')
+    @patch('resources.league.League._getGlickoResultsFromPlayers')
+    @patch('resources.league.League._updateGlickoMatchups')
+    @patch('resources.league.League._makeGlickoPlayersFromSides')
     def test_getNewGlickoRatings(self, make, update, getFrom):
-        assert_equals(self.league.getNewGlickoRatings('sides', 'winningSide'),
+        assert_equals(self.league._getNewGlickoRatings('sides', 'winningSide'),
                       getFrom.return_value)
 
     @patch('resources.league.League.trueSkillEnv')
     @patch('resources.league.League.getTeamRating')
     def test_getTrueSkillRating(self, getRtg, env):
         getRtg.return_value = "20/4"
-        assert_equals(self.league.getTrueSkillRating(12),
+        assert_equals(self.league._getTrueSkillRating(12),
                       env.create_rating.return_value)
         env.create_rating.assert_called_once_with(20, 4)
 
-    @patch('resources.league.League.getTrueSkillRating')
+    @patch('resources.league.League._getTrueSkillRating')
     @patch('resources.league.League.trueSkillEnv')
     def test_getNewTrueSkillRatings(self, env, getRtg):
         rating = MagicMock(mu=3,sigma=5)
         env.rate.return_value = [{1: rating, 2: rating}, {3: rating}]
-        assert_equals(self.league.getNewTrueSkillRatings([{1,2}, {3}], 1),
+        assert_equals(self.league._getNewTrueSkillRatings([{1,2}, {3}], 1),
             {1: '3/5', 2: '3/5', 3: '3/5'})
 
     @patch('resources.league.League.getTeamRating')
     def test_getNewWinCounts(self, getRtg):
         getRtg.return_value = 3
-        assert_equals(self.league.getNewWinCounts([{1, 2, 3}, {4, 5, 6}], 1),
+        assert_equals(self.league._getNewWinCounts([{1, 2, 3}, {4, 5, 6}], 1),
                       {4: '4', 5: '4', 6: '4'})
 
     @patch('resources.league.League.getTeamRating')
     def test_getWinRate(self, getRtg):
         getRtg.return_value = "400/30"
-        assert_equals(self.league.getWinRate(43), (400, 30))
+        assert_equals(self.league._getWinRate(43), (400, 30))
 
     @patch('resources.league.League.getTeamRating')
     def test_getNewWinRates(self, getRtg):
         getRtg.return_value = "500/2"
         sides = [{1, 2, 3}, {4, 5}, {6, 7, 8, 9}]
-        assert_equals(self.league.getNewWinRates(sides, 2),
+        assert_equals(self.league._getNewWinRates(sides, 2),
             {1: '333/3', 2: '333/3', 3: '333/3', 4: '333/3',
              5: '333/3', 6: '667/3', 7: '667/3', 8: '667/3', 9: '667/3'})
 
     def test_getNewRatings(self):
         self.league.sysDict = {self.league.ratingSystem:
                                {'update': lambda x, y: 4}}
-        assert_equals(self.league.getNewRatings([{1,2}, {3,4}], 0), 4)
+        assert_equals(self.league._getNewRatings([{1,2}, {3,4}], 0), 4)
 
     def test_updateEntityValue(self):
         table = MagicMock()
-        self.league.updateEntityValue(table, 'Harambe', 'Name', Blue='yellow')
+        self.league._updateEntityValue(table, 'Harambe', 'Name', Blue='yellow')
         table.updateMatchingEntities.assert_called_once_with({'Name':
             {'value': 'Harambe', 'type': 'positive'}}, {'Blue': 'yellow'})
-        self.league.updateTeamRating(4, '4390')
+        self.league._updateTeamRating(4, '4390')
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': 4, 'type': 'positive'}}, {'Rating': '4390'})
         oldCount = self.teams.updateMatchingEntities.call_count
-        self.league.updateRatings({4: '4390', 3: '2301', 1: '3909'})
+        self.league._updateRatings({4: '4390', 3: '2301', 1: '3909'})
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': 4, 'type': 'positive'}}, {'Rating': '4390'})
         assert_equals(self.teams.updateMatchingEntities.call_count,
                       oldCount+3)
 
-    @patch('resources.league.League.adjustTeamGameCount')
+    @patch('resources.league.League._adjustTeamGameCount')
     def test_finishGameForTeams(self, adj):
-        self.league.finishGameForTeams(({1, 2}, {3, 4, 5}, {6}))
+        self.league._finishGameForTeams(({1, 2}, {3, 4, 5}, {6}))
         assert_equals(adj.call_count, 6)
 
-    @patch('resources.league.League.finishGameForTeams')
-    @patch('resources.league.League.updateRatings')
-    @patch('resources.league.League.getNewRatings')
-    @patch('resources.league.League.setWinners')
+    @patch('resources.league.League._finishGameForTeams')
+    @patch('resources.league.League._updateRatings')
+    @patch('resources.league.League._getNewRatings')
+    @patch('resources.league.League._setWinners')
     def test_updateResults(self, setWin, getNew, update, finish):
-        self.league.updateResults(3, [{1, 2}, {3, 4}], 0)
+        self.league._updateResults(3, [{1, 2}, {3, 4}], 0)
         setWin.assert_called_once_with(3, {1, 2}, False)
         update.assert_called_once_with(getNew.return_value)
         finish.assert_called_once_with([{1, 2}, {3, 4}])
-        self.league.updateResults(12, [{1,}, {3,}], 1, False)
+        self.league._updateResults(12, [{1,}, {3,}], 1, False)
         setWin.assert_called_with(12, {3,}, False)
         assert_equals(update.call_count, 1)
         finish.assert_called_with([{1,}, {3,}])
 
-    @patch('resources.league.League.updateResults')
-    @patch('resources.league.League.findTeamsFromData')
-    @patch('resources.league.League.getGameSidesFromData')
-    @patch('resources.league.League.fetchGameData')
+    @patch('resources.league.League._updateResults')
+    @patch('resources.league.League._findTeamsFromData')
+    @patch('resources.league.League._getGameSidesFromData')
+    @patch('resources.league.League._fetchGameData')
     def test_updateWinners(self, fetch, get, find, update):
         self._setProp(self.league.SET_REMOVE_BOOTS, False)
         get.return_value = [{1, 2, 3}, {4, 5, 6}, {7, 8}]
         find.return_value = {4, 5}
-        self.league.updateWinners(1, ([43, 44], [12, 13]))
+        self.league._updateWinners(1, ([43, 44], [12, 13]))
         update.assert_called_once_with(1, get.return_value, 1)
         find.return_value = {4, 5, 7}
         self._setProp(self.league.SET_REMOVE_BOOTS, True)
-        self.league.updateWinners(1, ([43, 44], [12, 13]))
+        self.league._updateWinners(1, ([43, 44], [12, 13]))
         update.assert_called_with(1, get.return_value, 1)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': 7, 'type': 'positive'}}, {'Limit': 0})
         get.return_value = list()
-        assert_raises(NameError, self.league.updateWinners, 1, ([43,44], []))
+        assert_raises(NameError, self.league._updateWinners, 1, ([43,44], []))
 
     @patch('resources.league.League.changeLimit')
     @patch('resources.league.League.updateGameVetos')
     def test_handleSpecialDeclines(self, update, change):
         self._setProp(self.league.SET_VETO_DECLINES, "FALSE")
         self._setProp(self.league.SET_REMOVE_DECLINES, "FALSE")
-        self.league.handleSpecialDeclines({5, 10, 15}, 43)
+        self.league._handleSpecialDeclines({5, 10, 15}, 43)
         update.assert_not_called()
         change.assert_not_called()
         self._setProp(self.league.SET_VETO_DECLINES, "TRUE")
         self._setProp(self.league.SET_REMOVE_DECLINES, "TRUE")
-        self.league.handleSpecialDeclines({5, 10, 15}, 20)
+        self.league._handleSpecialDeclines({5, 10, 15}, 20)
         update.assert_called_once_with({5, 10, 15}, 20)
         assert_equals(change.call_count, 3)
         change.assert_called_with(15, 0)
@@ -2190,13 +2195,13 @@ class TestLeague(TestCase):
         assert_equals(self.league.makeFakeSides(sides, set(xrange(1, 9))),
                       ([set(xrange(1, 9)),], None))
 
-    @patch('resources.league.League.getGameSidesFromData')
-    @patch('resources.league.League.findTeamsFromData')
-    @patch('resources.league.League.fetchGameData')
-    @patch('resources.league.League.handleSpecialDeclines')
+    @patch('resources.league.League._getGameSidesFromData')
+    @patch('resources.league.League._findTeamsFromData')
+    @patch('resources.league.League._fetchGameData')
+    @patch('resources.league.League._handleSpecialDeclines')
     @patch('resources.league.League.makeFakeSides')
     @patch('resources.league.League.updateVeto')
-    @patch('resources.league.League.updateResults')
+    @patch('resources.league.League._updateResults')
     def test_updateDecline(self, updateRes, veto, make, handle,
                            fetch, find, get):
         make.return_value = set(), 0
@@ -2208,8 +2213,8 @@ class TestLeague(TestCase):
         self.league.updateDecline('ID', 'decliners')
         veto.assert_called_once_with('ID')
 
-    @patch('resources.league.League.finishGameForTeams')
-    @patch('resources.league.League.getGameSidesFromData')
+    @patch('resources.league.League._finishGameForTeams')
+    @patch('resources.league.League._getGameSidesFromData')
     def test_deleteGame(self, get, finish):
         self._setProp(self.league.SET_PRESERVE_RECORDS, "FALSE")
         self.league.deleteGame({'ID': 'ID'})
@@ -2226,12 +2231,12 @@ class TestLeague(TestCase):
                                                      'type': 'positive'}})
         assert_equals(self.games.updateMatchingEntities.call_count, old+1)
 
-    @patch('resources.league.League.fetchGameData')
+    @patch('resources.league.League._fetchGameData')
     def test_getGameSidesFromData(self, fetch):
         gameData = {'Sides': '1,5,9/4,38,238/30,23/2,3,12,4/8'}
         expRes = [{'1', '5', '9'}, {'4', '38', '238'},
                   {'30', '23'}, {'2', '3', '12', '4'}, {'8',}]
-        assert_equals(self.league.getGameSidesFromData(gameData), expRes)
+        assert_equals(self.league._getGameSidesFromData(gameData), expRes)
         fetch.return_value = gameData
         assert_equals(self.league.getGameSides('ID'), expRes)
 
@@ -2551,8 +2556,8 @@ class TestLeague(TestCase):
 
     @patch('resources.league.League.updateVeto')
     @patch('resources.league.League.updateDecline')
-    @patch('resources.league.League.updateWinners')
-    @patch('resources.league.League.fetchGameStatus')
+    @patch('resources.league.League._updateWinners')
+    @patch('resources.league.League._fetchGameStatus')
     def test_updateGame(self, fetch, win, decline, veto):
         createdTime = '2491-04-20 19:39:39'
         fetch.return_value = None
@@ -2708,7 +2713,7 @@ class TestLeague(TestCase):
     @patch('resources.league.League.checkConsistentClan')
     @patch('resources.league.League.checkTeam')
     @patch('resources.league.League.checkTeamRatingUsingData')
-    @patch('resources.league.League.fetchTeamData')
+    @patch('resources.league.League._fetchTeamData')
     def test_validateTeam(self, fetch, checkRtg, check, checkClan, change):
         assert_false(self.league.validateTeam('teamID', 'players'))
         checkRtg.assert_called_once_with('teamID', fetch.return_value)
@@ -2815,9 +2820,9 @@ class TestLeague(TestCase):
         assert_equals(self.league.getWinCountParity(["10", "10", "50"]), 0.0)
         assert_almost_equal(self.league.getWinCountParity(["5", "6", "7",
                             "8"]), 0.656, 3)
-        assert_equals(self.league.getWinRateParity(["10/9", "10/49", "50/4"]),
+        assert_equals(self.league._getWinRateParity(["10/9", "10/49", "50/4"]),
                       0.0)
-        assert_almost_equal(self.league.getWinRateParity(["5/49", "6/32904",
+        assert_almost_equal(self.league._getWinRateParity(["5/49", "6/32904",
                             "7/12057", "8/8"]), 0.656, 3)
         self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
         assert_equals(self.league.getParityScore([10, 10, 10]), 1.0)

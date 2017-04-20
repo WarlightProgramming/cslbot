@@ -265,44 +265,44 @@ class League(object):
         self.name = name
         self.thread = thread
         self.handler = self._makeHandler()
-        self.checkFormat()
+        self._checkFormat()
         self.sysDict = None
-        self.makeRateSysDict()
+        self._makeRateSysDict()
         self._currentID, self._gameSize, self._sideSize = None, list(), list()
-        self.debug = self.fetchProperty(self.SET_DEBUG, False,
-                                        self.getBoolProperty)
+        self.debug = self._fetchProperty(self.SET_DEBUG, False,
+                                        self._getBoolProperty)
         self.tempTeams = None
 
-    def makeRateSysDict(self):
+    def _makeRateSysDict(self):
         self.sysDict = {self.RATE_ELO: {'default':
                                         lambda: str(self.defaultElo),
-                                        'update': self.getNewEloRatings,
+                                        'update': self._getNewEloRatings,
                                         'prettify': str,
                                         'parity': self.getEloParity},
                         self.RATE_GLICKO: {'default':
                                            lambda: self.defaultGlicko,
-                                           'update': self.getNewGlickoRatings,
+                                           'update': self._getNewGlickoRatings,
                                            'prettify':
                                            self.getPrettyGlickoRating,
                                            'parity': self.getGlickoParity},
                         self.RATE_TRUESKILL: {'default':
-                                              lambda:  self.defaultTrueSkill,
+                                              lambda: self.defaultTrueSkill,
                                               'update':
-                                              self.getNewTrueSkillRatings,
+                                              self._getNewTrueSkillRatings,
                                               'prettify':
                                               self.getPrettyTrueSkillRating,
                                               'parity':
                                               self.getTrueSkillParity},
                         self.RATE_WINCOUNT: {'default': lambda: str(0),
-                                             'update': self.getNewWinCounts,
+                                             'update': self._getNewWinCounts,
                                              'prettify': str,
                                              'parity': self.getWinCountParity},
                         self.RATE_WINRATE: {'default':
                                             lambda: self.defaultWinRate,
-                                            'update': self.getNewWinRates,
+                                            'update': self._getNewWinRates,
                                             'prettify': (lambda r:
                                             str(r.split(self.SEP_RTG)[0])),
-                                            'parity': self.getWinRateParity}}
+                                            'parity': self._getWinRateParity}}
 
     @staticmethod
     def _makeHandler():
@@ -313,12 +313,12 @@ class League(object):
 
     @noisy
     def _getMods(self):
-        mods = self.fetchProperty(self.SET_MODS, set(), self.getIDGroup)
+        mods = self._fetchProperty(self.SET_MODS, set(), self.getIDGroup)
         mods.add(int(self.admin))
         return mods
 
     @staticmethod
-    def checkSheet(table, header, constraints, reformat=True):
+    def _checkSheet(table, header, constraints, reformat=True):
         """
         ensures a given table has the appropriate header/constraints
         :param table: Table object to check
@@ -339,7 +339,7 @@ class League(object):
                                    erase=True)
 
     @noisy
-    def checkTeamSheet(self):
+    def _checkTeamSheet(self):
         teamConstraints = {'ID': 'UNIQUE INT',
                            'Name': 'UNIQUE STRING',
                            'Players': 'UNIQUE STRING',
@@ -354,11 +354,11 @@ class League(object):
                            'Ongoing': 'INT'}
         if not self.cullingDisabled:
             teamConstraints['Probation Start'] = 'STRING'
-        self.checkSheet(self.teams, set(teamConstraints), teamConstraints,
-                        self.autoformat)
+        self._checkSheet(self.teams, set(teamConstraints), teamConstraints,
+                         self.autoformat)
 
     @noisy
-    def checkGamesSheet(self):
+    def _checkGamesSheet(self):
         gamesConstraints = {'ID': 'UNIQUE INT',
                             'WarlightID': 'UNIQUE INT',
                             'Created': 'STRING',
@@ -368,27 +368,27 @@ class League(object):
                             'Vetos': 'INT',
                             'Vetoed': 'STRING',
                             'Template': 'INT'}
-        self.checkSheet(self.games, set(gamesConstraints), gamesConstraints,
-                        self.autoformat)
+        self._checkSheet(self.games, set(gamesConstraints), gamesConstraints,
+                         self.autoformat)
 
     @noisy
-    def checkTemplatesSheet(self):
+    def _checkTemplatesSheet(self):
         templatesConstraints = {'ID': 'UNIQUE INT',
                                 'Name': 'UNIQUE STRING',
                                 'WarlightID': 'INT',
                                 'Active': 'BOOL',
                                 'Usage': 'INT'}
         if self.multischeme: templatesConstraints['Schemes'] = 'STRING'
-        self.checkSheet(self.templates, set(templatesConstraints),
-                        templatesConstraints, self.autoformat)
+        self._checkSheet(self.templates, set(templatesConstraints),
+                         templatesConstraints, self.autoformat)
 
     @runPhase
-    def checkFormat(self):
-        self.checkTeamSheet()
-        self.checkGamesSheet()
-        self.checkTemplatesSheet()
+    def _checkFormat(self):
+        self._checkTeamSheet()
+        self._checkGamesSheet()
+        self._checkTemplatesSheet()
 
-    def fetchProperty(self, label, default, process_fn=None):
+    def _fetchProperty(self, label, default, process_fn=None):
         cmd = self.settings.get(label, default)
         try:
             if (process_fn is None or
@@ -402,22 +402,22 @@ class League(object):
             return default
 
     @staticmethod
-    def getBoolProperty(val):
+    def _getBoolProperty(val):
         return {'true': True,
                 'false': False}[str(val).lower()]
 
     @property
     def autoformat(self):
         """whether to automatically format sheets"""
-        return self.fetchProperty(self.SET_AUTOFORMAT, True,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_AUTOFORMAT, True,
+                                  self._getBoolProperty)
 
     @property
     def preserveRecords(self):
         """whether to keep records of abandoned games"""
         if self.retentionRange and self.vetoPenalty: return True
-        return self.fetchProperty(self.SET_PRESERVE_RECORDS, True,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_PRESERVE_RECORDS, True,
+                                  self._getBoolProperty)
 
     @property
     def maintainTotal(self):
@@ -427,84 +427,84 @@ class League(object):
         is always equal to the # of active players * the default rating
         """
         prohibited = {self.RATE_WINRATE, self.RATE_WINCOUNT}
-        expVal = self.fetchProperty(self.SET_MAINTAIN_TOTAL, False,
-                                    self.getBoolProperty)
+        expVal = self._fetchProperty(self.SET_MAINTAIN_TOTAL, False,
+                                    self._getBoolProperty)
         return (expVal and self.ratingSystem not in prohibited)
 
     @property
     def favorNewTemplates(self):
-        return self.fetchProperty(self.SET_FAVOR_NEW_TEMPLATES, False,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_FAVOR_NEW_TEMPLATES, False,
+                                  self._getBoolProperty)
 
     @property
     def requireSameClan(self):
-        exp =  self.fetchProperty(self.SET_REQUIRE_SAME_CLAN, False,
-                                  self.getBoolProperty)
+        exp = self._fetchProperty(self.SET_REQUIRE_SAME_CLAN, False,
+                                  self._getBoolProperty)
         return (exp or self.maintainSameClan)
 
     @property
     def maintainSameClan(self):
-        return self.fetchProperty(self.SET_MAINTAIN_SAME_CLAN, False,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_MAINTAIN_SAME_CLAN, False,
+                                  self._getBoolProperty)
 
     @property
     def forbidClanMatchups(self):
-        return self.fetchProperty(self.SET_FORBID_CLAN_MATCHUPS, False,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_FORBID_CLAN_MATCHUPS, False,
+                                  self._getBoolProperty)
 
     @property
     def onlyModsCanAdd(self):
-        return self.fetchProperty(self.SET_ONLY_MODS_CAN_ADD, False,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_ONLY_MODS_CAN_ADD, False,
+                                  self._getBoolProperty)
 
     @property
     def autodrop(self):
         """whether to automatically drop templates players can't use"""
-        return self.fetchProperty(self.SET_AUTODROP, (self.dropLimit > 0),
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_AUTODROP, (self.dropLimit > 0),
+                                  self._getBoolProperty)
 
     @property
     def teamless(self):
-        return self.fetchProperty(self.SET_TEAMLESS, (self.teamSize == 1
+        return self._fetchProperty(self.SET_TEAMLESS, (self.teamSize == 1
                                   and self.sideSize == 1),
-                                  self.getBoolProperty)
+                                  self._getBoolProperty)
 
     @property
     def leagueAcronym(self):
-        return self.fetchProperty(self.SET_LEAGUE_ACRONYM, self.clusterName)
+        return self._fetchProperty(self.SET_LEAGUE_ACRONYM, self.clusterName)
 
     @property
     def clusterName(self):
-        return self.fetchProperty(self.SET_SUPER_NAME, self.name)
+        return self._fetchProperty(self.SET_SUPER_NAME, self.name)
 
     @property
     def nameLength(self):
-        return self.fetchProperty(self.SET_NAME_LENGTH, None, int)
+        return self._fetchProperty(self.SET_NAME_LENGTH, None, int)
 
     @property
     def ratingDecay(self):
-        return self.fetchProperty(self.SET_RATING_DECAY, 0, int)
+        return self._fetchProperty(self.SET_RATING_DECAY, 0, int)
 
     @property
     def penaltyFloor(self):
-        return self.fetchProperty(self.SET_PENALTY_FLOOR, None, int)
+        return self._fetchProperty(self.SET_PENALTY_FLOOR, None, int)
 
     @property
     def retentionRange(self):
-        return self.fetchProperty(self.SET_RETENTION_RANGE, None, int)
+        return self._fetchProperty(self.SET_RETENTION_RANGE, None, int)
 
     @property
     def constrainName(self):
-        return self.fetchProperty(self.SET_CONSTRAIN_NAME, True,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_CONSTRAIN_NAME, True,
+                                  self._getBoolProperty)
 
     @property
     def leagueMessage(self):
-        return self.fetchProperty(self.SET_LEAGUE_MESSAGE, self.DEFAULT_MSG)
+        return self._fetchProperty(self.SET_LEAGUE_MESSAGE, self.DEFAULT_MSG)
 
     @property
     def leagueUrl(self):
-        return self.fetchProperty(self.SET_URL, self.defaultUrl)
+        return self._fetchProperty(self.SET_URL, self.defaultUrl)
 
     @property
     def defaultUrl(self):
@@ -517,48 +517,48 @@ class League(object):
         process_fn = (lambda val: val if val == self.KW_ALL else
                       int(val) if self.multischeme else
                       (int(val) * self.sideSize * self.gameSize))
-        return self.fetchProperty(self.SET_REMATCH_LIMIT, 0, process_fn)
+        return self._fetchProperty(self.SET_REMATCH_LIMIT, 0, process_fn)
 
     @property
     def rematchCap(self):
-        return self.fetchProperty(self.SET_REMATCH_CAP, 1, int)
+        return self._fetchProperty(self.SET_REMATCH_CAP, 1, int)
 
     @property
     def teamLimit(self):
         process_fn = lambda x: None if (x.lower() in {"none", ""}) else int(x)
         defaultMax = None if self.teamSize > 1 else 1
-        return self.fetchProperty(self.SET_MAX_TEAMS, defaultMax, process_fn)
+        return self._fetchProperty(self.SET_MAX_TEAMS, defaultMax, process_fn)
 
     @property
     def vetoLimit(self):
         """maximum number of vetos per game"""
-        return self.fetchProperty(self.SET_VETO_LIMIT, 0, int)
+        return self._fetchProperty(self.SET_VETO_LIMIT, 0, int)
 
     @property
     def dropLimit(self):
         """maximum number of templates a player can drop"""
         process_fn = lambda x: min(int(x), len(self.templateIDs) - 1)
-        return self.fetchProperty(self.SET_DROP_LIMIT, 0, process_fn)
+        return self._fetchProperty(self.SET_DROP_LIMIT, 0, process_fn)
 
     @property
     def removeDeclines(self):
-        return self.fetchProperty(self.SET_REMOVE_DECLINES, True,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_REMOVE_DECLINES, True,
+                                  self._getBoolProperty)
 
     @property
     def removeBoots(self):
-        return self.fetchProperty(self.SET_REMOVE_BOOTS, True,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_REMOVE_BOOTS, True,
+                                  self._getBoolProperty)
 
     @property
     def penalizeDeclines(self):
-        return self.fetchProperty(self.SET_PENALIZE_DECLINES, True,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_PENALIZE_DECLINES, True,
+                                  self._getBoolProperty)
 
     @property
     def countDeclinesAsVetos(self):
-        return self.fetchProperty(self.SET_VETO_DECLINES, False,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_VETO_DECLINES, False,
+                                  self._getBoolProperty)
 
     @property
     def vetoPenalty(self):
@@ -566,10 +566,10 @@ class League(object):
         if self.ratingSystem == self.RATE_WINCOUNT: default = 1
         elif self.ratingSystem == self.RATE_WINRATE: default = 50
         else: default = 25
-        return self.fetchProperty(self.SET_VETO_PENALTY, default, int)
+        return self._fetchProperty(self.SET_VETO_PENALTY, default, int)
 
     @classmethod
-    def shuffleVal(cls, vals):
+    def _shuffleVal(cls, vals):
         vals = [int(v) for v in vals.split(cls.SEP_CMD)]
         random.shuffle(vals)
         return max(vals[0], 1)
@@ -578,33 +578,33 @@ class League(object):
     def teamSize(self):
         """number of players per team"""
         process_fn = lambda x: max(1, int(x))
-        return self.fetchProperty(self.SET_TEAM_SIZE, 1, process_fn)
+        return self._fetchProperty(self.SET_TEAM_SIZE, 1, process_fn)
 
     @staticmethod
-    def setIfEmpty(prop, fn):
+    def _setIfEmpty(prop, fn):
         if len(prop) == 0: prop.append(fn())
         return prop[0]
 
     @property
     def gameSize(self):
         """number of sides per game"""
-        return self.setIfEmpty(self._gameSize, self.statedGameSize)
+        return self._setIfEmpty(self._gameSize, self._statedGameSize)
 
-    def statedGameSize(self):
-        return self.fetchProperty(self.SET_GAME_SIZE, 2, self.shuffleVal)
+    def _statedGameSize(self):
+        return self._fetchProperty(self.SET_GAME_SIZE, 2, self._shuffleVal)
 
     @property
     def sideSize(self):
         """number of teams per side"""
-        return self.setIfEmpty(self._sideSize, self.statedSideSize)
+        return self._setIfEmpty(self._sideSize, self._statedSideSize)
 
-    def statedSideSize(self):
-        return self.fetchProperty(self.SET_TEAMS_PER_SIDE, 1, self.shuffleVal)
+    def _statedSideSize(self):
+        return self._fetchProperty(self.SET_TEAMS_PER_SIDE, 1, self._shuffleVal)
 
     @property
     def multischeme(self):
-        gameSpec = self.fetchProperty(self.SET_GAME_SIZE, "1")
-        sideSpec = self.fetchProperty(self.SET_TEAMS_PER_SIDE, "1")
+        gameSpec = self._fetchProperty(self.SET_GAME_SIZE, "1")
+        sideSpec = self._fetchProperty(self.SET_TEAMS_PER_SIDE, "1")
         return (self.SEP_CMD in gameSpec or self.SEP_CMD in sideSpec)
 
     @property
@@ -616,24 +616,24 @@ class League(object):
     @property
     def expiryThreshold(self):
         """number of days until game is declared abandoned"""
-        return self.fetchProperty(self.SET_EXP_THRESH, 3, int)
+        return self._fetchProperty(self.SET_EXP_THRESH, 3, int)
 
     @property
     def maxVacation(self):
         """maximum vacation length (in days) to remain on ladder"""
-        return self.fetchProperty(self.SET_MAX_VACATION, None, int)
+        return self._fetchProperty(self.SET_MAX_VACATION, None, int)
 
     @staticmethod
-    def timeZoneDiff():
+    def _timeZoneDiff():
         offset = (time.timezone if (time.localtime().tm_isdst == 0)
                   else time.altzone)
         return timedelta(hours=(offset/3600))
 
     @noisy
-    def meetsVacation(self, player):
+    def _meetsVacation(self, player):
         maxVac, secsPerDay = self.maxVacation, 86400
         if maxVac is None: return True
-        timeZoneDiff = self.timeZoneDiff()
+        timeZoneDiff = self._timeZoneDiff()
         ID, formatStr = int(player.ID), '%m/%d/%Y %H:%M:%S'
         validationData = self.handler.validateToken(ID)
         if 'onVacationUntil' not in validationData: return True
@@ -648,12 +648,12 @@ class League(object):
     def minLimit(self):
         """minimum number of max ongoing games per team"""
         process_fn = lambda x: max(int(x), 0)
-        return self.fetchProperty(self.SET_MIN_LIMIT, 0, process_fn)
+        return self._fetchProperty(self.SET_MIN_LIMIT, 0, process_fn)
 
     @property
     def maxLimit(self):
         """maximum number of max ongoing games per team"""
-        return self.fetchProperty(self.SET_MAX_LIMIT, None, int)
+        return self._fetchProperty(self.SET_MAX_LIMIT, None, int)
 
     @property
     def constrainLimit(self):
@@ -661,23 +661,23 @@ class League(object):
         whether to constrain out-of-range limits
         limits outside range are set to the min or max limit
         """
-        return self.fetchProperty(self.SET_CONSTRAIN_LIMIT, True,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_CONSTRAIN_LIMIT, True,
+                                  self._getBoolProperty)
 
     @staticmethod
-    def valueInRange(val, rangeMin, rangeMax):
+    def _valueInRange(val, rangeMin, rangeMax):
         return ((rangeMin is None or val >= rangeMin) and
                 (rangeMax is None or val <= rangeMax))
 
     @noisy
-    def limitInRange(self, limit):
+    def _limitInRange(self, limit):
         """returns True if a limit is in an acceptable range"""
-        return self.valueInRange(limit, self.minLimit, self.maxLimit)
+        return self._valueInRange(limit, self.minLimit, self.maxLimit)
 
     @property
     def ratingSystem(self):
         """rating system to use"""
-        system = self.fetchProperty(self.SET_SYSTEM, self.RATE_ELO,
+        system = self._fetchProperty(self.SET_SYSTEM, self.RATE_ELO,
                                     lambda x: x.upper())
         if system not in self.sysDict:
             raise ImproperInput("Unrecognized rating system. Aborting.")
@@ -685,12 +685,12 @@ class League(object):
 
     @property
     def kFactor(self):
-        prop = self.fetchProperty(self.SET_ELO_K, 32, int)
+        prop = self._fetchProperty(self.SET_ELO_K, 32, int)
         return (prop * self.sideSize)
 
     @property
     def defaultElo(self):
-        return self.fetchProperty(self.SET_ELO_DEFAULT, 1500, int)
+        return self._fetchProperty(self.SET_ELO_DEFAULT, 1500, int)
 
     @property
     def eloEnv(self):
@@ -698,23 +698,23 @@ class League(object):
 
     @property
     def glickoRd(self):
-        return self.fetchProperty(self.SET_GLICKO_RD, 350, int)
+        return self._fetchProperty(self.SET_GLICKO_RD, 350, int)
 
     @property
     def glickoRating(self):
-        return self.fetchProperty(self.SET_GLICKO_DEFAULT, 1500, int)
+        return self._fetchProperty(self.SET_GLICKO_DEFAULT, 1500, int)
 
     @property
     def defaultGlicko(self):
-        return self.unsplitRtg([self.glickoRating, self.glickoRd])
+        return self._unsplitRtg([self.glickoRating, self.glickoRd])
 
     @property
     def trueSkillSigma(self):
-        return self.fetchProperty(self.SET_TRUESKILL_SIGMA, 500, int)
+        return self._fetchProperty(self.SET_TRUESKILL_SIGMA, 500, int)
 
     @property
     def trueSkillMu(self):
-        return self.fetchProperty(self.SET_TRUESKILL_DEFAULT, 1500, int)
+        return self._fetchProperty(self.SET_TRUESKILL_DEFAULT, 1500, int)
 
     @property
     def trueSkillBeta(self):
@@ -735,7 +735,7 @@ class League(object):
 
     @property
     def defaultTrueSkill(self):
-        return self.unsplitRtg([self.trueSkillMu, self.trueSkillSigma])
+        return self._unsplitRtg([self.trueSkillMu, self.trueSkillSigma])
 
     @property
     def defaultWinRate(self):
@@ -743,64 +743,64 @@ class League(object):
 
     @property
     def reverseParity(self):
-        return self.fetchProperty(self.SET_REVERSE_PARITY, False,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_REVERSE_PARITY, False,
+                                  self._getBoolProperty)
 
     @property
     def reverseSideParity(self):
-        return self.fetchProperty(self.SET_REVERSE_GROUPING, False,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_REVERSE_GROUPING, False,
+                                  self._getBoolProperty)
 
     @property
     def maxBoot(self):
-        return self.fetchProperty(self.SET_MAX_BOOT, 100.0, float)
+        return self._fetchProperty(self.SET_MAX_BOOT, 100.0, float)
 
     @property
     def minLevel(self):
-        return self.fetchProperty(self.SET_MIN_LEVEL, 0, int)
+        return self._fetchProperty(self.SET_MIN_LEVEL, 0, int)
 
     @property
     def membersOnly(self):
-        exp = self.fetchProperty(self.SET_MEMBERS_ONLY, False,
-                                 self.getBoolProperty)
+        exp = self._fetchProperty(self.SET_MEMBERS_ONLY, False,
+                                 self._getBoolProperty)
         return (exp or (self.minMemberAge > 0))
 
     @staticmethod
-    def memberAge(player):
+    def _memberAge(player):
         return (date.today() - player.memberSince).days
 
     @noisy
-    def meetsMembership(self, player):
+    def _meetsMembership(self, player):
         return (not self.membersOnly or (player.isMember and
-                self.memberAge(player) >= self.minMemberAge))
+                self._memberAge(player) >= self.minMemberAge))
 
     @property
     def minPoints(self):
-        return self.fetchProperty(self.SET_MIN_POINTS, 0, int)
+        return self._fetchProperty(self.SET_MIN_POINTS, 0, int)
 
     @property
     def minAge(self):
-        return self.fetchProperty(self.SET_MIN_AGE, 0, int)
+        return self._fetchProperty(self.SET_MIN_AGE, 0, int)
 
     @property
     def minMemberAge(self):
-        return self.fetchProperty(self.SET_MIN_MEMBER_AGE, 0, int)
+        return self._fetchProperty(self.SET_MIN_MEMBER_AGE, 0, int)
 
     @property
     def maxRTSpeed(self):
         process_fn = lambda x: float(Decimal(x) / Decimal(60.0))
-        return self.fetchProperty(self.SET_MAX_RT_SPEED, None, process_fn)
+        return self._fetchProperty(self.SET_MAX_RT_SPEED, None, process_fn)
 
     @property
     def maxMDSpeed(self):
-        return self.fetchProperty(self.SET_MAX_MD_SPEED, None, float)
+        return self._fetchProperty(self.SET_MAX_MD_SPEED, None, float)
 
     @property
     def minExplicitRating(self):
-        return self.fetchProperty(self.SET_MIN_RATING, None, int)
+        return self._fetchProperty(self.SET_MIN_RATING, None, int)
 
     @noisy
-    def findRatingAtPercentile(self, percentile):
+    def _findRatingAtPercentile(self, percentile):
         if percentile == 0: return None
         ratings = self.teams.findValue({'ID': {'value': '',
                                                'type': 'negative'}},
@@ -814,23 +814,21 @@ class League(object):
 
     @property
     def minPercentileRating(self):
-        process_fn = lambda x: self.findRatingAtPercentile(float(x))
-        return self.fetchProperty(self.SET_MIN_PERCENTILE, None, process_fn)
+        process_fn = lambda x: self._findRatingAtPercentile(float(x))
+        return self._fetchProperty(self.SET_MIN_PERCENTILE, None, process_fn)
 
     @property
     def minRating(self):
-        minPercentile = self.minPercentileRating
-        if minPercentile is None: return self.minExplicitRating
-        return minPercentile
+        return max(self.minPercentileRating, self.minExplicitRating)
 
     @property
     def gracePeriod(self):
-        return self.fetchProperty(self.SET_GRACE_PERIOD, 0, int)
+        return self._fetchProperty(self.SET_GRACE_PERIOD, 0, int)
 
     @property
     def restorationPeriod(self):
         process_fn = lambda x: int(x) + self.gracePeriod
-        return self.fetchProperty(self.SET_RESTORATION_PERIOD, None,
+        return self._fetchProperty(self.SET_RESTORATION_PERIOD, None,
                                   process_fn)
 
     @property
@@ -842,7 +840,7 @@ class League(object):
         restPd = self.restorationPeriod
         if self.cullingDisabled: restPd = 0
         if restPd is None: return
-        deadTeams = self.getExtantEntities(self.teams,
+        deadTeams = self._getExtantEntities(self.teams,
                                            {'Limit': {'value': '0',
                                                       'type': 'positive'},
                                             'Probation Start': {'value': '',
@@ -858,50 +856,50 @@ class League(object):
 
     @property
     def allowJoins(self):
-        return self.fetchProperty(self.SET_ALLOW_JOINS, True,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_ALLOW_JOINS, True,
+                                  self._getBoolProperty)
 
     @property
     def leagueCapacity(self):
-        return self.fetchProperty(self.SET_LEAGUE_CAPACITY, None, int)
+        return self._fetchProperty(self.SET_LEAGUE_CAPACITY, None, int)
 
     @property
     def activeCapacity(self):
-        return self.fetchProperty(self.SET_ACTIVE_CAPACITY, None, int)
+        return self._fetchProperty(self.SET_ACTIVE_CAPACITY, None, int)
 
     @classmethod
-    def valueBelowCapacity(cls, value, capacity):
-        return cls.valueInRange(value, None,
+    def _valueBelowCapacity(cls, value, capacity):
+        return cls._valueInRange(value, None,
                                 (capacity-1 if isinstance(capacity, int)
                                  else capacity))
 
     @property
     def activeFull(self):
-        return (not self.valueBelowCapacity(len(self.activeTeams),
+        return (not self._valueBelowCapacity(len(self.activeTeams),
                                             self.activeCapacity))
 
     @property
     def leagueFull(self):
-        return (not self.valueBelowCapacity(len(self.allTeams),
+        return (not self._valueBelowCapacity(len(self.allTeams),
                                             self.leagueCapacity))
 
     @classmethod
-    def getDateTimeProperty(cls, val):
+    def _getDateTimeProperty(cls, val):
         if isinstance(val, datetime): return val
-        return (datetime.strptime(val, cls.TIMEFORMAT) - cls.timeZoneDiff())
+        return (datetime.strptime(val, cls.TIMEFORMAT) - cls._timeZoneDiff())
 
     @property
     def joinPeriodStart(self):
-        return self.fetchProperty(self.SET_JOIN_PERIOD_START, None,
-                                  self.getDateTimeProperty)
+        return self._fetchProperty(self.SET_JOIN_PERIOD_START, None,
+                                  self._getDateTimeProperty)
 
     @property
     def joinPeriodEnd(self):
-        return self.fetchProperty(self.SET_JOIN_PERIOD_END, None,
-                                  self.getDateTimeProperty)
+        return self._fetchProperty(self.SET_JOIN_PERIOD_END, None,
+                                  self._getDateTimeProperty)
 
     @staticmethod
-    def currentTimeWithinRange(start, end):
+    def _currentTimeWithinRange(start, end):
         now = datetime.now()
         if (start is not None and
             now < start): return False
@@ -913,49 +911,47 @@ class League(object):
     def joinsAllowed(self):
         if (self.leagueFull or self.activeFull): return False
         start, end = self.joinPeriodStart, self.joinPeriodEnd
-        if self.currentTimeWithinRange(start, end):
-            return self.allowJoins
-        return False
+        return (self._currentTimeWithinRange(start, end) and self.allowJoins)
 
     @property
     def leagueActive(self):
-        return self.fetchProperty(self.SET_ACTIVE, True, self.getBoolProperty)
+        return self._fetchProperty(self.SET_ACTIVE, True, self._getBoolProperty)
 
     @property
     def minSize(self):
-        return self.fetchProperty(self.SET_MIN_SIZE, (self.sideSize *
+        return self._fetchProperty(self.SET_MIN_SIZE, (self.sideSize *
                                   self.gameSize), int)
 
     @property
     def minToCull(self):
-        return self.fetchProperty(self.SET_MIN_TO_CULL, 0, int)
+        return self._fetchProperty(self.SET_MIN_TO_CULL, 0, int)
 
     @property
     def minToRank(self):
-        return self.fetchProperty(self.SET_MIN_TO_RANK, 0, int)
+        return self._fetchProperty(self.SET_MIN_TO_RANK, 0, int)
 
     @property
     def maxRank(self):
-        return self.fetchProperty(self.SET_MAX_RANK, None, int)
+        return self._fetchProperty(self.SET_MAX_RANK, None, int)
 
     @property
     def minLimitToRank(self):
-        return self.fetchProperty(self.SET_MIN_LIMIT_TO_RANK, 1, int)
+        return self._fetchProperty(self.SET_MIN_LIMIT_TO_RANK, 1, int)
 
     @staticmethod
-    def applyRestrictions(matchDict, restrictions):
+    def _applyRestrictions(matchDict, restrictions):
         if restrictions is not None:
             for restriction in restrictions:
                 matchDict[restriction] = restrictions[restriction]
 
     @classmethod
-    def getExtantMatchDict(cls, restrictions):
+    def _getExtantMatchDict(cls, restrictions):
         matchDict = {'ID': {'value': '', 'type': 'negative'}}
-        cls.applyRestrictions(matchDict, restrictions)
+        cls._applyRestrictions(matchDict, restrictions)
         return matchDict
 
     @classmethod
-    def getExtantEntities(cls, table, restrictions=None):
+    def _getExtantEntities(cls, table, restrictions=None):
         """
         :param table: table to fetch entities from
         :param restrictions: dictionary matching elements to
@@ -964,24 +960,24 @@ class League(object):
         :rtype list[dict]:
         :retval: matching entities in table
         """
-        matchDict = cls.getExtantMatchDict(restrictions)
+        matchDict = cls._getExtantMatchDict(restrictions)
         return table.findEntities(matchDict)
 
     @classmethod
-    def getLabeledEntities(cls, table, restrictions, keyLabel):
-        matchDict = cls.getExtantMatchDict(restrictions)
+    def _getLabeledEntities(cls, table, restrictions, keyLabel):
+        matchDict = cls._getExtantMatchDict(restrictions)
         return table.findEntities(matchDict, keyLabel=keyLabel)
 
     @property
     def activeTeams(self):
-        teams = self.getExtantEntities(self.teams,
+        teams = self._getExtantEntities(self.teams,
                                        {'Limit': {'value': '0',
                                                   'type': 'negative'}})
         return [team for team in teams if int(team['Limit']) > 0]
 
     @property
     def activeTemplates(self):
-        return self.getExtantEntities(self.templates,
+        return self._getExtantEntities(self.templates,
                                       {'Active': {'value': 'TRUE',
                                                   'type': 'positive'}})
 
@@ -995,81 +991,79 @@ class League(object):
 
     @property
     def minTemplates(self):
-        return self.fetchProperty(self.SET_MIN_TEMPLATES, 1, int)
+        return self._fetchProperty(self.SET_MIN_TEMPLATES, 1, int)
 
     @property
     def activityStart(self):
-        return self.fetchProperty(self.SET_START_DATE, None,
-                                  self.getDateTimeProperty)
+        return self._fetchProperty(self.SET_START_DATE, None,
+                                  self._getDateTimeProperty)
 
     @property
     def activityEnd(self):
-        return self.fetchProperty(self.SET_END_DATE, None,
-                                  self.getDateTimeProperty)
+        return self._fetchProperty(self.SET_END_DATE, None,
+                                  self._getDateTimeProperty)
 
     @property
     def active(self):
         if self.templateCount < self.minTemplates: return False
         if self.size < self.minSize: return False
         start, end = self.activityStart, self.activityEnd
-        if self.currentTimeWithinRange(start, end):
-            return self.leagueActive
-        return False
+        return (self._currentTimeWithinRange(start, end) and self.leagueActive)
 
     @property
     def allowRemoval(self):
-        return self.fetchProperty(self.SET_ALLOW_REMOVAL, False,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_ALLOW_REMOVAL, False,
+                                  self._getBoolProperty)
 
     @property
     def minOngoingGames(self):
-        return self.fetchProperty(self.SET_MIN_ONGOING_GAMES, 0, int)
+        return self._fetchProperty(self.SET_MIN_ONGOING_GAMES, 0, int)
 
     @property
     def maxOngoingGames(self):
-        return self.fetchProperty(self.SET_MAX_ONGOING_GAMES, None, int)
+        return self._fetchProperty(self.SET_MAX_ONGOING_GAMES, None, int)
 
     @noisy
-    def gameCountInRange(self, player):
+    def _gameCountInRange(self, player):
         ongoing = player.currentGames
-        return self.valueInRange(ongoing, self.minOngoingGames,
+        return self._valueInRange(ongoing, self.minOngoingGames,
                                  self.maxOngoingGames)
 
     @property
     def minRTPercent(self):
-        return self.fetchProperty(self.SET_MIN_RT_PERCENT, 0.0, float)
+        return self._fetchProperty(self.SET_MIN_RT_PERCENT, 0.0, float)
 
     @property
     def maxRTPercent(self):
-        return self.fetchProperty(self.SET_MAX_RT_PERCENT, 100.0, float)
+        return self._fetchProperty(self.SET_MAX_RT_PERCENT, 100.0, float)
 
     @noisy
-    def RTPercentInRange(self, player):
+    def _RTPercentInRange(self, player):
         pct = player.percentRT
         return (pct >= self.minRTPercent and pct <= self.maxRTPercent)
 
     @property
     def maxLastSeen(self):
-        return self.fetchProperty(self.SET_MAX_LAST_SEEN, None, float)
+        return self._fetchProperty(self.SET_MAX_LAST_SEEN, None, float)
 
     @property
     def min1v1Pct(self):
-        return self.fetchProperty(self.SET_MIN_1v1_PCT, 0.0, float)
+        return self._fetchProperty(self.SET_MIN_1v1_PCT, 0.0, float)
 
     @property
     def min2v2Pct(self):
-        return self.fetchProperty(self.SET_MIN_2v2_PCT, 0.0, float)
+        return self._fetchProperty(self.SET_MIN_2v2_PCT, 0.0, float)
 
     @property
     def min3v3Pct(self):
-        return self.fetchProperty(self.SET_MIN_3v3_PCT, 0.0, float)
+        return self._fetchProperty(self.SET_MIN_3v3_PCT, 0.0, float)
 
     @property
     def minRanked(self):
-        return self.fetchProperty(self.SET_MIN_RANKED, 0, int)
+        return self._fetchProperty(self.SET_MIN_RANKED, 0, int)
 
     @noisy
-    def meetsMinRanked(self, player):
+    def _meetsMinRanked(self, player):
         data = player.rankedGames
         pcts = data.get('data', dict())
         p1v1, p2v2, p3v3 = (pcts.get('1v1', 0), pcts.get('2v2', 0),
@@ -1081,11 +1075,11 @@ class League(object):
 
     @property
     def minGames(self):
-        return self.fetchProperty(self.SET_MIN_GAMES, 0, int)
+        return self._fetchProperty(self.SET_MIN_GAMES, 0, int)
 
     @property
     def minAchievementRate(self):
-        return self.fetchProperty(self.SET_MIN_ACH, 0.0, float)
+        return self._fetchProperty(self.SET_MIN_ACH, 0.0, float)
 
     @classmethod
     def getIDGroup(cls, val, process_fn=int):
@@ -1098,53 +1092,58 @@ class League(object):
 
     @property
     def agents(self):
-        return self.fetchProperty(self.SET_AGENTS, set(), self.getGroup)
+        return self._fetchProperty(self.SET_AGENTS, set(), self.getGroup)
 
     def agentAllowed(self, agentID):
+        """
+        returns True if an Interface is authorized to execute orders
+        :param agentID: Warlight ID of Interface owner
+        :rtype: bool
+        """
         return (str(agentID) in self.agents or self.KW_ALL in self.agents)
 
     @property
     def bannedPlayers(self):
         """set containing IDs of banned players"""
-        return self.fetchProperty(self.SET_BANNED_PLAYERS, set(),
+        return self._fetchProperty(self.SET_BANNED_PLAYERS, set(),
                                   self.getGroup)
 
     @property
     def bannedClans(self):
         """set containing IDs of banned clans"""
-        return self.fetchProperty(self.SET_BANNED_CLANS, set(),
+        return self._fetchProperty(self.SET_BANNED_CLANS, set(),
                                   self.getGroup)
 
     @property
     def bannedLocations(self):
-        return self.fetchProperty(self.SET_BANNED_LOCATIONS, set(),
+        return self._fetchProperty(self.SET_BANNED_LOCATIONS, set(),
                                   self.getGroup)
 
     @property
     def allowedPlayers(self):
         """set containing IDs of allowed players"""
-        return self.fetchProperty(self.SET_ALLOWED_PLAYERS, set(),
+        return self._fetchProperty(self.SET_ALLOWED_PLAYERS, set(),
                                   self.getGroup)
 
     @property
     def allowedClans(self):
         """set containing IDs of allowed clans"""
-        return self.fetchProperty(self.SET_ALLOWED_CLANS, set(),
+        return self._fetchProperty(self.SET_ALLOWED_CLANS, set(),
                                   self.getGroup)
 
     @property
     def allowedLocations(self):
-        return self.fetchProperty(self.SET_ALLOWED_LOCATIONS, set(),
+        return self._fetchProperty(self.SET_ALLOWED_LOCATIONS, set(),
                                   self.getGroup)
 
     @property
     def requireClan(self):
         default = (self.KW_ALL in self.bannedClans)
-        return self.fetchProperty(self.SET_REQUIRE_CLAN, default,
-                                  self.getBoolProperty)
+        return self._fetchProperty(self.SET_REQUIRE_CLAN, default,
+                                  self._getBoolProperty)
 
     @noisy
-    def clanAllowed(self, player):
+    def _clanAllowed(self, player):
         clan = player.clanID
         if clan is None:
             return (not self.requireClan)
@@ -1155,35 +1154,35 @@ class League(object):
                      and self.KW_ALL not in self.bannedClans))
 
     @staticmethod
-    def processLoc(location):
+    def _processLoc(location):
         tempLoc = location.split()
         return ' '.join(tempLoc)
 
     @noisy
-    def checkLocation(self, location):
-        location = self.processLoc(location)
+    def _checkLocation(self, location):
+        location = self._processLoc(location)
         if (location in self.allowedLocations or
             self.KW_ALL in self.allowedLocations): return True
         if (location in self.bannedLocations or
             self.KW_ALL in self.bannedLocations): return False
 
     @noisy
-    def locationAllowed(self, player):
+    def _locationAllowed(self, player):
         location = player.location.split(":")
         results = set()
         for loc in location:
-            check = self.checkLocation(loc)
+            check = self._checkLocation(loc)
             results.add(check)
         return ((True in results) or (False not in results))
 
     @noisy
-    def meetsAge(self, player):
+    def _meetsAge(self, player):
         now = date.today()
         joinDate = player.joinDate
         return ((now - joinDate).days >= self.minAge)
 
     @noisy
-    def meetsSpeed(self, player):
+    def _meetsSpeed(self, player):
         speeds = player.playSpeed
         rtSpeed = speeds.get('Real-Time Games', None)
         mdSpeed = speeds.get('Multi-Day Games', None)
@@ -1193,21 +1192,21 @@ class League(object):
                  mdSpeed <= self.maxMDSpeed))
 
     @noisy
-    def meetsLastSeen(self, player):
+    def _meetsLastSeen(self, player):
         lastSeen = player.lastSeen
         return (self.maxLastSeen is None or
                 lastSeen <= self.maxLastSeen)
 
     @noisy
-    def checkPrereqs(self, player):
-        prereqs = {self.clanAllowed(player), self.locationAllowed(player),
+    def _checkPrereqs(self, player):
+        prereqs = {self._clanAllowed(player), self._locationAllowed(player),
                    (player.bootRate <= self.maxBoot),
                    (player.level >= self.minLevel),
-                   self.meetsMembership(player), self.meetsVacation(player),
-                   (player.points >= self.minPoints), self.meetsAge(player),
-                   self.meetsSpeed(player), self.gameCountInRange(player),
-                   self.RTPercentInRange(player), self.meetsLastSeen(player),
-                   self.meetsMinRanked(player),
+                   self._meetsMembership(player), self._meetsVacation(player),
+                   (player.points >= self.minPoints), self._meetsAge(player),
+                   self._meetsSpeed(player), self._gameCountInRange(player),
+                   self._RTPercentInRange(player), self._meetsLastSeen(player),
+                   self._meetsMinRanked(player),
                    (player.playedGames >= self.minGames),
                    (player.achievementRate >= self.minAchievementRate)}
         for prereq in prereqs:
@@ -1220,23 +1219,23 @@ class League(object):
                 self.KW_ALL in self.allowedPlayers)
 
     @noisy
-    def allowed(self, playerID):
+    def _allowed(self, playerID):
         """returns True if a player is allowed to join the league"""
         player = int(playerID)
         if self._playerExplicitlyAllowed(player): return True
         parser = PlayerParser(player)
-        if not self.checkPrereqs(parser):
+        if not self._checkPrereqs(parser):
             return False
         return (str(player) not in self.bannedPlayers and
                 self.KW_ALL not in self.bannedPlayers)
 
     @noisy
-    def banned(self, playerID):
+    def _banned(self, playerID):
         """returns True if a player is banned from the league"""
-        return not(self.allowed(playerID))
+        return not(self._allowed(playerID))
 
     @noisy
-    def logFailedOrder(self, order):
+    def _logFailedOrder(self, order):
         desc = ("Failed to process %s order by %d" %
                 (order['type'], int(order['author'])))
         self.parent.log(desc, league=self.name, error=True)
@@ -1277,11 +1276,11 @@ class League(object):
             raise ImproperInput("Team %s has already reached its drop limit" %
                                 (str(teamID)))
         drops = (self.SEP_DROPS).join(str(d) for d in existingDrops)
-        self.updateEntityValue(self.teams, teamID, Drops=drops)
+        self._updateEntityValue(self.teams, teamID, Drops=drops)
 
     @noisy
     def checkTeamMember(self, member, badTemps):
-        if self.banned(member):
+        if self._banned(member):
             raise ImproperInput(str(member) + " is banned from this league")
         tempAccess = self.checkTemplateAccess(member)
         for temp in tempAccess:
@@ -1313,7 +1312,7 @@ class League(object):
 
     @noisy
     def checkLimit(self, limit):
-        if not self.limitInRange(limit):
+        if not self._limitInRange(limit):
             if self.constrainLimit:
                 if limit < self.minLimit: return self.minLimit
                 return self.maxLimit
@@ -1403,7 +1402,7 @@ class League(object):
         teamName = self.getTeamNameFromOrder(order)
         gameLimit, forcedDrops, members, confirms = self.checkEligible(order)
         temp = sorted(zip(members, confirms))
-        members, confirms = [x for (x,y) in temp], [y for (x,y) in temp]
+        members, confirms = [x for (x, y) in temp], [y for (x, y) in temp]
         members = (self.SEP_PLYR).join([str(m) for m in members])
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
         self.teams.addEntity({'ID': self.currentID,
@@ -1486,7 +1485,7 @@ class League(object):
         if int(newLimit) <= 0: return
         elif self.activeCapacity is None: return
         elif not self.activeFull: return
-        oldLimit = int(self.fetchTeamData(teamID)['Limit'])
+        oldLimit = int(self._fetchTeamData(teamID)['Limit'])
         if oldLimit == 0:
             raise ImproperInput("League has reached max active teams.")
 
@@ -1498,7 +1497,7 @@ class League(object):
 
     @property
     def templateIDs(self):
-        return self.getLabeledEntities(self.templates,
+        return self._getLabeledEntities(self.templates,
             {'Active': {'value': 'TRUE', 'type': 'positive'}}, "ID")
 
     @noisy
@@ -1553,7 +1552,7 @@ class League(object):
     @noisy
     def updateTeamDrops(self, teamID, drops):
         dropStr = (self.SEP_DROPS).join(set(str(x) for x in drops))
-        self.updateEntityValue(self.teams, teamID, Drops=dropStr)
+        self._updateEntityValue(self.teams, teamID, Drops=dropStr)
 
     def findAndDrop(self, templateNames, existingDrops):
         for templateName in templateNames:
@@ -1594,8 +1593,8 @@ class League(object):
         if author not in self.mods:
             raise ImproperInput("Only mods can toggle template active status")
         tempName = order['orders'][1]
-        self.updateEntityValue(self.templates, tempName, identifier='Name',
-                               Active=setTo)
+        self._updateEntityValue(self.templates, tempName, identifier='Name',
+                                Active=setTo)
 
     @noisy
     def activateTemplate(self, order):
@@ -1609,7 +1608,7 @@ class League(object):
 
     @property
     def allTeams(self):
-        return self.getExtantEntities(self.teams)
+        return self._getExtantEntities(self.teams)
 
     @noisy
     def getPlayersFromOrder(self, order):
@@ -1621,8 +1620,8 @@ class League(object):
     @noisy
     def updateConfirms(self, teamID, confirms, identifier='ID'):
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
-        self.updateEntityValue(self.teams, teamID, identifier=identifier,
-                               Confirmations=confirms)
+        self._updateEntityValue(self.teams, teamID, identifier=identifier,
+                                Confirmations=confirms)
 
     @noisy
     def quitLeague(self, order):
@@ -1639,7 +1638,7 @@ class League(object):
 
     @property
     def usedTemplates(self):
-        IDs, games = self.templateIDs, self.getExtantEntities(self.games)
+        IDs, games = self.templateIDs, self._getExtantEntities(self.games)
         results = set()
         for ID in IDs: results.add(int(ID))
         for game in games: results.add(int(game['Template']))
@@ -1676,8 +1675,8 @@ class League(object):
     def renameTeam(self, order):
         matchingTeam = self.fetchMatchingTeam(order)[0]
         newName = self.getTeamNameFromOrder(order, 2)
-        self.updateEntityValue(self.teams, matchingTeam['ID'], identifier='ID',
-                               Name=newName)
+        self._updateEntityValue(self.teams, matchingTeam['ID'],
+                                identifier='ID', Name=newName)
 
     @runPhase
     def executeOrders(self):
@@ -1703,23 +1702,23 @@ class League(object):
                 if len(str(e)): # exception has some description string
                     self.parent.log(str(e), self.name, error=True)
                 else:
-                    self.logFailedOrder(order)
+                    self._logFailedOrder(order)
         self.updateRanks()
 
     @property
     def unfinishedGames(self):
-        return self.getLabeledEntities(self.games,
+        return self._getLabeledEntities(self.games,
             {'Finished': {'value': '', 'type': 'positive'}}, 'WarlightID')
 
     @staticmethod
-    def isAbandoned(players):
+    def _isAbandoned(players):
         for player in players:
             if player['state'] == 'VotedToEnd': return True
             elif player['state'] == 'Won': return False
         return False
 
     @staticmethod
-    def findMatchingPlayers(players, *states):
+    def _findMatchingPlayers(players, *states):
         matching = list()
         for player in players:
             if player['state'] in states:
@@ -1728,56 +1727,57 @@ class League(object):
         return matching
 
     @noisy
-    def findWinners(self, players):
-        return self.findMatchingPlayers(players, 'Won')
+    def _findWinners(self, players):
+        return self._findMatchingPlayers(players, 'Won')
 
     @noisy
-    def findDecliners(self, players):
-        return self.findMatchingPlayers(players, 'Declined')
+    def _findDecliners(self, players):
+        return self._findMatchingPlayers(players, 'Declined')
 
     @noisy
-    def findBooted(self, players):
-        return self.findMatchingPlayers(players, 'Booted')
+    def _findBooted(self, players):
+        return self._findMatchingPlayers(players, 'Booted')
 
     @noisy
-    def findWaiting(self, players):
-        return self.findMatchingPlayers(players, 'Invited', 'Declined')
+    def _findWaiting(self, players):
+        return self._findMatchingPlayers(players, 'Invited', 'Declined')
 
     @noisy
-    def handleFinished(self, gameData):
-        if self.isAbandoned(gameData['players']):
+    def _handleFinished(self, gameData):
+        if self._isAbandoned(gameData['players']):
             return 'ABANDONED', [int(p.get('id')) for p in gameData['players']]
         else:
-            decliners = self.findDecliners(gameData['players'])
+            decliners = self._findDecliners(gameData['players'])
             if len(decliners) > 0: return 'DECLINED', decliners
-            return ('FINISHED', self.findWinners(gameData['players']),
-                    self.findBooted(gameData['players']))
+            return ('FINISHED', self._findWinners(gameData['players']),
+                    self._findBooted(gameData['players']))
 
-    def wrapUp(self, gameData, group):
+    @noisy
+    def _wrapUp(self, gameData, group):
         self.handler.deleteGame(gameData['id'])
         if len(group) == len(gameData['players']):
             return 'ABANDONED', None
         return 'DECLINED', group
 
     @noisy
-    def handleWaiting(self, gameData, created):
-        decliners = self.findDecliners(gameData['players'])
-        if len(decliners): return self.wrapUp(gameData, decliners)
-        waiting = self.findWaiting(gameData['players'])
+    def _handleWaiting(self, gameData, created):
+        decliners = self._findDecliners(gameData['players'])
+        if len(decliners): return self._wrapUp(gameData, decliners)
+        waiting = self._findWaiting(gameData['players'])
         if (((datetime.now() - created).days >= self.expiryThreshold)
             and len(waiting)):
-            return self.wrapUp(gameData, waiting)
+            return self._wrapUp(gameData, waiting)
 
     @noisy
-    def fetchGameStatus(self, gameID, created):
+    def _fetchGameStatus(self, gameID, created):
         gameData = self.handler.queryGame(gameID)
         if gameData.get('state') == 'Finished':
-            return self.handleFinished(gameData)
+            return self._handleFinished(gameData)
         elif gameData.get('state') == 'WaitingForPlayers':
-            return self.handleWaiting(gameData, created)
+            return self._handleWaiting(gameData, created)
 
     @staticmethod
-    def fetchDataByID(table, ID, itemType):
+    def _fetchDataByID(table, ID, itemType):
         nonexStr = "Nonexistent %s: %s" % (str(itemType), str(ID))
         data = table.findEntities({'ID': {'value': ID,
                                           'type': 'positive'}})
@@ -1785,159 +1785,159 @@ class League(object):
         return data[0]
 
     @noisy
-    def fetchGameData(self, gameID):
-        return self.fetchDataByID(self.games, gameID, "game")
+    def _fetchGameData(self, gameID):
+        return self._fetchDataByID(self.games, gameID, "game")
 
     @noisy
-    def fetchTeamData(self, teamID):
-        return self.fetchDataByID(self.teams, teamID, "team")
+    def _fetchTeamData(self, teamID):
+        return self._fetchDataByID(self.teams, teamID, "team")
 
     @noisy
-    def fetchTemplateData(self, templateID):
-        return self.fetchDataByID(self.templates, templateID, "template")
+    def _fetchTemplateData(self, templateID):
+        return self._fetchDataByID(self.templates, templateID, "template")
 
     @classmethod
-    def getGameTeams(cls, gameData):
+    def _getGameTeams(cls, gameData):
         results = list()
         for side in gameData['Sides'].split(cls.SEP_SIDES):
             results += side.split(cls.SEP_TEAMS)
         return results
 
     @noisy
-    def findTeamsFromData(self, gameData, players):
+    def _findTeamsFromData(self, gameData, players):
         players, results = set([str(player) for player in players]), set()
-        gameTeams = self.getGameTeams(gameData)
+        gameTeams = self._getGameTeams(gameData)
         for team in gameTeams:
-            teamData = self.fetchTeamData(team)
+            teamData = self._fetchTeamData(team)
             playerData = set(teamData['Players'].split(self.SEP_PLYR))
             if len(playerData.intersection(players)) > 0:
                 results.add(team)
         return results
 
     @noisy
-    def findCorrespondingTeams(self, gameID, players):
-        gameData = self.fetchGameData(gameID)
-        return self.findTeamsFromData(gameData, players)
+    def _findCorrespondingTeams(self, gameID, players):
+        gameData = self._fetchGameData(gameID)
+        return self._findTeamsFromData(gameData, players)
 
     @noisy
-    def setWinners(self, gameID, winningSide, declined=False):
+    def _setWinners(self, gameID, winningSide, declined=False):
         sortedWinners = sorted(team for team in winningSide)
         winStr = (self.SEP_TEAMS).join(str(team) for team in sortedWinners)
         if declined: winStr = winStr + self.MARK_DECLINE
         finStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
-        self.updateEntityValue(self.games, gameID, identifier='ID',
-                               Winners=winStr, Finished=finStr)
+        self._updateEntityValue(self.games, gameID, identifier='ID',
+                                Winners=winStr, Finished=finStr)
 
     @noisy
-    def adjustTeamGameCount(self, teamID, adj, totalAdj=0):
-        teamData = self.fetchTeamData(teamID)
+    def _adjustTeamGameCount(self, teamID, adj, totalAdj=0):
+        teamData = self._fetchTeamData(teamID)
         oldCount = int(teamData['Ongoing'])
         oldFin = int(teamData['Finished'])
-        self.updateEntityValue(self.teams, teamID, Ongoing=str(oldCount+adj),
-                               Finished=str(oldFin+totalAdj))
+        self._updateEntityValue(self.teams, teamID, Ongoing=str(oldCount+adj),
+                                Finished=str(oldFin+totalAdj))
 
     @noisy
-    def adjustTemplateGameCount(self, templateID, adj):
-        oldCount = int(self.fetchTemplateData(templateID)['Usage'])
-        self.updateEntityValue(self.templates, templateID,
-                               Usage=str(oldCount+adj))
+    def _adjustTemplateGameCount(self, templateID, adj):
+        oldCount = int(self._fetchTemplateData(templateID)['Usage'])
+        self._updateEntityValue(self.templates, templateID,
+                                Usage=str(oldCount+adj))
 
     @noisy
-    def getEloDiff(self, rating, events, count):
+    def _getEloDiff(self, rating, events, count):
         oldRating = rating
         rating = self.eloEnv.rate(oldRating, events)
         diff = int(round((rating - oldRating) / count))
         return diff
 
     @noisy
-    def getEloRating(self, teamID):
+    def _getEloRating(self, teamID):
         return int(self.getTeamRating(teamID))
 
     @noisy
-    def getSideEloRating(self, side):
+    def _getSideEloRating(self, side):
         rating = 0
         for team in side:
-            rating += self.getEloRating(team)
+            rating += self._getEloRating(team)
         return rating
 
     @noisy
-    def makeOpps(self, sides, i, winningSide):
+    def _makeOpps(self, sides, i, winningSide):
         opps = list()
         for j in xrange(len(sides)):
             if i == j: continue
             other = sides[j]
-            otherRtg = self.getSideEloRating(other)
-            event = self.getEvent(i, j, winningSide)
+            otherRtg = self._getSideEloRating(other)
+            event = self._getEvent(i, j, winningSide)
             if event is not None: opps.append((event, otherRtg))
         return opps
 
     @staticmethod
-    def applyEloDiff(side, diff, diffs):
+    def _applyEloDiff(side, diff, diffs):
         for team in side:
             diffs[team] = Decimal(diff) / Decimal(len(side))
 
     @noisy
-    def getNewEloRatings(self, sides, winningSide):
+    def _getNewEloRatings(self, sides, winningSide):
         results, diffs, count = dict(), dict(), len(sides) - 1
         for i in xrange(len(sides)):
             side = sides[i]
-            sideRtg = self.getSideEloRating(side)
-            opps = self.makeOpps(sides, i, winningSide)
-            diff = self.getEloDiff(sideRtg, opps, count)
-            self.applyEloDiff(side, diff, diffs)
+            sideRtg = self._getSideEloRating(side)
+            opps = self._makeOpps(sides, i, winningSide)
+            diff = self._getEloDiff(sideRtg, opps, count)
+            self._applyEloDiff(side, diff, diffs)
         for side in sides:
             for team in side:
-                results[team] = str(self.getEloRating(team) +
+                results[team] = str(self._getEloRating(team) +
                                     int(round(diffs[team])))
         return results
 
     @classmethod
-    def unsplitRtg(cls, rating):
+    def _unsplitRtg(cls, rating):
         return (cls.SEP_RTG).join([str(val) for val in rating])
 
     @noisy
-    def getGlickoRating(self, teamID):
+    def _getGlickoRating(self, teamID):
         return self.splitRating(self.getTeamRating(teamID))
 
     @noisy
-    def getSideGlickoRating(self, side):
+    def _getSideGlickoRating(self, side):
         rating, dev = 0, 0
         for team in side:
-            glicko = self.getGlickoRating(team)
+            glicko = self._getGlickoRating(team)
             rating, dev = (rating + glicko[0], dev + glicko[1])
         return rating, dev
 
     @staticmethod
-    def getEvent(i, j, winner, WIN=1, LOSS=0):
+    def _getEvent(i, j, winner, WIN=1, LOSS=0):
         if i == winner: return WIN
         elif j == winner: return LOSS
 
     @noisy
-    def updateGlickoMatchup(self, players, i, j, winner):
+    def _updateGlickoMatchup(self, players, i, j, winner):
         side1, side2 = players[i], players[j]
-        if self.getEvent(i, j, winner) is None: return
+        if self._getEvent(i, j, winner) is None: return
         side1.update_player([side2.rating,], [side2.rd,],
-                            [self.getEvent(i, j, winner),])
+                            [self._getEvent(i, j, winner),])
         side2.update_player([side1.rating,], [side1.rd,],
-                            [self.getEvent(j, i, winner),])
+                            [self._getEvent(j, i, winner),])
 
     @noisy
-    def makeGlickoPlayersFromSides(self, sides):
+    def _makeGlickoPlayersFromSides(self, sides):
         players = list()
         for side in sides:
-            sideRtg, sideRd = self.getSideGlickoRating(side)
+            sideRtg, sideRd = self._getSideGlickoRating(side)
             sidePlayer = Player(rating=sideRtg, rd=sideRd)
             players.append(sidePlayer)
         return players
 
     @noisy
-    def updateGlickoMatchups(self, sides, players, winningSide):
+    def _updateGlickoMatchups(self, sides, players, winningSide):
         for i in xrange(len(sides)):
             for j in xrange(i+1, len(sides)):
-                self.updateGlickoMatchup(players, i, j, winningSide)
+                self._updateGlickoMatchup(players, i, j, winningSide)
 
     @staticmethod
-    def preciseUpdate(vals, divisor_1, divisor_2):
+    def _preciseUpdate(vals, divisor_1, divisor_2):
         results = list()
         for val in vals:
             res = int(round(Decimal(val) /
@@ -1946,52 +1946,52 @@ class League(object):
         return tuple(results)
 
     @noisy
-    def getGlickoResultsFromPlayers(self, sides, players):
+    def _getGlickoResultsFromPlayers(self, sides, players):
         results, otherSides = dict(), len(sides)-1
         for i in xrange(len(sides)):
             newRtg, newRd = players[i].rating, players[i].rd
-            oldRtg, oldRd = self.getSideGlickoRating(sides[i])
+            oldRtg, oldRd = self._getSideGlickoRating(sides[i])
             rtgDiff, rdDiff = float(newRtg - oldRtg), float(newRd - oldRd)
-            rtgDiff, rdDiff = self.preciseUpdate([rtgDiff, rdDiff], otherSides,
-                                                 len(sides[i]))
+            rtgDiff, rdDiff = self._preciseUpdate([rtgDiff, rdDiff],
+                                                   otherSides, len(sides[i]))
             for team in sides[i]:
-                origRtg, origRd = self.getGlickoRating(team)
+                origRtg, origRd = self._getGlickoRating(team)
                 rtg = origRtg + int(round(rtgDiff))
                 rd = origRd + int(round(rdDiff))
-                results[team] = self.unsplitRtg([str(rtg), str(rd)])
+                results[team] = self._unsplitRtg([str(rtg), str(rd)])
         return results
 
     @noisy
-    def getNewGlickoRatings(self, sides, winningSide):
-        players = self.makeGlickoPlayersFromSides(sides)
-        self.updateGlickoMatchups(sides, players, winningSide)
-        return self.getGlickoResultsFromPlayers(sides, players)
+    def _getNewGlickoRatings(self, sides, winningSide):
+        players = self._makeGlickoPlayersFromSides(sides)
+        self._updateGlickoMatchups(sides, players, winningSide)
+        return self._getGlickoResultsFromPlayers(sides, players)
 
     @noisy
-    def getTrueSkillRating(self, teamID):
+    def _getTrueSkillRating(self, teamID):
         mu, sigma = self.splitRating(self.getTeamRating(teamID))
         return self.trueSkillEnv.create_rating(mu, sigma)
 
     @noisy
-    def getNewTrueSkillRatings(self, sides, winningSide):
+    def _getNewTrueSkillRatings(self, sides, winningSide):
         results, WIN, LOSS = dict(), 0, 1
         rating_groups = list()
         for side in sides:
             rating_group = dict()
             for team in side:
-                rating_group[team] = self.getTrueSkillRating(team)
+                rating_group[team] = self._getTrueSkillRating(team)
             rating_groups.append(rating_group)
         ranks = [LOSS,] * len(sides)
         ranks[winningSide] = WIN
         updated = self.trueSkillEnv.rate(rating_groups, ranks=[WIN, LOSS])
         for side in updated:
             for team in side:
-                results[team] = self.unsplitRtg([side[team].mu,
+                results[team] = self._unsplitRtg([side[team].mu,
                                                  side[team].sigma])
         return results
 
     @noisy
-    def getNewWinCounts(self, sides, winningSide):
+    def _getNewWinCounts(self, sides, winningSide):
         results = dict()
         winningTeams = sides[winningSide]
         for team in winningTeams:
@@ -2001,7 +2001,7 @@ class League(object):
         return results
 
     @noisy
-    def getWinRate(self, team):
+    def _getWinRate(self, team):
         rating = self.getTeamRating(team)
         winRate, numGames = rating.split(self.SEP_RTG)
         winRate = int(winRate)
@@ -2009,12 +2009,12 @@ class League(object):
         return winRate, numGames
 
     @noisy
-    def getNewWinRates(self, sides, winningSide):
+    def _getNewWinRates(self, sides, winningSide):
         results = dict()
         for i in xrange(len(sides)):
             side = sides[i]
             for team in side:
-                winRate, numGames = self.getWinRate(team)
+                winRate, numGames = self._getWinRate(team)
                 estimatedWins = (Decimal(numGames) * (Decimal(winRate)
                                  / Decimal(self.WINRATE_SCALE)))
                 if i == winningSide:
@@ -2022,11 +2022,11 @@ class League(object):
                 numGames += 1
                 newRate = round(float(estimatedWins / Decimal(numGames)), 3)
                 newRate = int(Decimal(newRate) * Decimal(self.WINRATE_SCALE))
-                results[team] = self.unsplitRtg([newRate, numGames])
+                results[team] = self._unsplitRtg([newRate, numGames])
         return results
 
     @noisy
-    def getNewRatings(self, sides, winningSide):
+    def _getNewRatings(self, sides, winningSide):
         """
         :param sides: list[set[string]]
         :param winningSide: int (index of winning side)
@@ -2034,59 +2034,59 @@ class League(object):
         return self.sysDict[self.ratingSystem]['update'](sides, winningSide)
 
     @staticmethod
-    def updateEntityValue(table, ID, identifier='ID', **values):
+    def _updateEntityValue(table, ID, identifier='ID', **values):
         table.updateMatchingEntities({identifier: {'value': ID,
                                                    'type': 'positive'}},
                                      values)
 
     @noisy
-    def updateTeamRating(self, teamID, rating):
-        self.updateEntityValue(self.teams, teamID, Rating=rating)
+    def _updateTeamRating(self, teamID, rating):
+        self._updateEntityValue(self.teams, teamID, Rating=rating)
 
     @noisy
-    def updateRatings(self, newRatings):
+    def _updateRatings(self, newRatings):
         for team in newRatings:
-            self.updateTeamRating(team, newRatings[team])
+            self._updateTeamRating(team, newRatings[team])
 
     @noisy
-    def finishGameForTeams(self, sides):
+    def _finishGameForTeams(self, sides):
         for side in sides:
             for team in side:
-                self.adjustTeamGameCount(team, -1, 1)
+                self._adjustTeamGameCount(team, -1, 1)
 
     @noisy
-    def updateResults(self, gameID, sides, winningSide, adj=True,
+    def _updateResults(self, gameID, sides, winningSide, adj=True,
                       declined=False):
         adj = (adj and self.retentionRange is None)
-        self.setWinners(gameID, sides[winningSide], declined)
+        self._setWinners(gameID, sides[winningSide], declined)
         if adj:
-            newRatings = self.getNewRatings(sides, winningSide)
-            self.updateRatings(newRatings)
-        self.finishGameForTeams(sides)
+            newRatings = self._getNewRatings(sides, winningSide)
+            self._updateRatings(newRatings)
+        self._finishGameForTeams(sides)
 
     @noisy
-    def removeBooted(self, gameData, booted):
+    def _removeBooted(self, gameData, booted):
         if not self.removeBoots: return
-        bootedTeams = self.findTeamsFromData(gameData, booted)
+        bootedTeams = self._findTeamsFromData(gameData, booted)
         for team in bootedTeams:
             self.changeLimit(team, 0)
 
     @noisy
-    def updateWinners(self, gameID, groups):
+    def _updateWinners(self, gameID, groups):
         winners, booted = groups
-        gameData = self.fetchGameData(gameID)
-        self.removeBooted(gameData, booted)
-        sides = self.getGameSidesFromData(gameData)
-        winningTeams = self.findTeamsFromData(gameData, winners)
+        gameData = self._fetchGameData(gameID)
+        self._removeBooted(gameData, booted)
+        sides = self._getGameSidesFromData(gameData)
+        winningTeams = self._findTeamsFromData(gameData, winners)
         for i in xrange(len(sides)):
             side = sides[i]
             if len(side & winningTeams) > 0:
                 winningSide = i
                 break
-        self.updateResults(gameID, sides, winningSide)
+        self._updateResults(gameID, sides, winningSide)
 
     @noisy
-    def handleSpecialDeclines(self, losingTeams, template):
+    def _handleSpecialDeclines(self, losingTeams, template):
         if self.countDeclinesAsVetos:
             self.updateGameVetos(losingTeams, template)
         if self.removeDeclines:
@@ -2106,15 +2106,15 @@ class League(object):
 
     @noisy
     def updateDecline(self, gameID, decliners):
-        gameData = self.fetchGameData(gameID)
-        sides = self.getGameSidesFromData(gameData)
-        losingTeams = self.findTeamsFromData(gameData, decliners)
+        gameData = self._fetchGameData(gameID)
+        sides = self._getGameSidesFromData(gameData)
+        losingTeams = self._findTeamsFromData(gameData, decliners)
         template = str(gameData['Template'])
-        self.handleSpecialDeclines(losingTeams, template)
+        self._handleSpecialDeclines(losingTeams, template)
         sides, winningSide = self.makeFakeSides(sides, losingTeams)
         if winningSide is None: self.updateVeto(gameID)
-        self.updateResults(gameID, sides, winningSide,
-                           adj=self.penalizeDeclines, declined=True)
+        self._updateResults(gameID, sides, winningSide,
+                            adj=self.penalizeDeclines, declined=True)
 
     @staticmethod
     def removeEntity(table, ID, identifier='ID'):
@@ -2125,13 +2125,14 @@ class League(object):
     def deleteGame(self, gameData):
         if self.preserveRecords:
             finStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
-            self.updateEntityValue(self.games, gameData['ID'], Finished=finStr)
+            self._updateEntityValue(self.games, gameData['ID'],
+                                    Finished=finStr)
         else: self.removeEntity(self.games, gameData['ID'])
-        sides = self.getGameSidesFromData(gameData)
-        self.finishGameForTeams(sides)
+        sides = self._getGameSidesFromData(gameData)
+        self._finishGameForTeams(sides)
 
     @classmethod
-    def getGameSidesFromData(cls, gameData, processFn=str):
+    def _getGameSidesFromData(cls, gameData, processFn=str):
         results = list()
         sides = gameData['Sides'].split(cls.SEP_SIDES)
         for side in sides:
@@ -2140,8 +2141,8 @@ class League(object):
 
     @noisy
     def getGameSides(self, gameID):
-        gameData = self.fetchGameData(gameID)
-        return self.getGameSidesFromData(gameData)
+        gameData = self._fetchGameData(gameID)
+        return self._getGameSidesFromData(gameData)
 
     @noisy
     def usingTempTeams(self, team):
@@ -2151,20 +2152,20 @@ class League(object):
     def getTeamRating(self, team):
         team = str(team)
         if self.usingTempTeams(team): return self.tempTeams[str(team)]
-        teamData = self.fetchTeamData(team)
+        teamData = self._fetchTeamData(team)
         return teamData['Rating']
 
     @noisy
     def adjustRating(self, team, adjustment):
         rating = list(self.splitRating(self.getTeamRating(team)))
         rating[0] += adjustment
-        rating = self.unsplitRtg(rating)
+        rating = self._unsplitRtg(rating)
         if self.usingTempTeams(team): self.tempTeams[str(team)] = rating
-        else: self.updateEntityValue(self.teams, team, Rating=rating)
+        else: self._updateEntityValue(self.teams, team, Rating=rating)
 
     @noisy
     def penalizeVeto(self, gameData):
-        teams = self.getGameTeams(gameData)
+        teams = self._getGameTeams(gameData)
         for team in teams:
             self.adjustRating(team, -self.vetoPenalty)
 
@@ -2173,14 +2174,14 @@ class League(object):
         vetos = gameData['Vetoed'] + self.SEP_VETOS + str(gameData['Template'])
         if vetos[0] == self.SEP_VETOS: vetos = vetos[1:]
         vetoCount = int(gameData['Vetos']) + 1
-        self.updateEntityValue(self.games, gameData['ID'], Vetoed=vetos,
-                               Vetos=vetoCount, Template='')
-        self.adjustTemplateGameCount(gameData['Template'], -1)
+        self._updateEntityValue(self.games, gameData['ID'], Vetoed=vetos,
+                                Vetos=vetoCount, Template='')
+        self._adjustTemplateGameCount(gameData['Template'], -1)
 
     @noisy
     def setGameTemplate(self, gameData, tempID):
-        self.updateEntityValue(self.games, gameData['ID'], Template=tempID)
-        self.adjustTemplateGameCount(tempID, 1)
+        self._updateEntityValue(self.games, gameData['ID'], Template=tempID)
+        self._adjustTemplateGameCount(tempID, 1)
         gameData['Template'] = tempID
 
     @classmethod
@@ -2189,7 +2190,7 @@ class League(object):
 
     @noisy
     def getTeamPlayers(self, team):
-        return self.getPlayersFromData(self.fetchTeamData(team))
+        return self.getPlayersFromData(self._fetchTeamData(team))
 
     @noisy
     def getSidePlayers(self, side):
@@ -2209,7 +2210,7 @@ class League(object):
 
     @noisy
     def getTeamName(self, teamID):
-        teamData = self.fetchTeamData(teamID)
+        teamData = self._fetchTeamData(teamID)
         return teamData['Name']
 
     @noisy
@@ -2265,7 +2266,7 @@ class League(object):
 
     @noisy
     def getTeamRank(self, team):
-        teamData = self.fetchTeamData(team)
+        teamData = self._fetchTeamData(team)
         return int(teamData['Rank'])
 
     @noisy
@@ -2274,7 +2275,7 @@ class League(object):
         sides = gameData['Sides']
         for side in sides.split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
-                teamData = self.fetchTeamData(team)
+                teamData = self._fetchTeamData(team)
                 teamRating = self.prettifyRating(teamData['Rating'])
                 teamRank = teamData['Rank']
                 teamName = teamData['Name']
@@ -2304,7 +2305,7 @@ class League(object):
     @noisy
     def getTemplateName(self, gameData):
         templateID = gameData['Template']
-        tempData = self.fetchTemplateData(templateID)
+        tempData = self._fetchTemplateData(templateID)
         return tempData['Name']
 
     @property
@@ -2364,11 +2365,11 @@ class League(object):
 
     @noisy
     def updateTeamHistory(self, team, others):
-        oldHistory = self.fetchTeamData(team)['History']
+        oldHistory = self._fetchTeamData(team)['History']
         newStr = (self.SEP_TEAMS).join(others)
         newHistory = (oldHistory + (self.SEP_TEAMS if len(oldHistory) else "")
                       + newStr)
-        self.updateEntityValue(self.teams, team, History=newHistory)
+        self._updateEntityValue(self.teams, team, History=newHistory)
 
     @noisy
     def updateHistories(self, gameData):
@@ -2400,7 +2401,7 @@ class League(object):
 
     @noisy
     def getTempSettings(self, tempID):
-        tempData = self.fetchTemplateData(tempID)
+        tempData = self._fetchTemplateData(tempID)
         template = tempData['WarlightID']
         settingsDict, overrides = dict(), list()
         for head in tempData:
@@ -2422,10 +2423,10 @@ class League(object):
                        overridenBonuses=overrides,
                        teamless=self.teamless,
                        message=self.getGameMessage(gameData))
-            self.adjustTemplateGameCount(temp, 1)
+            self._adjustTemplateGameCount(temp, 1)
             createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
-            self.updateEntityValue(self.games, gameData['ID'], WarlightID=wlID,
-                                   Created=createdStr)
+            self._updateEntityValue(self.games, gameData['ID'],
+                                    WarlightID=wlID, Created=createdStr)
             return gameData
         except Exception as e:
             sides = gameData['Sides']
@@ -2435,7 +2436,7 @@ class League(object):
 
     @noisy
     def createGame(self, gameID):
-        gameData = self.fetchGameData(gameID)
+        gameData = self._fetchGameData(gameID)
         self.createGameFromData(gameData)
 
     @noisy
@@ -2444,7 +2445,7 @@ class League(object):
         if gameData is None: return
         for side in gameData['Sides'].split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
-                self.adjustTeamGameCount(team, 1)
+                self._adjustTeamGameCount(team, 1)
         self.updateHistories(gameData)
 
     @noisy
@@ -2452,7 +2453,7 @@ class League(object):
         vetos = set([v for v in gameData['Vetoed'].split(self.SEP_VETOS)])
         for side in gameData['Sides'].split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
-                teamData = self.fetchTeamData(team)
+                teamData = self._fetchTeamData(team)
                 self.updateConflicts(teamData, vetos)
         return set(int(v) for v in vetos)
 
@@ -2478,7 +2479,7 @@ class League(object):
 
     @noisy
     def getTeamVetoDict(self, teamID):
-        teamData = self.fetchTeamData(teamID)
+        teamData = self._fetchTeamData(teamID)
         return self.getVetoDict(teamData['Vetos'])
 
     @noisy
@@ -2497,14 +2498,14 @@ class League(object):
 
     @noisy
     def updateTeamVetos(self, team, template, adj):
-        teamData = self.fetchTeamData(team)
+        teamData = self._fetchTeamData(team)
         oldVetos = teamData['Vetos']
         if str(template) not in oldVetos:
             newVetos = (oldVetos + self.SEP_VETOS + str(template) +
                         self.SEP_VETOCT + str(adj))
             if len(oldVetos) == 0: newVetos = newVetos[1:]
         else: newVetos = self.updateVetoCt(oldVetos, template, adj)
-        self.updateEntityValue(self.teams, team, Vetos=newVetos)
+        self._updateEntityValue(self.teams, team, Vetos=newVetos)
 
     @noisy
     def updateGameVetos(self, teams, template):
@@ -2522,7 +2523,7 @@ class League(object):
 
     @noisy
     def updateVeto(self, gameID):
-        gameData = self.fetchGameData(gameID)
+        gameData = self._fetchGameData(gameID)
         if int(gameData['Vetos']) >= self.vetoLimit:
             self.penalizeVeto(gameData)
             self.deleteGame(gameData)
@@ -2539,16 +2540,16 @@ class League(object):
     @noisy
     def updateGame(self, warlightID, gameID, createdTime):
         created = datetime.strptime(createdTime, self.TIMEFORMAT)
-        status = self.fetchGameStatus(warlightID, created)
+        status = self._fetchGameStatus(warlightID, created)
         if status is not None:
-            updateWin = self.getOneArgFunc(self.updateWinners, status[1:])
+            updateWin = self.getOneArgFunc(self._updateWinners, status[1:])
             updateDecline = self.getOneArgFunc(self.updateDecline, status[1])
             {'FINISHED': updateWin, 'DECLINED': updateDecline,
              'ABANDONED': self.updateVeto}.get(status[0])(gameID)
 
     @noisy
     def wipeRank(self, teamID):
-        self.updateEntityValue(self.teams, teamID, Rank='')
+        self._updateEntityValue(self.teams, teamID, Rank='')
 
     @noisy
     def eligibleForRank(self, teamData):
@@ -2570,7 +2571,7 @@ class League(object):
                 previous = teamRtg
                 rank += offset + 1
             else: offset += 1
-            self.updateEntityValue(self.teams, teamID, Rank=rank)
+            self._updateEntityValue(self.teams, teamID, Rank=rank)
 
     @noisy
     def updateRanks(self):
@@ -2602,7 +2603,7 @@ class League(object):
     def changeLimit(self, teamID, limit):
         limit = int(limit)
         limit = self.checkLimit(limit) if limit != 0 else 0
-        self.updateEntityValue(self.teams, teamID, Limit=limit)
+        self._updateEntityValue(self.teams, teamID, Limit=limit)
 
     @classmethod
     def updatePlayerCounts(cls, playerCounts, players):
@@ -2613,7 +2614,7 @@ class League(object):
     def setProbation(self, teamID, start=None):
         if start is None: probStr = ''
         else: probStr = datetime.strftime(start, self.TIMEFORMAT)
-        self.updateEntityValue(self.teams, teamID,
+        self._updateEntityValue(self.teams, teamID,
                                **{'Probation Start': probStr})
 
     @noisy
@@ -2630,8 +2631,8 @@ class League(object):
         teamRating = int(self.prettifyRating(teamData['Rating']))
         teamRank = int(teamData['Rank'])
         return (teamFinished < self.minToCull or
-                (self.valueInRange(teamRating, self.minRating, None) and
-                 self.valueInRange(teamRank, None, self.maxRank)))
+                (self._valueInRange(teamRating, self.minRating, None) and
+                 self._valueInRange(teamRank, None, self.maxRank)))
 
     @noisy
     def checkTeamRatingUsingData(self, teamID, teamData):
@@ -2647,13 +2648,13 @@ class League(object):
 
     @noisy
     def checkTeamRating(self, teamID):
-        teamData = self.fetchTeamData(teamID)
+        teamData = self._fetchTeamData(teamID)
         return self.checkTeamRatingUsingData(teamID, teamData)
 
     @noisy
     def validateTeam(self, teamID, players):
         """returns True is the team has been dropped from the league"""
-        teamData = self.fetchTeamData(teamID)
+        teamData = self._fetchTeamData(teamID)
         if int(teamData['Limit']) < 1: return False
         try:
             self.checkTeamRatingUsingData(teamID, teamData)
@@ -2778,7 +2779,7 @@ class League(object):
         return self.getVarianceScore(winCounts)
 
     @noisy
-    def getWinRateParity(self, ratings):
+    def _getWinRateParity(self, ratings):
         winRates = [int(r.split(self.SEP_RTG)[0]) for r in ratings]
         return self.getVarianceScore(winRates)
 
@@ -2957,7 +2958,7 @@ class League(object):
         for side in sides:
             teams = side.split(self.SEP_TEAMS)
             for team in teams:
-                teamData = self.fetchTeamData(team)
+                teamData = self._fetchTeamData(team)
                 self.updateScores(teamData, scores)
                 self.updateConflicts(teamData, conflicts)
         return scores, conflicts
@@ -3026,7 +3027,7 @@ class League(object):
         rtg = list(cls.splitRating(team['Rating']))
         rtg[0] = int(round(Decimal(rtg[0]) + Decimal(adj)))
         if floor is not None: rtg[0] = max(rtg[0], floor)
-        return cls.unsplitRtg(rtg)
+        return cls._unsplitRtg(rtg)
 
     @runPhase
     def rescaleRatings(self):
@@ -3040,7 +3041,7 @@ class League(object):
         adjustment = (Decimal(expected) - Decimal(total)) / Decimal(count)
         for team in self.reduceToOnceActive(allTeams):
             rating = self.adjustAndPackage(team, adjustment)
-            self.updateTeamRating(team['ID'], rating)
+            self._updateTeamRating(team['ID'], rating)
 
     @staticmethod
     def decayTime(iterations):
@@ -3057,7 +3058,7 @@ class League(object):
         if (self.isInactive(team) and self.wasActive(team)):
             rating = self.adjustAndPackage(team, -self.ratingDecay,
                                            self.penaltyFloor)
-            self.updateTeamRating(team['ID'], rating)
+            self._updateTeamRating(team['ID'], rating)
 
     @runPhase
     def decayRatings(self):
@@ -3075,7 +3076,7 @@ class League(object):
 
     @property
     def unexpiredGames(self):
-        allGames, current = self.getExtantEntities(self.games), datetime.now()
+        allGames, current = self._getExtantEntities(self.games), datetime.now()
         return [g for g in allGames if
                 self.dateUnexpired(g['Finished'], current)]
 
@@ -3119,7 +3120,7 @@ class League(object):
 
     @noisy
     def calculateResults(self, sides, winningSide):
-        newRatings = self.getNewRatings(sides, winningSide)
+        newRatings = self._getNewRatings(sides, winningSide)
         for team in newRatings:
             self.tempTeams[str(team)] = newRatings[team]
 
@@ -3136,8 +3137,8 @@ class League(object):
                 self.calculateResults(sides, winningSide)
 
     @noisy
-    def updateTeamRatings(self):
-        self.updateRatings(self.tempTeams)
+    def _updateTeamRatings(self):
+        self._updateRatings(self.tempTeams)
 
     @runPhase
     def calculateRatings(self):
@@ -3146,7 +3147,7 @@ class League(object):
         for team in self.allTeams:
             self.tempTeams[str(team['ID'])] = self.defaultRating
         self.runCalculations()
-        self.updateTeamRatings()
+        self._updateTeamRatings()
         self.tempTeams = None
 
     @noisy
@@ -3226,7 +3227,7 @@ class League(object):
                 'Created': self.unpackDateTime(game['Created']),
                 'Finished': self.unpackDateTime(game['Finished']),
                 'Ongoing': not(len(game['Finished'])),
-                'Sides': self.getGameSidesFromData(game, int),
+                'Sides': self._getGameSidesFromData(game, int),
                 'Winners': self.packageWinners(game['Winners']),
                 'Declined': (self.MARK_DECLINE in game['Winners']),
                 'EndedInVeto': (not(len(game['Winners']))
@@ -3239,7 +3240,7 @@ class League(object):
         return {'ID': int(template['ID']),
                 'Name': template['Name'],
                 'WarlightID': int(template['WarlightID']),
-                'Active': self.getBoolProperty(template['Active']),
+                'Active': self._getBoolProperty(template['Active']),
                 'Usage': int(template['Usage'])}
 
     @staticmethod
@@ -3263,22 +3264,22 @@ class League(object):
         return packageFn(fetchFn(ID))[0]
 
     def fetchTeam(self, teamID):
-        return self.fetchAndPackage(self.fetchTeamData, self.packageTeams,
+        return self.fetchAndPackage(self._fetchTeamData, self.packageTeams,
                                     teamID)
 
     def fetchAllTeams(self):
         return self.packageTeams(*self.allTeams)
 
     def fetchGame(self, gameID):
-        return self.fetchAndPackage(self.fetchGameData, self.packageGames,
+        return self.fetchAndPackage(self._fetchGameData, self.packageGames,
                                     gameID)
 
     def fetchAllGames(self):
-        return self.packageGames(*self.getExtantEntities(self.games))
+        return self.packageGames(*self._getExtantEntities(self.games))
 
     def fetchTemplate(self, templateID):
-        return self.fetchAndPackage(self.fetchTemplateData,
+        return self.fetchAndPackage(self._fetchTemplateData,
                                     self.packageTemplates, templateID)
 
     def fetchAllTemplates(self):
-        return self.packageTemplates(*self.getExtantEntities(self.templates))
+        return self.packageTemplates(*self._getExtantEntities(self.templates))

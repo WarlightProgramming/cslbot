@@ -114,7 +114,7 @@ class LeagueManager(object):
     def _makeForumThreadParser(self, thread):
         return ForumThreadParser(self._fetchThreadID(thread))
 
-    def _fetchLeagueThread(self, offset=0):
+    def _fetchLeagueThread(self):
         thread = self.commands.findEntities({self.TITLE_CMD: 'THREAD'})
         if len(thread) > 0:
             try:

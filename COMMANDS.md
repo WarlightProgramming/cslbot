@@ -1761,8 +1761,7 @@ You can weed out teams below a certain official rating (using a single rating
 score, so no deviations/etc.) for a certain period of time. So if you're
 running an Elo ladder and decide that any team that's been below 1500 for 5
 days in a row doesn't belong in the league, you can set this to 1500 and
-[**GRACE PERIOD**](#grace-period) to 5. If you set a [**MIN RATING PERCENTILE**](#min-rating-percentile), it will override
-this.
+[**GRACE PERIOD**](#grace-period) to 5.
 
 ___
 
