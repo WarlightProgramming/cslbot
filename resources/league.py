@@ -278,25 +278,25 @@ class League(object):
                                         lambda: str(self.defaultElo),
                                         'update': self._getNewEloRatings,
                                         'prettify': str,
-                                        'parity': self.getEloParity},
+                                        'parity': self._getEloParity},
                         self.RATE_GLICKO: {'default':
                                            lambda: self.defaultGlicko,
                                            'update': self._getNewGlickoRatings,
                                            'prettify':
-                                           self.getPrettyGlickoRating,
-                                           'parity': self.getGlickoParity},
+                                           self._getPrettyGlickoRating,
+                                           'parity': self._getGlickoParity},
                         self.RATE_TRUESKILL: {'default':
                                               lambda: self.defaultTrueSkill,
                                               'update':
                                               self._getNewTrueSkillRatings,
                                               'prettify':
-                                              self.getPrettyTrueSkillRating,
+                                              self._getPrettyTrueSkillRating,
                                               'parity':
-                                              self.getTrueSkillParity},
+                                              self._getTrueSkillParity},
                         self.RATE_WINCOUNT: {'default': lambda: str(0),
                                              'update': self._getNewWinCounts,
                                              'prettify': str,
-                                             'parity': self.getWinCountParity},
+                                             'parity': self._getWinCountParity},
                         self.RATE_WINRATE: {'default':
                                             lambda: self.defaultWinRate,
                                             'update': self._getNewWinRates,
@@ -806,7 +806,7 @@ class League(object):
                                                'type': 'negative'}},
                                        "Rating")
         for i in xrange(len(ratings)):
-            ratings[i] = int(self.prettifyRating(ratings[i]))
+            ratings[i] = int(self._prettifyRating(ratings[i]))
         ratings.sort()
         index = len(ratings) * float(Decimal(percentile) / Decimal(100.0))
         index = min(int(index) + bool(index % 1), len(ratings) - 1)
@@ -1237,19 +1237,19 @@ class League(object):
         self.parent.log(desc, league=self.name, error=True)
 
     @noisy
-    def checkTeamCreator(self, creator, members):
+    def _checkTeamCreator(self, creator, members):
         if (creator not in members and
             creator not in self.mods):
             raise ImproperInput(str(creator) + " isn't able to" +
                                 " add a team that excludes them")
 
     @noisy
-    def checkTemplateAccess(self, playerID):
+    def _checkTemplateAccess(self, playerID):
         """returns True if a player can play on all templates"""
         tempIDs = self.templateIDs
         tempWLIDs, unusables = dict(), set()
         for ID in tempIDs:
-            self.addToSetWithinDict(tempWLIDs, tempIDs[ID]['WarlightID'], ID)
+            self._addToSetWithinDict(tempWLIDs, tempIDs[ID]['WarlightID'], ID)
         tempResults = self.handler.validateToken(int(playerID),
                                                  *tempWLIDs)
         for temp in tempWLIDs:
@@ -1259,7 +1259,7 @@ class League(object):
         return unusables
 
     @noisy
-    def handleAutodrop(self, teamID, templates):
+    def _handleAutodrop(self, teamID, templates):
         teams = self.teams.findEntities({'ID': {'value': teamID,
                                                 'type': 'positive'}})
         if len(teams) == 0:
@@ -1275,25 +1275,25 @@ class League(object):
         self._updateEntityValue(self.teams, teamID, Drops=drops)
 
     @noisy
-    def checkTeamMember(self, member, badTemps):
+    def _checkTeamMember(self, member, badTemps):
         if self._banned(member):
             raise ImproperInput(str(member) + " is banned from this league")
-        tempAccess = self.checkTemplateAccess(member)
+        tempAccess = self._checkTemplateAccess(member)
         for temp in tempAccess:
             badTemps.add(temp)
 
     @noisy
-    def autodropEligible(self, badTemps):
+    def _autodropEligible(self, badTemps):
         return (self.autodrop and (len(badTemps) <= self.dropLimit))
 
     @noisy
-    def handleTeamAutodrop(self, teamID, members, badTemps):
-        if self.autodropEligible(badTemps):
+    def _handleTeamAutodrop(self, teamID, members, badTemps):
+        if self._autodropEligible(badTemps):
             if teamID is None:
                 forcedDrops = (self.SEP_DROPS).join([str(t) for t in badTemps])
                 return forcedDrops
             else:
-                self.handleAutodrop(teamID, badTemps)
+                self._handleAutodrop(teamID, badTemps)
                 return ""
         else:
             memberStr = (self.SEP_PLYR).join(str(m) for m in members)
@@ -1301,13 +1301,13 @@ class League(object):
                                 % (memberStr))
 
     @noisy
-    def checkTeam(self, members, teamID=None):
+    def _checkTeam(self, members, teamID=None):
         badTemplates = set()
-        for member in members: self.checkTeamMember(member, badTemplates)
-        return self.handleTeamAutodrop(teamID, members, badTemplates)
+        for member in members: self._checkTeamMember(member, badTemplates)
+        return self._handleTeamAutodrop(teamID, members, badTemplates)
 
     @noisy
-    def checkLimit(self, limit):
+    def _checkLimit(self, limit):
         if not self._limitInRange(limit):
             if self.constrainLimit:
                 if limit < self.minLimit: return self.minLimit
@@ -1332,11 +1332,11 @@ class League(object):
 
     @property
     def currentID(self):
-        if self._currentID is None: self.setCurrentID()
+        if self._currentID is None: self._setCurrentID()
         return self._currentID
 
     @noisy
-    def setCurrentID(self):
+    def _setCurrentID(self):
         existingIDs = self.existingIDs
         if len(existingIDs) == 0:
             self._currentID = 0
@@ -1355,12 +1355,12 @@ class League(object):
         return result
 
     @noisy
-    def checkJoins(self):
+    def _checkJoins(self):
         if not self.joinsAllowed:
             raise ImproperInput("This league is not open to new teams")
 
     @staticmethod
-    def checkConsistentClan(members, required):
+    def _checkConsistentClan(members, required):
         if not required: return
         clans = {PlayerParser(member).clanID for member in members}
         if len(clans) > 1:
@@ -1368,24 +1368,24 @@ class League(object):
             raise ImproperInput(failStr)
 
     @noisy
-    def checkAuthorAndMembers(self, order):
+    def _checkAuthorAndMembers(self, order):
         author = int(order['author'])
         if self.onlyModsCanAdd and author not in self.mods:
             raise ImproperInput("Only mods or above can add teams")
         members = [int(member) for member in order['orders'][3:]]
-        self.checkTeamCreator(author, members)
-        self.checkConsistentClan(members, self.requireSameClan)
+        self._checkTeamCreator(author, members)
+        self._checkConsistentClan(members, self.requireSameClan)
         confirms = [(m == author) for m in members]
-        return self.checkTeam(members), members, confirms
+        return self._checkTeam(members), members, confirms
 
     @noisy
-    def checkEligible(self, order):
+    def _checkEligible(self, order):
         gameLimit = int(order['orders'][2])
-        forcedDrops, members, confirms = self.checkAuthorAndMembers(order)
-        return self.checkLimit(gameLimit), forcedDrops, members, confirms
+        forcedDrops, members, confirms = self._checkAuthorAndMembers(order)
+        return self._checkLimit(gameLimit), forcedDrops, members, confirms
 
     @noisy
-    def getTeamNameFromOrder(self, order, index=1):
+    def _getTeamNameFromOrder(self, order, index=1):
         teamName = order['orders'][index]
         if len(teamName) > self.nameLength:
             if self.constrainName: return teamName[:self.nameLength]
@@ -1393,10 +1393,10 @@ class League(object):
         return teamName
 
     @noisy
-    def addTeam(self, order):
-        self.checkJoins()
-        teamName = self.getTeamNameFromOrder(order)
-        gameLimit, forcedDrops, members, confirms = self.checkEligible(order)
+    def _addTeam(self, order):
+        self._checkJoins()
+        teamName = self._getTeamNameFromOrder(order)
+        gameLimit, forcedDrops, members, confirms = self._checkEligible(order)
         temp = sorted(zip(members, confirms))
         members, confirms = [x for (x, y) in temp], [y for (x, y) in temp]
         members = (self.SEP_PLYR).join([str(m) for m in members])
@@ -1412,7 +1412,7 @@ class League(object):
         self._currentID += 1
 
     @noisy
-    def retrieveTeamWithName(self, name):
+    def _retrieveTeamWithName(self, name):
         matches = self.teams.findEntities({'Name': {'value': name,
                                                     'type': 'positive'}})
         if len(matches) < 1:
@@ -1420,17 +1420,17 @@ class League(object):
         return matches[0]
 
     @noisy
-    def authorInTeam(self, author, team, allowMods=True):
+    def _authorInTeam(self, author, team, allowMods=True):
         if (allowMods and (author in self.mods)): return True
         return (str(author) in team['Players'].split(self.SEP_PLYR))
 
     @noisy
-    def fetchMatchingTeam(self, order, checkAuthor=True,
+    def _fetchMatchingTeam(self, order, checkAuthor=True,
                           allowMod=True):
         name, author, index = order['orders'][1], int(order['author']), None
-        matchingTeam = self.retrieveTeamWithName(name)
+        matchingTeam = self._retrieveTeamWithName(name)
         if (checkAuthor and
-            not self.authorInTeam(author, matchingTeam, allowMod)):
+            not self._authorInTeam(author, matchingTeam, allowMod)):
             raise ImproperInput(str(author) + " not in " + str(name))
         try:
             index = (matchingTeam['Players'].
@@ -1440,44 +1440,44 @@ class League(object):
         return matchingTeam, index
 
     @noisy
-    def toggleConfirm(self, order, confirm=True):
-        matchingTeam, index = self.fetchMatchingTeam(order, True, False)
+    def _toggleConfirm(self, order, confirm=True):
+        matchingTeam, index = self._fetchMatchingTeam(order, True, False)
         confirms = matchingTeam['Confirmations'].split(self.SEP_CONF)
         confirms[index] = "TRUE" if confirm else "FALSE"
-        self.updateConfirms(matchingTeam['ID'], confirms)
+        self._updateConfirms(matchingTeam['ID'], confirms)
 
     @noisy
-    def toggleTeamConfirm(self, order, confirm=True):
+    def _toggleTeamConfirm(self, order, confirm=True):
         author = int(order['author'])
         if (author in self.mods and len(order['orders']) > 2):
-            self.toggleConfirms(order, confirm=confirm)
-        else: self.toggleConfirm(order, confirm=confirm)
+            self._toggleConfirms(order, confirm=confirm)
+        else: self._toggleConfirm(order, confirm=confirm)
 
     @noisy
-    def confirmTeam(self, order):
-        self.toggleTeamConfirm(order)
+    def _confirmTeam(self, order):
+        self._toggleTeamConfirm(order)
 
     @noisy
-    def unconfirmTeam(self, order):
-        self.toggleTeamConfirm(order, confirm=False)
+    def _unconfirmTeam(self, order):
+        self._toggleTeamConfirm(order, confirm=False)
 
     @noisy
-    def toggleConfirms(self, order, confirm=True):
+    def _toggleConfirms(self, order, confirm=True):
         players = order['orders'][2:]
         teamName = order['orders'][1]
         for player in players:
             newOrder = {'author': int(player), 'orders': [self.name, teamName]}
-            self.toggleConfirm(newOrder, confirm=confirm)
+            self._toggleConfirm(newOrder, confirm=confirm)
 
     @noisy
-    def removeTeam(self, order):
+    def _removeTeam(self, order):
         if not self.allowRemoval:
             raise ImproperInput("Team removal has been disabled.")
-        matchingTeam = self.fetchMatchingTeam(order)[0]
+        matchingTeam = self._fetchMatchingTeam(order)[0]
         self._removeEntity(self.teams, matchingTeam['ID'])
 
     @noisy
-    def checkLimitChange(self, teamID, newLimit):
+    def _checkLimitChange(self, teamID, newLimit):
         if int(newLimit) <= 0: return
         elif self.activeCapacity is None: return
         elif not self.activeFull: return
@@ -1486,10 +1486,10 @@ class League(object):
             raise ImproperInput("League has reached max active teams.")
 
     @noisy
-    def setLimit(self, order):
-        matchingTeam = self.fetchMatchingTeam(order)[0]
-        self.checkLimitChange(matchingTeam.get('ID'), order['orders'][2])
-        self.changeLimit(matchingTeam.get('ID'), order['orders'][2])
+    def _setLimit(self, order):
+        matchingTeam = self._fetchMatchingTeam(order)[0]
+        self._checkLimitChange(matchingTeam.get('ID'), order['orders'][2])
+        self._changeLimit(matchingTeam.get('ID'), order['orders'][2])
 
     @property
     def templateIDs(self):
@@ -1497,15 +1497,15 @@ class League(object):
             {'Active': {'value': 'TRUE', 'type': 'positive'}}, "ID")
 
     @noisy
-    def validScheme(self, tempData):
+    def _validScheme(self, tempData):
         schemes = set(tempData['Schemes'].split(self.SEP_SCHEMES))
         return (len(schemes.intersection({self.scheme, self.KW_ALL})) > 0)
 
     @noisy
-    def narrowToValidSchemes(self, templates):
+    def _narrowToValidSchemes(self, templates):
         results = dict()
         for template in templates:
-            if self.validScheme(templates[template]):
+            if self._validScheme(templates[template]):
                 results[template] = templates[template]
         return results
 
@@ -1513,7 +1513,7 @@ class League(object):
     def usableTemplateIDs(self):
         retvals = self.templateIDs
         if self.multischeme:
-            return self.narrowToValidSchemes(retvals)
+            return self._narrowToValidSchemes(retvals)
         return retvals
 
     @property
@@ -1529,7 +1529,7 @@ class League(object):
         return tempInfo
 
     @noisy
-    def findMatchingTemplate(self, templateName):
+    def _findMatchingTemplate(self, templateName):
         IDs = self.templates.findValue({'ID': {'value': '',
                                                'type': 'negative'},
                                         'Name': {'value': templateName,
@@ -1538,29 +1538,29 @@ class League(object):
         return IDs[0]
 
     @noisy
-    def getExistingDrops(self, order):
-        teamData = self.fetchMatchingTeam(order)[0]
+    def _getExistingDrops(self, order):
+        teamData = self._fetchMatchingTeam(order)[0]
         existingDrops = teamData.get('Drops')
         existingDrops = set(existingDrops.split(self.SEP_DROPS))
         teamID = teamData.get('ID')
         return teamID, existingDrops
 
     @noisy
-    def updateTeamDrops(self, teamID, drops):
+    def _updateTeamDrops(self, teamID, drops):
         dropStr = (self.SEP_DROPS).join(set(str(x) for x in drops))
         self._updateEntityValue(self.teams, teamID, Drops=dropStr)
 
-    def findAndDrop(self, templateNames, existingDrops):
+    def _findAndDrop(self, templateNames, existingDrops):
         for templateName in templateNames:
-            temp = self.findMatchingTemplate(templateName)
+            temp = self._findMatchingTemplate(templateName)
             if temp is None: continue
             existingDrops.add(str(temp.get('ID')))
 
     @noisy
-    def dropTemplates(self, order):
+    def _dropTemplates(self, order):
         templateNames = order['orders'][2:]
         teamName = order['orders'][1]
-        teamID, existingDrops = self.getExistingDrops(order)
+        teamID, existingDrops = self._getExistingDrops(order)
         remainingDrops = (self.dropLimit - len(existingDrops))
         if remainingDrops < 1:
             raise ImproperInput("Team %s already reached its drop limit" %
@@ -1570,21 +1570,21 @@ class League(object):
                        % (teamName, remainingDrops))
             self.parent.log(dataStr, self.name, error=True)
             templateNames = templateNames[:remainingDrops]
-        self.findAndDrop(templateNames, existingDrops)
-        self.updateTeamDrops(teamID, existingDrops)
+        self._findAndDrop(templateNames, existingDrops)
+        self._updateTeamDrops(teamID, existingDrops)
 
     @noisy
-    def undropTemplates(self, order):
+    def _undropTemplates(self, order):
         templateNames = order['orders'][2:]
-        teamID, existingDrops = self.getExistingDrops(order)
+        teamID, existingDrops = self._getExistingDrops(order)
         for templateName in templateNames:
-            temp = self.findMatchingTemplate(templateName)
+            temp = self._findMatchingTemplate(templateName)
             if (temp is not None and str(temp.get('ID')) in existingDrops):
                 existingDrops.remove(str(temp.get('ID')))
-        self.updateTeamDrops(teamID, existingDrops)
+        self._updateTeamDrops(teamID, existingDrops)
 
     @noisy
-    def toggleActivity(self, order, setTo):
+    def _toggleActivity(self, order, setTo):
         author = int(order['author'])
         if author not in self.mods:
             raise ImproperInput("Only mods can toggle template active status")
@@ -1593,35 +1593,35 @@ class League(object):
                                 Active=setTo)
 
     @noisy
-    def activateTemplate(self, order):
-        self.toggleActivity(order, 'TRUE')
+    def _activateTemplate(self, order):
+        self._toggleActivity(order, 'TRUE')
 
     @noisy
-    def deactivateTemplate(self, order):
+    def _deactivateTemplate(self, order):
         if self.templateCount <= self.minTemplates:
             raise ImproperInput("Not enough active templates to deactivate")
-        self.toggleActivity(order, 'FALSE')
+        self._toggleActivity(order, 'FALSE')
 
     @property
     def allTeams(self):
         return self._getExtantEntities(self.teams)
 
     @noisy
-    def getPlayersFromOrder(self, order):
+    def _getPlayersFromOrder(self, order):
         author = int(order['author'])
         if (author in self.mods and len(order['orders']) > 1):
             return set(order['orders'][1:])
         return set([str(author),])
 
     @noisy
-    def updateConfirms(self, teamID, confirms, identifier='ID'):
+    def _updateConfirms(self, teamID, confirms, identifier='ID'):
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
         self._updateEntityValue(self.teams, teamID, identifier=identifier,
                                 Confirmations=confirms)
 
     @noisy
-    def quitLeague(self, order):
-        players = self.getPlayersFromOrder(order)
+    def _quitLeague(self, order):
+        players = self._getPlayersFromOrder(order)
         for team in self.allTeams:
             members = team['Players'].split(self.SEP_PLYR)
             confirms = team['Confirmations'].split(self.SEP_CONF)
@@ -1630,7 +1630,7 @@ class League(object):
                 if player in members:
                     hit, index = True, members.index(player)
                     confirms[index] = "FALSE"
-            if hit: self.updateConfirms(team['ID'], confirms)
+            if hit: self._updateConfirms(team['ID'], confirms)
 
     @property
     def usedTemplates(self):
@@ -1641,25 +1641,25 @@ class League(object):
         return results
 
     @noisy
-    def confirmAdmin(self, author, ordType):
+    def _confirmAdmin(self, author, ordType):
         if author != self.admin:
             raise ImproperInput("%s orders are only usable by admins" %
                                 (ordType))
 
     @property
-    def newTempGameCount(self):
+    def _newTempGameCount(self):
         if self.favorNewTemplates: return 0
         existingTemps = self.activeTemplates
         countSum = sum(t['Usage'] for t in existingTemps)
         return int(round(Decimal(countSum) / Decimal(len(existingTemps))))
 
     @noisy
-    def addTemplate(self, order):
-        self.confirmAdmin(int(order['author']), order['type'])
+    def _addTemplate(self, order):
+        self._confirmAdmin(int(order['author']), order['type'])
         used, nexti, orders = self.usedTemplates, 3, order['orders']
         tempName, warlightID = orders[1:3]
         ID = (max(used) + 1) if len(used) else 0
-        gameCount = self.newTempGameCount
+        gameCount = self._newTempGameCount
         tempDict = {'ID': ID, 'Name': tempName, 'WarlightID': warlightID,
                     'Active': 'TRUE', 'Usage': gameCount}
         if self.multischeme: tempDict['Schemes'], nexti = orders[3], 4
@@ -1668,38 +1668,38 @@ class League(object):
         self.templates.addEntity(tempDict)
 
     @noisy
-    def renameTeam(self, order):
-        matchingTeam = self.fetchMatchingTeam(order)[0]
-        newName = self.getTeamNameFromOrder(order, 2)
+    def _renameTeam(self, order):
+        matchingTeam = self._fetchMatchingTeam(order)[0]
+        newName = self._getTeamNameFromOrder(order, 2)
         self._updateEntityValue(self.teams, matchingTeam['ID'],
                                 identifier='ID', Name=newName)
 
     @runPhase
-    def executeOrders(self):
+    def _executeOrders(self):
         for order in self.orders:
             orderType = order['type'].lower()
             try:
-                {self.ORD_ADD_TEAM: self.addTeam,
-                 self.ORD_CONFIRM_TEAM: self.confirmTeam,
-                 self.ORD_UNCONFIRM_TEAM: self.unconfirmTeam,
-                 self.ORD_SET_LIMIT: self.setLimit,
-                 self.ORD_REMOVE_TEAM: self.removeTeam,
-                 self.ORD_DROP_TEMPLATE: self.dropTemplates,
-                 self.ORD_UNDROP_TEMPLATE: self.undropTemplates,
-                 self.ORD_DROP_TEMPLATES: self.dropTemplates,
-                 self.ORD_UNDROP_TEMPLATES: self.undropTemplates,
-                 self.ORD_ACTIVATE_TEMPLATE: self.activateTemplate,
-                 self.ORD_DEACTIVATE_TEMPLATE: self.deactivateTemplate,
-                 self.ORD_QUIT_LEAGUE: self.quitLeague,
-                 self.ORD_ADD_TEMPLATE: self.addTemplate,
-                 self.ORD_RENAME_TEAM: self.renameTeam
+                {self.ORD_ADD_TEAM: self._addTeam,
+                 self.ORD_CONFIRM_TEAM: self._confirmTeam,
+                 self.ORD_UNCONFIRM_TEAM: self._unconfirmTeam,
+                 self.ORD_SET_LIMIT: self._setLimit,
+                 self.ORD_REMOVE_TEAM: self._removeTeam,
+                 self.ORD_DROP_TEMPLATE: self._dropTemplates,
+                 self.ORD_UNDROP_TEMPLATE: self._undropTemplates,
+                 self.ORD_DROP_TEMPLATES: self._dropTemplates,
+                 self.ORD_UNDROP_TEMPLATES: self._undropTemplates,
+                 self.ORD_ACTIVATE_TEMPLATE: self._activateTemplate,
+                 self.ORD_DEACTIVATE_TEMPLATE: self._deactivateTemplate,
+                 self.ORD_QUIT_LEAGUE: self._quitLeague,
+                 self.ORD_ADD_TEMPLATE: self._addTemplate,
+                 self.ORD_RENAME_TEAM: self._renameTeam
                 }[orderType](order)
             except Exception as e:
                 if len(str(e)): # exception has some description string
                     self.parent.log(str(e), self.name, error=True)
                 else:
                     self._logFailedOrder(order)
-        self.updateRanks()
+        self._updateRanks()
 
     @property
     def unfinishedGames(self):
@@ -1847,7 +1847,7 @@ class League(object):
 
     @noisy
     def _getEloRating(self, teamID):
-        return int(self.getTeamRating(teamID))
+        return int(self._getTeamRating(teamID))
 
     @noisy
     def _getSideEloRating(self, side):
@@ -1893,7 +1893,7 @@ class League(object):
 
     @noisy
     def _getGlickoRating(self, teamID):
-        return self.splitRating(self.getTeamRating(teamID))
+        return self._splitRating(self._getTeamRating(teamID))
 
     @noisy
     def _getSideGlickoRating(self, side):
@@ -1965,7 +1965,7 @@ class League(object):
 
     @noisy
     def _getTrueSkillRating(self, teamID):
-        mu, sigma = self.splitRating(self.getTeamRating(teamID))
+        mu, sigma = self._splitRating(self._getTeamRating(teamID))
         return self.trueSkillEnv.create_rating(mu, sigma)
 
     @noisy
@@ -1991,14 +1991,14 @@ class League(object):
         results = dict()
         winningTeams = sides[winningSide]
         for team in winningTeams:
-            count = self.getTeamRating(team)
+            count = self._getTeamRating(team)
             count = str(int(count) + 1)
             results[team] = count
         return results
 
     @noisy
     def _getWinRate(self, team):
-        rating = self.getTeamRating(team)
+        rating = self._getTeamRating(team)
         winRate, numGames = rating.split(self.SEP_RTG)
         winRate = int(winRate)
         numGames = int(numGames)
@@ -2065,7 +2065,7 @@ class League(object):
         if not self.removeBoots: return
         bootedTeams = self._findTeamsFromData(gameData, booted)
         for team in bootedTeams:
-            self.changeLimit(team, 0)
+            self._changeLimit(team, 0)
 
     @noisy
     def _updateWinners(self, gameID, groups):
@@ -2084,10 +2084,10 @@ class League(object):
     @noisy
     def _handleSpecialDeclines(self, losingTeams, template):
         if self.countDeclinesAsVetos:
-            self.updateGameVetos(losingTeams, template)
+            self._updateGameVetos(losingTeams, template)
         if self.removeDeclines:
             for team in losingTeams:
-                self.changeLimit(team, 0)
+                self._changeLimit(team, 0)
 
     @staticmethod
     def _makeFakeSides(sides, losingTeams):
@@ -2108,7 +2108,7 @@ class League(object):
         template = str(gameData['Template'])
         self._handleSpecialDeclines(losingTeams, template)
         sides, winningSide = self._makeFakeSides(sides, losingTeams)
-        if winningSide is None: self.updateVeto(gameID)
+        if winningSide is None: self._updateVeto(gameID)
         self._updateResults(gameID, sides, winningSide,
                             adj=self.penalizeDeclines, declined=True)
 
@@ -2136,37 +2136,37 @@ class League(object):
         return results
 
     @noisy
-    def getGameSides(self, gameID):
+    def _getGameSides(self, gameID):
         gameData = self._fetchGameData(gameID)
         return self._getGameSidesFromData(gameData)
 
     @noisy
-    def usingTempTeams(self, team):
+    def _usingTempTeams(self, team):
         return (self.tempTeams is not None and str(team) in self.tempTeams)
 
     @noisy
-    def getTeamRating(self, team):
+    def _getTeamRating(self, team):
         team = str(team)
-        if self.usingTempTeams(team): return self.tempTeams[str(team)]
+        if self._usingTempTeams(team): return self.tempTeams[str(team)]
         teamData = self._fetchTeamData(team)
         return teamData['Rating']
 
     @noisy
-    def adjustRating(self, team, adjustment):
-        rating = list(self.splitRating(self.getTeamRating(team)))
+    def _adjustRating(self, team, adjustment):
+        rating = list(self._splitRating(self._getTeamRating(team)))
         rating[0] += adjustment
         rating = self._unsplitRtg(rating)
-        if self.usingTempTeams(team): self.tempTeams[str(team)] = rating
+        if self._usingTempTeams(team): self.tempTeams[str(team)] = rating
         else: self._updateEntityValue(self.teams, team, Rating=rating)
 
     @noisy
-    def penalizeVeto(self, gameData):
+    def _penalizeVeto(self, gameData):
         teams = self._getGameTeams(gameData)
         for team in teams:
-            self.adjustRating(team, -self.vetoPenalty)
+            self._adjustRating(team, -self.vetoPenalty)
 
     @noisy
-    def vetoCurrentTemplate(self, gameData):
+    def _vetoCurrentTemplate(self, gameData):
         vetos = gameData['Vetoed'] + self.SEP_VETOS + str(gameData['Template'])
         if vetos[0] == self.SEP_VETOS: vetos = vetos[1:]
         vetoCount = int(gameData['Vetos']) + 1
@@ -2175,51 +2175,51 @@ class League(object):
         self._adjustTemplateGameCount(gameData['Template'], -1)
 
     @noisy
-    def setGameTemplate(self, gameData, tempID):
+    def _setGameTemplate(self, gameData, tempID):
         self._updateEntityValue(self.games, gameData['ID'], Template=tempID)
         self._adjustTemplateGameCount(tempID, 1)
         gameData['Template'] = tempID
 
     @classmethod
-    def getPlayersFromData(cls, data):
-        return cls.unpackInts(data['Players'], cls.SEP_PLYR)
+    def _getPlayersFromData(cls, data):
+        return cls._unpackInts(data['Players'], cls.SEP_PLYR)
 
     @noisy
-    def getTeamPlayers(self, team):
-        return self.getPlayersFromData(self._fetchTeamData(team))
+    def _getTeamPlayers(self, team):
+        return self._getPlayersFromData(self._fetchTeamData(team))
 
     @noisy
-    def getSidePlayers(self, side):
+    def _getSidePlayers(self, side):
         players = list()
         for team in side:
-            players += self.getTeamPlayers(team)
+            players += self._getTeamPlayers(team)
         return players
 
     @noisy
-    def assembleTeams(self, gameData):
+    def _assembleTeams(self, gameData):
         teams = list()
         sides = gameData['Sides'].split(self.SEP_SIDES)
         for side in sides:
             sideTeams = side.split(self.SEP_TEAMS)
-            teams.append(tuple(self.getSidePlayers(sideTeams)))
+            teams.append(tuple(self._getSidePlayers(sideTeams)))
         return teams
 
     @noisy
-    def getTeamName(self, teamID):
+    def _getTeamName(self, teamID):
         teamData = self._fetchTeamData(teamID)
         return teamData['Name']
 
     @noisy
-    def getNameInfo(self, side, maxLen=None):
+    def _getNameInfo(self, side, maxLen=None):
         nameInfo = list()
         for team in side.split(self.SEP_TEAMS):
             nameInfo.append("+")
-            teamName = self.fitToMaxLen(self.getTeamName(team), maxLen)
+            teamName = self._fitToMaxLen(self._getTeamName(team), maxLen)
             nameInfo.append(teamName)
         return nameInfo[1:]
 
     @staticmethod
-    def fitToMaxLen(val, maxLen, replace="..."):
+    def _fitToMaxLen(val, maxLen, replace="..."):
         if maxLen is not None and len(val) > maxLen:
             replace = replace[:maxLen]
             repLen = len(replace)
@@ -2227,52 +2227,52 @@ class League(object):
         return val
 
     @noisy
-    def getGameName(self, gameData, maxLen=50):
+    def _getGameName(self, gameData, maxLen=50):
         start = self.leagueAcronym + " | "
         nameData = list()
         for side in gameData['Sides'].split(self.SEP_SIDES):
             nameData.append(" vs ")
-            nameInfo = self.getNameInfo(side, self.nameLength)
+            nameInfo = self._getNameInfo(side, self.nameLength)
             nameData += nameInfo
-        name = self.fitToMaxLen((start + "".join(nameData[1:])),
+        name = self._fitToMaxLen((start + "".join(nameData[1:])),
                                 maxLen)
         return name
 
     @noisy
-    def getPrettyGlickoRating(self, rating):
+    def _getPrettyGlickoRating(self, rating):
         return rating.split(self.SEP_RTG)[0]
 
     @noisy
-    def getPrettyTrueSkillRating(self, rating):
+    def _getPrettyTrueSkillRating(self, rating):
         mu, sigma = [int(i) for i in rating.split(self.SEP_RTG)]
         return str(mu - 3 * sigma)
 
     @noisy
-    def prettifyRating(self, rating):
+    def _prettifyRating(self, rating):
         return self.sysDict[self.ratingSystem]['prettify'](rating)
 
     @noisy
-    def getPrettyRating(self, team):
-        teamRating = self.getTeamRating(team)
-        return self.prettifyRating(teamRating)
+    def _getPrettyRating(self, team):
+        teamRating = self._getTeamRating(team)
+        return self._prettifyRating(teamRating)
 
     @noisy
-    def getOfficialRating(self, team):
-        return int(self.getPrettyRating(team))
+    def _getOfficialRating(self, team):
+        return int(self._getPrettyRating(team))
 
     @noisy
-    def getTeamRank(self, team):
+    def _getTeamRank(self, team):
         teamData = self._fetchTeamData(team)
         return int(teamData['Rank'])
 
     @noisy
-    def sideInfo(self, gameData):
+    def _sideInfo(self, gameData):
         infoData = list()
         sides = gameData['Sides']
         for side in sides.split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
                 teamData = self._fetchTeamData(team)
-                teamRating = self.prettifyRating(teamData['Rating'])
+                teamRating = self._prettifyRating(teamData['Rating'])
                 teamRank = teamData['Rank']
                 teamName = teamData['Name']
                 if teamRank is '':
@@ -2287,19 +2287,19 @@ class League(object):
         return infoStr
 
     @staticmethod
-    def makeThread(thread):
+    def _makeThread(thread):
         if '/Forum/' in str(thread): return thread
         return ('https://www.warlight.net/Forum/' + str(thread))
 
     @noisy
-    def makeInterface(self, interface):
+    def _makeInterface(self, interface):
         if (isinstance(interface, str) and not isInteger(interface) and
             'warlight.net/Forum/' not in interface):
             return interface
-        return self.makeThread(interface)
+        return self._makeThread(interface)
 
     @noisy
-    def getTemplateName(self, gameData):
+    def _getTemplateName(self, gameData):
         templateID = gameData['Template']
         tempData = self._fetchTemplateData(templateID)
         return tempData['Name']
@@ -2310,7 +2310,7 @@ class League(object):
         return str(parser.name)
 
     @staticmethod
-    def adaptMessage(message, replaceDict):
+    def _adaptMessage(message, replaceDict):
         for val in replaceDict:
             checkStr = "{{%s}}" % val
             if checkStr in message:
@@ -2318,15 +2318,15 @@ class League(object):
         return message
 
     @noisy
-    def processMessage(self, message, gameData):
+    def _processMessage(self, message, gameData):
         leagueName = lambda: self.name
         clusterName = lambda: self.clusterName
         leagueUrl = lambda: self.leagueUrl
         vetoLimit = lambda: self.vetoLimit
         vetos = lambda: gameData['Vetos']
-        makeInterface = lambda: self.makeInterface(self.thread)
-        sideInfo = lambda: self.sideInfo(gameData)
-        tempName = lambda: self.getTemplateName(gameData)
+        makeInterface = lambda: self._makeInterface(self.thread)
+        sideInfo = lambda: self._sideInfo(gameData)
+        tempName = lambda: self._getTemplateName(gameData)
         adminName = lambda: self.adminName
         expThresh = lambda: self.expiryThreshold
         replaceDict = {'_LEAGUE_NAME': leagueName,
@@ -2339,16 +2339,16 @@ class League(object):
                        '_TEMPLATE_NAME': tempName,
                        '_LEAGUE_ADMIN': adminName,
                        '_ABANDON_THRESHOLD': expThresh}
-        return self.adaptMessage(message, replaceDict)
+        return self._adaptMessage(message, replaceDict)
 
     @noisy
-    def getGameMessage(self, gameData):
+    def _getGameMessage(self, gameData):
         MAX_MESSAGE_LEN = 2048
-        msg = self.processMessage(self.leagueMessage, gameData)
-        return self.fitToMaxLen(msg, MAX_MESSAGE_LEN)
+        msg = self._processMessage(self.leagueMessage, gameData)
+        return self._fitToMaxLen(msg, MAX_MESSAGE_LEN)
 
     @noisy
-    def getAllGameTeams(self, gameData):
+    def _getAllGameTeams(self, gameData):
         allTeams = list()
         for side in gameData['Sides'].split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
@@ -2356,11 +2356,11 @@ class League(object):
         return allTeams
 
     @staticmethod
-    def getOtherTeams(teams, team):
+    def _getOtherTeams(teams, team):
         return [t for t in teams if t != team]
 
     @noisy
-    def updateTeamHistory(self, team, others):
+    def _updateTeamHistory(self, team, others):
         oldHistory = self._fetchTeamData(team)['History']
         newStr = (self.SEP_TEAMS).join(others)
         newHistory = (oldHistory + (self.SEP_TEAMS if len(oldHistory) else "")
@@ -2368,18 +2368,18 @@ class League(object):
         self._updateEntityValue(self.teams, team, History=newHistory)
 
     @noisy
-    def updateHistories(self, gameData):
-        allTeams = self.getAllGameTeams(gameData)
+    def _updateHistories(self, gameData):
+        allTeams = self._getAllGameTeams(gameData)
         for team in allTeams:
-            otherTeams = self.getOtherTeams(allTeams, team)
-            self.updateTeamHistory(team, otherTeams)
+            otherTeams = self._getOtherTeams(allTeams, team)
+            self._updateTeamHistory(team, otherTeams)
 
     @staticmethod
-    def strBeginsWith(val, checkStr):
+    def _strBeginsWith(val, checkStr):
         return (val[:len(checkStr)] == checkStr)
 
     @noisy
-    def addTempSetting(self, settings, head, data):
+    def _addTempSetting(self, settings, head, data):
         head = head[len(self.KW_TEMPSETTING):]
         head, target = head.split(self.SEP_TEMPSET), settings
         for i in xrange(len(head)):
@@ -2391,34 +2391,34 @@ class League(object):
                 target = target[elem]
 
     @noisy
-    def addTempOverride(self, overrides, head, data):
+    def _addTempOverride(self, overrides, head, data):
         head = head[len(self.KW_TEMPOVERRIDE):]
         overrides.append((head, int(data)))
 
     @noisy
-    def getTempSettings(self, tempID):
+    def _getTempSettings(self, tempID):
         tempData = self._fetchTemplateData(tempID)
         template = tempData['WarlightID']
         settingsDict, overrides = dict(), list()
         for head in tempData:
             if (tempData[head] == ''): continue
-            elif self.strBeginsWith(head, self.KW_TEMPSETTING):
-                self.addTempSetting(settingsDict, head, tempData[head])
-            elif self.strBeginsWith(head, self.KW_TEMPOVERRIDE):
-                self.addTempOverride(overrides, head, tempData[head])
+            elif self._strBeginsWith(head, self.KW_TEMPSETTING):
+                self._addTempSetting(settingsDict, head, tempData[head])
+            elif self._strBeginsWith(head, self.KW_TEMPOVERRIDE):
+                self._addTempOverride(overrides, head, tempData[head])
         return template, settingsDict, overrides
 
     @noisy
-    def createGameFromData(self, gameData):
+    def _createGameFromData(self, gameData):
         temp = int(gameData['Template'])
-        tempID, tempSettings, overrides = self.getTempSettings(temp)
-        teams = self.assembleTeams(gameData)
+        tempID, tempSettings, overrides = self._getTempSettings(temp)
+        teams = self._assembleTeams(gameData)
         try:
-            wlID = self.handler.createGame(tempID, self.getGameName(gameData),
+            wlID = self.handler.createGame(tempID, self._getGameName(gameData),
                        teams, settingsDict=tempSettings,
                        overridenBonuses=overrides,
                        teamless=self.teamless,
-                       message=self.getGameMessage(gameData))
+                       message=self._getGameMessage(gameData))
             self._adjustTemplateGameCount(temp, 1)
             createdStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
             self._updateEntityValue(self.games, gameData['ID'],
@@ -2431,41 +2431,41 @@ class League(object):
             self._removeEntity(self.games, gameData['ID'])
 
     @noisy
-    def createGame(self, gameID):
+    def _createGame(self, gameID):
         gameData = self._fetchGameData(gameID)
-        self.createGameFromData(gameData)
+        self._createGameFromData(gameData)
 
     @noisy
-    def makeGame(self, gameID):
-        gameData = self.createGame(gameID)
+    def _makeGame(self, gameID):
+        gameData = self._createGame(gameID)
         if gameData is None: return
         for side in gameData['Sides'].split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
                 self._adjustTeamGameCount(team, 1)
-        self.updateHistories(gameData)
+        self._updateHistories(gameData)
 
     @noisy
-    def getGameVetos(self, gameData):
+    def _getGameVetos(self, gameData):
         vetos = set([v for v in gameData['Vetoed'].split(self.SEP_VETOS)])
         for side in gameData['Sides'].split(self.SEP_SIDES):
             for team in side.split(self.SEP_TEAMS):
                 teamData = self._fetchTeamData(team)
-                self.updateConflicts(teamData, vetos)
+                self._updateConflicts(teamData, vetos)
         return set(int(v) for v in vetos)
 
     @noisy
-    def updateTemplate(self, gameData):
-        vetos, ranks, i = self.getGameVetos(gameData), self.templateRanks, 0
+    def _updateTemplate(self, gameData):
+        vetos, ranks, i = self._getGameVetos(gameData), self.templateRanks, 0
         while (i < len(ranks) and ranks[i][0] in vetos): i += 1
         if i < len(ranks):
             newTemp = ranks[i][0]
-            self.setGameTemplate(gameData, newTemp)
-            self.createGameFromData(gameData)
+            self._setGameTemplate(gameData, newTemp)
+            self._createGameFromData(gameData)
         else:
             self._deleteGame(gameData)
 
     @classmethod
-    def getVetoDict(cls, vetos):
+    def _getVetoDict(cls, vetos):
         results = dict()
         for temp in vetos.split(cls.SEP_VETOS):
             if len(temp) == 0: continue
@@ -2474,41 +2474,41 @@ class League(object):
         return results
 
     @noisy
-    def getTeamVetoDict(self, teamID):
+    def _getTeamVetoDict(self, teamID):
         teamData = self._fetchTeamData(teamID)
-        return self.getVetoDict(teamData['Vetos'])
+        return self._getVetoDict(teamData['Vetos'])
 
     @noisy
-    def packageVetoDict(self, vetoDict):
+    def _packageVetoDict(self, vetoDict):
         tempData = [(str(temp) + self.SEP_VETOCT + str(vetoDict[temp]))
                     for temp in vetoDict]
         return (self.SEP_VETOS).join(tempData)
 
     @noisy
-    def updateVetoCt(self, oldVetos, template, adj):
-        vetoDict = self.getVetoDict(oldVetos)
+    def _updateVetoCt(self, oldVetos, template, adj):
+        vetoDict = self._getVetoDict(oldVetos)
         template = int(template)
         if template not in vetoDict: vetoDict[template] = int(adj)
         else: vetoDict[template] += int(adj)
-        return self.packageVetoDict(vetoDict)
+        return self._packageVetoDict(vetoDict)
 
     @noisy
-    def updateTeamVetos(self, team, template, adj):
+    def _updateTeamVetos(self, team, template, adj):
         teamData = self._fetchTeamData(team)
         oldVetos = teamData['Vetos']
         if str(template) not in oldVetos:
             newVetos = (oldVetos + self.SEP_VETOS + str(template) +
                         self.SEP_VETOCT + str(adj))
             if len(oldVetos) == 0: newVetos = newVetos[1:]
-        else: newVetos = self.updateVetoCt(oldVetos, template, adj)
+        else: newVetos = self._updateVetoCt(oldVetos, template, adj)
         self._updateEntityValue(self.teams, team, Vetos=newVetos)
 
     @noisy
-    def updateGameVetos(self, teams, template):
-        for team in teams: self.updateTeamVetos(team, template, 1)
+    def _updateGameVetos(self, teams, template):
+        for team in teams: self._updateTeamVetos(team, template, 1)
 
     @classmethod
-    def getTeams(cls, gameData):
+    def _getTeams(cls, gameData):
         results = set()
         sides = gameData['Sides'].split(cls.SEP_SIDES)
         for side in sides:
@@ -2518,46 +2518,46 @@ class League(object):
         return results
 
     @noisy
-    def updateVeto(self, gameID):
+    def _updateVeto(self, gameID):
         gameData = self._fetchGameData(gameID)
         if int(gameData['Vetos']) >= self.vetoLimit:
-            self.penalizeVeto(gameData)
+            self._penalizeVeto(gameData)
             self._deleteGame(gameData)
         else:
             template = gameData['Template']
-            self.vetoCurrentTemplate(gameData)
-            self.updateGameVetos(self.getTeams(gameData), template)
-            self.updateTemplate(gameData)
+            self._vetoCurrentTemplate(gameData)
+            self._updateGameVetos(self._getTeams(gameData), template)
+            self._updateTemplate(gameData)
 
     @staticmethod
-    def getOneArgFunc(fun, *args):
+    def _getOneArgFunc(fun, *args):
         return lambda x: fun(x, *args)
 
     @noisy
-    def updateGame(self, warlightID, gameID, createdTime):
+    def _updateGame(self, warlightID, gameID, createdTime):
         created = datetime.strptime(createdTime, self.TIMEFORMAT)
         status = self._fetchGameStatus(warlightID, created)
         if status is not None:
-            updateWin = self.getOneArgFunc(self._updateWinners, status[1:])
-            updateDecline = self.getOneArgFunc(self._updateDecline, status[1])
+            updateWin = self._getOneArgFunc(self._updateWinners, status[1:])
+            updateDecline = self._getOneArgFunc(self._updateDecline, status[1])
             {'FINISHED': updateWin, 'DECLINED': updateDecline,
-             'ABANDONED': self.updateVeto}.get(status[0])(gameID)
+             'ABANDONED': self._updateVeto}.get(status[0])(gameID)
 
     @noisy
-    def wipeRank(self, teamID):
+    def _wipeRank(self, teamID):
         self._updateEntityValue(self.teams, teamID, Rank='')
 
     @noisy
-    def eligibleForRank(self, teamData):
+    def _eligibleForRank(self, teamData):
         return (int(teamData['Finished']) >= self.minToRank and
                 int(teamData['Limit']) >= self.minLimitToRank)
 
     @staticmethod
-    def hasRank(teamData):
+    def _hasRank(teamData):
         return (teamData['Rank'] is not '')
 
     @noisy
-    def rankUsingRatings(self, teamRatings):
+    def _rankUsingRatings(self, teamRatings):
         teamRatings.sort(key = lambda x: x[1]) # sort using ratings
         teamRatings.reverse()
         rank, previous, offset = 0, None, 0
@@ -2570,158 +2570,158 @@ class League(object):
             self._updateEntityValue(self.teams, teamID, Rank=rank)
 
     @noisy
-    def updateRanks(self):
+    def _updateRanks(self):
         teamRatings = list()
         for team in self.allTeams:
-            if self.eligibleForRank(team):
+            if self._eligibleForRank(team):
                 teamRatings.append((team['ID'],
-                                    self.getOfficialRating(team['ID'])))
-            elif self.hasRank(team): self.wipeRank(team['ID'])
-        self.rankUsingRatings(teamRatings)
+                                    self._getOfficialRating(team['ID'])))
+            elif self._hasRank(team): self._wipeRank(team['ID'])
+        self._rankUsingRatings(teamRatings)
 
     @runPhase
-    def updateGames(self):
+    def _updateGames(self):
         gamesToCheck = self.unfinishedGames
         for game in gamesToCheck:
             try:
-                self.updateGame(game, gamesToCheck[game]['ID'],
+                self._updateGame(game, gamesToCheck[game]['ID'],
                                 gamesToCheck[game]['Created'])
             except (SheetErrors.SheetError, SheetErrors.DataError):
                 self.parent.log("Failed to update game: " + str(game),
                                 league=self.name, error=True)
 
     @noisy
-    def checkExcess(self, playerCount):
+    def _checkExcess(self, playerCount):
         if self.teamLimit is None: return False
         return (playerCount > self.teamLimit)
 
     @noisy
-    def changeLimit(self, teamID, limit):
+    def _changeLimit(self, teamID, limit):
         limit = int(limit)
-        limit = self.checkLimit(limit) if limit != 0 else 0
+        limit = self._checkLimit(limit) if limit != 0 else 0
         self._updateEntityValue(self.teams, teamID, Limit=limit)
 
     @classmethod
-    def updatePlayerCounts(cls, playerCounts, players):
+    def _updatePlayerCounts(cls, playerCounts, players):
         for player in players:
-            cls.updateCountInDict(playerCounts, player)
+            cls._updateCountInDict(playerCounts, player)
 
     @noisy
-    def setProbation(self, teamID, start=None):
+    def _setProbation(self, teamID, start=None):
         if start is None: probStr = ''
         else: probStr = datetime.strftime(start, self.TIMEFORMAT)
         self._updateEntityValue(self.teams, teamID,
                                **{'Probation Start': probStr})
 
     @noisy
-    def wipeProbation(self, teamID):
-        self.setProbation(teamID)
+    def _wipeProbation(self, teamID):
+        self._setProbation(teamID)
 
     @noisy
-    def startProbation(self, teamID):
-        self.setProbation(teamID, datetime.now())
+    def _startProbation(self, teamID):
+        self._setProbation(teamID, datetime.now())
 
     @noisy
-    def meetsRetention(self, teamData):
+    def _meetsRetention(self, teamData):
         teamFinished = int(teamData['Finished'])
-        teamRating = int(self.prettifyRating(teamData['Rating']))
+        teamRating = int(self._prettifyRating(teamData['Rating']))
         teamRank = int(teamData['Rank'])
         return (teamFinished < self.minToCull or
                 (self._valueInRange(teamRating, self.minRating, None) and
                  self._valueInRange(teamRank, None, self.maxRank)))
 
     @noisy
-    def checkTeamRatingUsingData(self, teamID, teamData):
+    def _checkTeamRatingUsingData(self, teamID, teamData):
         start = teamData['Probation Start']
-        if self.meetsRetention(teamData):
-            if len(start) > 0: self.wipeProbation(teamID)
+        if self._meetsRetention(teamData):
+            if len(start) > 0: self._wipeProbation(teamID)
         elif len(start) == 0:
-            self.startProbation(teamID)
+            self._startProbation(teamID)
         else: # already on probation
             start = datetime.strptime(start, self.TIMEFORMAT)
             if (datetime.now() - start).days >= self.gracePeriod:
                 raise ImproperInput("Team %s has been culled" % (str(teamID)))
 
     @noisy
-    def checkTeamRating(self, teamID):
+    def _checkTeamRating(self, teamID):
         teamData = self._fetchTeamData(teamID)
-        return self.checkTeamRatingUsingData(teamID, teamData)
+        return self._checkTeamRatingUsingData(teamID, teamData)
 
     @noisy
-    def validateTeam(self, teamID, players):
+    def _validateTeam(self, teamID, players):
         """returns True is the team has been dropped from the league"""
         teamData = self._fetchTeamData(teamID)
         if int(teamData['Limit']) < 1: return False
         try:
-            self.checkTeamRatingUsingData(teamID, teamData)
-            self.checkTeam(players, teamID)
-            self.checkConsistentClan(players, self.maintainSameClan)
+            self._checkTeamRatingUsingData(teamID, teamData)
+            self._checkTeam(players, teamID)
+            self._checkConsistentClan(players, self.maintainSameClan)
             return False
         except ImproperInput as e:
             self.parent.log(("Removing %s because: %s" % (str(teamID),
                              e.message)), self.name)
-            self.changeLimit(teamID, 0)
+            self._changeLimit(teamID, 0)
             return True
 
     @noisy
-    def validatePlayerGroup(self, playerCounts, players, teamID):
+    def _validatePlayerGroup(self, playerCounts, players, teamID):
         """returns True is the player's team has been dropped"""
         for player in players:
             if player not in playerCounts: continue
-            if self.checkExcess(playerCounts[player]):
-                self.changeLimit(teamID, 0)
+            if self._checkExcess(playerCounts[player]):
+                self._changeLimit(teamID, 0)
                 return True
         return False
 
     @staticmethod
-    def isInactive(team):
+    def _isInactive(team):
         confirmations, limit = team['Confirmations'], int(team['Limit'])
         return ('FALSE' in confirmations or limit < 1)
 
     @staticmethod
-    def wasActive(team):
+    def _wasActive(team):
         count, finished = int(team['Ongoing']), int(team['Finished'])
         return bool(count + finished)
 
     @runPhase
-    def validatePlayers(self):
+    def _validatePlayers(self):
         playerCounts, allTeams = dict(), self.allTeams
         for i in xrange(len(allTeams)):
             team = allTeams[i]
-            if self.isInactive(team): continue
+            if self._isInactive(team): continue
             ID, players = team['ID'], team['Players'].split(self.SEP_PLYR)
-            if not (self.validateTeam(ID, players) or
-                    self.validatePlayerGroup(playerCounts, players, ID)):
-                self.updatePlayerCounts(playerCounts, players)
+            if not (self._validateTeam(ID, players) or
+                    self._validatePlayerGroup(playerCounts, players, ID)):
+                self._updatePlayerCounts(playerCounts, players)
 
     @classmethod
-    def splitRating(cls, rating):
+    def _splitRating(cls, rating):
         return tuple(int(x) for x in rating.split(cls.SEP_RTG))
 
     @noisy
-    def updateSums(self, rating, sums):
-        splitRtg = self.splitRating(str(rating))
+    def _updateSums(self, rating, sums):
+        splitRtg = self._splitRating(str(rating))
         for i in xrange(len(splitRtg)):
             if i >= len(sums): sums.append(splitRtg[i])
             else: sums[i] += splitRtg[i]
 
     @noisy
-    def addRatings(self, ratings):
+    def _addRatings(self, ratings):
         sums = list()
-        for rating in ratings: self.updateSums(rating, sums)
+        for rating in ratings: self._updateSums(rating, sums)
         return (self.SEP_RTG).join(str(x) for x in sums)
 
     @noisy
-    def getEloPairingParity(self, rtg1, rtg2):
+    def _getEloPairingParity(self, rtg1, rtg2):
         return (self.eloEnv.quality_1vs1(int(rtg1), int(rtg2)))
 
     @noisy
-    def getEloParity(self, ratings):
+    def _getEloParity(self, ratings):
         rtgs = [int(rating) for rating in ratings]
-        return self.getAverageParity(rtgs, self.getEloPairingParity)
+        return self._getAverageParity(rtgs, self._getEloPairingParity)
 
     @staticmethod
-    def getAverageParity(ratings, parityFn):
+    def _getAverageParity(ratings, parityFn):
         paritySum, matchups = 0.0, 0
         for i in xrange(len(ratings)):
             rtg1 = ratings[i]
@@ -2733,7 +2733,7 @@ class League(object):
                    1.0), 0.0)
 
     @noisy
-    def getGlickoPairingParity(self, rtg1, rtg2):
+    def _getGlickoPairingParity(self, rtg1, rtg2):
         rating1, rd1 = rtg1
         rating2, rd2 = rtg2
         LN10 = math.log(10, math.e)
@@ -2747,20 +2747,20 @@ class League(object):
         return (1.0 - (shortfall * 2))
 
     @noisy
-    def getGlickoParity(self, ratings):
+    def _getGlickoParity(self, ratings):
         rtgs = [tuple(int(r) for r in rating.split(self.SEP_RTG))
                 for rating in ratings]
-        return self.getAverageParity(rtgs, self.getGlickoPairingParity)
+        return self._getAverageParity(rtgs, self._getGlickoPairingParity)
 
     @noisy
-    def getTrueSkillParity(self, ratings):
+    def _getTrueSkillParity(self, ratings):
         rtgs = [rating.split(self.SEP_RTG) for rating in ratings]
         players = [tuple(self.trueSkillEnv.create_rating(int(rtg[0]),
                    int(rtg[1])),) for rtg in rtgs]
         return (self.trueSkillEnv.quality(players))
 
     @staticmethod
-    def getVarianceScore(vals):
+    def _getVarianceScore(vals):
         average = Decimal(sum(vals)) / Decimal(len(vals))
         variance = Decimal(0)
         for val in vals:
@@ -2770,17 +2770,17 @@ class League(object):
         return (1.0 - score)
 
     @noisy
-    def getWinCountParity(self, ratings):
+    def _getWinCountParity(self, ratings):
         winCounts = [int(r) for r in ratings]
-        return self.getVarianceScore(winCounts)
+        return self._getVarianceScore(winCounts)
 
     @noisy
     def _getWinRateParity(self, ratings):
         winRates = [int(r.split(self.SEP_RTG)[0]) for r in ratings]
-        return self.getVarianceScore(winRates)
+        return self._getVarianceScore(winRates)
 
     @noisy
-    def getParityScore(self, ratings):
+    def _getParityScore(self, ratings):
         """
         given two ratings, returns a score from 0.0 to 1.0
         representing the preferability of the pairing
@@ -2788,37 +2788,37 @@ class League(object):
         return self.sysDict[self.ratingSystem]['parity'](ratings)
 
     @classmethod
-    def getPlayers(cls, team):
+    def _getPlayers(cls, team):
         players = team['Players'].split(cls.SEP_PLYR)
         players = [int(p) for p in players]
         return players
 
     @classmethod
-    def getHistory(cls, team):
+    def _getHistory(cls, team):
         history = team['History'].split(cls.SEP_TEAMS)
         return [int(t) for t in history]
 
     @staticmethod
-    def addToSetWithinDict(data, label, value):
+    def _addToSetWithinDict(data, label, value):
         if label not in data:
             data[label] = set()
         data[label].add(value)
 
     @noisy
-    def makePlayersDict(self, teams):
+    def _makePlayersDict(self, teams):
         playerDict, clanDict = dict(), dict()
         for team in teams:
-            players = self.getPlayers(team)
+            players = self._getPlayers(team)
             ID = int(team['ID'])
             for player in players:
-                self.addToSetWithinDict(playerDict, player, ID)
+                self._addToSetWithinDict(playerDict, player, ID)
                 if self.forbidClanMatchups:
-                    self.addToSetWithinDict(clanDict,
-                                            PlayerParser(player).clanID, ID)
+                    self._addToSetWithinDict(clanDict,
+                                             PlayerParser(player).clanID, ID)
         return playerDict, clanDict
 
     @noisy
-    def narrowHistory(self, history):
+    def _narrowHistory(self, history):
         results = set()
         for item in set(history):
             if history.count(item) >= self.rematchCap:
@@ -2826,7 +2826,7 @@ class League(object):
         return results
 
     @noisy
-    def updateClanConflicts(self, conflicts, player, clansDict):
+    def _updateClanConflicts(self, conflicts, player, clansDict):
         if not self.forbidClanMatchups: return
         playerClan = PlayerParser(player).clanID
         conflicts.update(clansDict.get(playerClan, set()))
@@ -2834,7 +2834,7 @@ class League(object):
     @property
     def teamsDict(self):
         result, allTeams = dict(), self.activeTeams
-        playersDict, clansDict = self.makePlayersDict(allTeams)
+        playersDict, clansDict = self._makePlayersDict(allTeams)
         for team in allTeams:
             if ('FALSE' in team['Confirmations']): continue
             teamDict = {'rating': team['Rating'],
@@ -2843,53 +2843,53 @@ class League(object):
                                   int(team['Ongoing'])))}
             conflicts = set()
             ID = str(team['ID'])
-            players = self.getPlayers(team)
+            players = self._getPlayers(team)
             for player in players:
                 conflicts.update(playersDict[player])
-                self.updateClanConflicts(conflicts, player, clansDict)
-            fullHistory = self.getHistory(team)
+                self._updateClanConflicts(conflicts, player, clansDict)
+            fullHistory = self._getHistory(team)
             if self.rematchLimit == self.KW_ALL:
                 history = fullHistory
             else:
                 history = fullHistory[-(self.rematchLimit):]
-            conflicts.update(self.narrowHistory(history))
+            conflicts.update(self._narrowHistory(history))
             teamDict['conflicts'] = conflicts
             result[ID] = teamDict
         return result
 
     @noisy
-    def makeGrouping(self, groupingDict, groupSize, groupSep,
+    def _makeGrouping(self, groupingDict, groupSize, groupSep,
                      reverseParity):
         if reverseParity:
-            score_fn = lambda *args: 1.0 - self.getParityScore(args)
+            score_fn = lambda *args: 1.0 - self._getParityScore(args)
         else:
-            score_fn = lambda *args: self.getParityScore(args)
+            score_fn = lambda *args: self._getParityScore(args)
         groups = pair.group_teams(groupingDict, score_fn=score_fn,
                                   game_size=groupSize)
         return {groupSep.join([str(x) for x in group])
                 for group in groups}
 
     @noisy
-    def makeSides(self, teamsDict):
-        return self.makeGrouping(teamsDict, self.sideSize, self.SEP_TEAMS,
-                                 self.reverseSideParity)
+    def _makeSides(self, teamsDict):
+        return self._makeGrouping(teamsDict, self.sideSize, self.SEP_TEAMS,
+                                  self.reverseSideParity)
 
     @noisy
-    def getSideRating(self, side, teamsDict):
+    def _getSideRating(self, side, teamsDict):
         ratings = [teamsDict[team]['rating']
                    for team in side.split(self.SEP_TEAMS)]
-        return self.addRatings(ratings)
+        return self._addRatings(ratings)
 
     @noisy
-    def makeTeamsToSides(self, sides):
+    def _makeTeamsToSides(self, sides):
         result = dict()
         for side in sides:
             teams = side.split(self.SEP_TEAMS)
-            for team in teams: self.addToSetWithinDict(result, team, side)
+            for team in teams: self._addToSetWithinDict(result, team, side)
         return result
 
     @noisy
-    def getSideConflicts(self, side, teamsDict, teamsToSides):
+    def _getSideConflicts(self, side, teamsDict, teamsToSides):
         teams = side.split(self.SEP_TEAMS)
         conflicts = set()
         for team in teams:
@@ -2900,23 +2900,23 @@ class League(object):
         return conflicts
 
     @noisy
-    def makeSidesDict(self, sides, teamsDict):
-        result, teamsToSides = dict(), self.makeTeamsToSides(sides)
+    def _makeSidesDict(self, sides, teamsDict):
+        result, teamsToSides = dict(), self._makeTeamsToSides(sides)
         for side in sides:
-            sideDict = {'rating': self.getSideRating(side, teamsDict),
-                        'conflicts': self.getSideConflicts(side, teamsDict,
+            sideDict = {'rating': self._getSideRating(side, teamsDict),
+                        'conflicts': self._getSideConflicts(side, teamsDict,
                             teamsToSides),
                         'count': 1}
             result[side] = sideDict
         return result
 
     @noisy
-    def makeMatchings(self, sidesDict):
-        return self.makeGrouping(sidesDict, self.gameSize, self.SEP_SIDES,
-                                 self.reverseParity)
+    def _makeMatchings(self, sidesDict):
+        return self._makeGrouping(sidesDict, self.gameSize, self.SEP_SIDES,
+                                  self.reverseParity)
 
     @staticmethod
-    def turnNoneIntoMutable(val, mutable):
+    def _turnNoneIntoMutable(val, mutable):
         if val is None: return mutable()
         return val
 
@@ -2928,43 +2928,43 @@ class League(object):
         return result
 
     @staticmethod
-    def updateCountInDict(data, label, count=1):
+    def _updateCountInDict(data, label, count=1):
         if label not in data: data[label] = count
         else: data[label] += count
 
     @staticmethod
-    def splitAndFilter(string, splitter):
+    def _splitAndFilter(string, splitter):
         return [v for v in string.split(splitter) if len(v)]
 
     @noisy
-    def updateScores(self, teamData, scores):
-        vetos = self.getVetoDict(teamData['Vetos'])
-        for veto in vetos: self.updateCountInDict(scores, str(veto),
-                                                  vetos[veto])
+    def _updateScores(self, teamData, scores):
+        vetos = self._getVetoDict(teamData['Vetos'])
+        for veto in vetos: self._updateCountInDict(scores, str(veto),
+                                                   vetos[veto])
 
     @noisy
-    def updateConflicts(self, teamData, conflicts):
-        drops = self.splitAndFilter(teamData['Drops'], self.SEP_DROPS)
+    def _updateConflicts(self, teamData, conflicts):
+        drops = self._splitAndFilter(teamData['Drops'], self.SEP_DROPS)
         for drop in drops: conflicts.add(drop)
 
     @noisy
-    def getScoresAndConflicts(self, matching):
+    def _getScoresAndConflicts(self, matching):
         scores, conflicts = dict(), set()
         sides = matching.split(self.SEP_SIDES)
         for side in sides:
             teams = side.split(self.SEP_TEAMS)
             for team in teams:
                 teamData = self._fetchTeamData(team)
-                self.updateScores(teamData, scores)
-                self.updateConflicts(teamData, conflicts)
+                self._updateScores(teamData, scores)
+                self._updateConflicts(teamData, conflicts)
         return scores, conflicts
 
     @noisy
-    def makeMatchingsDict(self, matchings):
+    def _makeMatchingsDict(self, matchings):
         result, numTemps = dict(), len(self.usableTemplateIDs)
         for matching in matchings:
             matchDict = {'count': 1}
-            scores, conflicts = self.getScoresAndConflicts(matching)
+            scores, conflicts = self._getScoresAndConflicts(matching)
             if (len(conflicts) == numTemps): continue
             matchDict['scores'] = scores
             matchDict['conflicts'] = conflicts
@@ -2972,14 +2972,14 @@ class League(object):
         return result
 
     @noisy
-    def makeBatch(self, matchings):
+    def _makeBatch(self, matchings):
         templatesDict = self.templatesDict
-        matchingsDict = self.makeMatchingsDict(matchings)
+        matchingsDict = self._makeMatchingsDict(matchings)
         assignments = pair.assign_templates(matchingsDict, templatesDict, True)
         return [{'Sides': a[0], 'Template': a[1]} for a in assignments]
 
     @noisy
-    def createBatch(self, batch):
+    def _createBatch(self, batch):
         currentID = max(int(ID) for ID in self.gameIDs) + 1
         for game in batch:
             try:
@@ -2988,7 +2988,7 @@ class League(object):
                                       'Sides': game['Sides'], 'Vetos': 0,
                                       'Vetoed': '', 'Finished': '',
                                       'Template': game['Template']})
-                self.makeGame(currentID)
+                self._makeGame(currentID)
                 currentID += 1
             except (SheetErrors.DataError, SheetErrors.SheetError) as e:
                 self.parent.log(("Failed to add game to sheet due to %s" %
@@ -2998,49 +2998,49 @@ class League(object):
                                  (currentID)), self.name, error=True)
 
     @runPhase
-    def createGames(self):
+    def _createGames(self):
         teamsDict = self.teamsDict
-        sides = self.makeSides(teamsDict) if self.sideSize > 1 else teamsDict
-        sidesDict = self.makeSidesDict(sides, teamsDict)
-        matchings = self.makeMatchings(sidesDict)
-        batch = self.makeBatch(matchings)
-        self.createBatch(batch)
+        sides = self._makeSides(teamsDict) if self.sideSize > 1 else teamsDict
+        sidesDict = self._makeSidesDict(sides, teamsDict)
+        matchings = self._makeMatchings(sidesDict)
+        batch = self._makeBatch(matchings)
+        self._createBatch(batch)
 
     @classmethod
-    def reduceToActive(cls, teams):
-        return [t for t in teams if not cls.isInactive(t)]
+    def _reduceToActive(cls, teams):
+        return [t for t in teams if not cls._isInactive(t)]
 
     @classmethod
-    def onceActive(cls, t):
-        return ((not cls.isInactive(t) or cls.wasActive(t)))
+    def _onceActive(cls, t):
+        return ((not cls._isInactive(t) or cls._wasActive(t)))
 
     @classmethod
-    def reduceToOnceActive(cls, teams):
-        return [t for t in teams if cls.onceActive(t)]
+    def _reduceToOnceActive(cls, teams):
+        return [t for t in teams if cls._onceActive(t)]
 
     @classmethod
-    def adjustAndPackage(cls, team, adj, floor=None):
-        rtg = list(cls.splitRating(team['Rating']))
+    def _adjustAndPackage(cls, team, adj, floor=None):
+        rtg = list(cls._splitRating(team['Rating']))
         rtg[0] = int(round(Decimal(rtg[0]) + Decimal(adj)))
         if floor is not None: rtg[0] = max(rtg[0], floor)
         return cls._unsplitRtg(rtg)
 
     @runPhase
-    def rescaleRatings(self):
+    def _rescaleRatings(self):
         if not self.maintainTotal: return
         allTeams = self.allTeams
-        actives = self.reduceToActive(allTeams)
+        actives = self._reduceToActive(allTeams)
         total, count = 0, len(actives)
         for team in actives:
-            total += self.splitRating(team['Rating'])[0]
-        expected = count * self.splitRating(self.defaultRating)[0]
+            total += self._splitRating(team['Rating'])[0]
+        expected = count * self._splitRating(self.defaultRating)[0]
         adjustment = (Decimal(expected) - Decimal(total)) / Decimal(count)
-        for team in self.reduceToOnceActive(allTeams):
-            rating = self.adjustAndPackage(team, adjustment)
+        for team in self._reduceToOnceActive(allTeams):
+            rating = self._adjustAndPackage(team, adjustment)
             self._updateTeamRating(team['ID'], rating)
 
     @staticmethod
-    def decayTime(iterations):
+    def _decayTime(iterations):
         HOURS_PER_DAY, MINUTES_PER_HOUR, now = 24, 60, datetime.now()
         midnight = datetime(year=now.year, month=now.month, day=now.day)
         maxHours = Decimal(HOURS_PER_DAY) / Decimal(iterations)
@@ -3050,21 +3050,21 @@ class League(object):
         return ((now - midnight) <= maxDelta)
 
     @noisy
-    def decayRating(self, team):
-        if (self.isInactive(team) and self.wasActive(team)):
-            rating = self.adjustAndPackage(team, -self.ratingDecay,
+    def _decayRating(self, team):
+        if (self._isInactive(team) and self._wasActive(team)):
+            rating = self._adjustAndPackage(team, -self.ratingDecay,
                                            self.penaltyFloor)
             self._updateTeamRating(team['ID'], rating)
 
     @runPhase
-    def decayRatings(self):
+    def _decayRatings(self):
         if (self.ratingDecay == 0 or
-            not self.decayTime(ITERATIONS_PER_DAY)): return
+            not self._decayTime(ITERATIONS_PER_DAY)): return
         allTeams = self.allTeams
-        for team in allTeams: self.decayRating(team)
+        for team in allTeams: self._decayRating(team)
 
     @noisy
-    def dateUnexpired(self, finishDate, current):
+    def _dateUnexpired(self, finishDate, current):
         if finishDate == '': return False
         return ((current -
                   datetime.strptime(finishDate, self.TIMEFORMAT)) <=
@@ -3074,83 +3074,83 @@ class League(object):
     def unexpiredGames(self):
         allGames, current = self._getExtantEntities(self.games), datetime.now()
         return [g for g in allGames if
-                self.dateUnexpired(g['Finished'], current)]
+                self._dateUnexpired(g['Finished'], current)]
 
     @staticmethod
-    def getAllTeams(sides):
+    def _getAllTeams(sides):
         return set().union(*sides)
 
     @classmethod
-    def unpackDeclineWinners(cls, winners, sides):
-        allTeams = cls.getAllTeams(sides)
+    def _unpackDeclineWinners(cls, winners, sides):
+        allTeams = cls._getAllTeams(sides)
         sides = [winners, allTeams-winners]
         return sides, 0, True
 
     @staticmethod
-    def removeMark(string, mark):
+    def _removeMark(string, mark):
         if mark in string: return string.replace(mark, "")
         return string
 
     @classmethod
-    def removeDeclineMark(cls, winners):
-        return cls.removeMark(winners, cls.MARK_DECLINE)
+    def _removeDeclineMark(cls, winners):
+        return cls._removeMark(winners, cls.MARK_DECLINE)
 
     @classmethod
-    def unpackWinners(cls, game):
+    def _unpackWinners(cls, game):
         winners, sides = game['Winners'], game['Sides'].split(cls.SEP_SIDES)
         declined = cls.MARK_DECLINE in winners
-        winners = cls.removeDeclineMark(winners)
+        winners = cls._removeDeclineMark(winners)
         sides = [set(side.split(cls.SEP_TEAMS)) for side in sides]
         winners = set(winners.split(cls.SEP_TEAMS))
         winningSide = None
-        if declined: return cls.unpackDeclineWinners(winners, sides)
+        if declined: return cls._unpackDeclineWinners(winners, sides)
         for i in xrange(len(sides)):
             if len(sides[i] & winners) > 0: winningSide = i
         return sides, winningSide, declined
 
     @noisy
-    def calculateVetos(self, sides):
+    def _calculateVetos(self, sides):
         if not self.vetoPenalty: return
-        for team in self.getAllTeams(sides):
-            self.adjustRating(team, -self.vetoPenalty)
+        for team in self._getAllTeams(sides):
+            self._adjustRating(team, -self.vetoPenalty)
 
     @noisy
-    def calculateResults(self, sides, winningSide):
+    def _calculateResults(self, sides, winningSide):
         newRatings = self._getNewRatings(sides, winningSide)
         for team in newRatings:
             self.tempTeams[str(team)] = newRatings[team]
 
     @noisy
-    def runCalculations(self):
+    def _runCalculations(self):
         games = self.unexpiredGames
         for game in games:
-            sides, winningSide, declined = self.unpackWinners(game)
+            sides, winningSide, declined = self._unpackWinners(game)
             if winningSide is None:
-                self.calculateVetos(sides)
+                self._calculateVetos(sides)
             elif declined and not self.penalizeDeclines:
                 continue
             else:
-                self.calculateResults(sides, winningSide)
+                self._calculateResults(sides, winningSide)
 
     @noisy
     def _updateTeamRatings(self):
         self._updateRatings(self.tempTeams)
 
     @runPhase
-    def calculateRatings(self):
+    def _calculateRatings(self):
         if self.retentionRange is None: return
         self.tempTeams = dict()
         for team in self.allTeams:
             self.tempTeams[str(team['ID'])] = self.defaultRating
-        self.runCalculations()
+        self._runCalculations()
         self._updateTeamRatings()
         self.tempTeams = None
 
     @noisy
-    def applyRatingAdjustments(self):
-        self.rescaleRatings()
-        self.decayRatings()
-        self.calculateRatings()
+    def _applyRatingAdjustments(self):
+        self._rescaleRatings()
+        self._decayRatings()
+        self._calculateRatings()
 
     def run(self):
         """
@@ -3160,79 +3160,79 @@ class League(object):
         3. update teams using prereqs
         4. create new games
         """
-        self.updateGames()
-        self.applyRatingAdjustments()
+        self._updateGames()
+        self._applyRatingAdjustments()
         self.restoreTeams()
-        self.executeOrders()
-        self.validatePlayers()
-        if self.active: self.createGames()
+        self._executeOrders()
+        self._validatePlayers()
+        if self.active: self._createGames()
 
     @classmethod
-    def unpackConfirms(cls, confirms):
+    def _unpackConfirms(cls, confirms):
         return [(c.upper() == "TRUE") for c in confirms.split(cls.SEP_CONF)]
 
-    @staticmethod
-    def unpackInts(string, sep):
+    @classmethod
+    def _unpackInts(cls, string, sep):
         if not len(string): return list()
-        return [int(v) for v in string.split(sep)]
+        return [cls._unpackInt(v) for v in string.split(sep)]
 
     @staticmethod
-    def unpackInt(val):
+    def _unpackInt(val):
         return int(val) if len(str(val)) else val
 
     @classmethod
-    def zipPlayers(cls, team):
-        players = cls.getPlayersFromData(team)
-        confirms = cls.unpackConfirms(team['Confirmations'])
+    def _zipPlayers(cls, team):
+        players = cls._getPlayersFromData(team)
+        confirms = cls._unpackConfirms(team['Confirmations'])
         results = dict()
         for i in xrange(len(players)):
             results[players[i]] = {'confirmed': confirms[i]}
         return results
 
-    def packageTeam(self, team):
+    def _packageTeam(self, team):
         res = {'ID': int(team['ID']),
                'Name': team['Name'],
-               'Players': self.zipPlayers(team),
-               'Rating': self.splitRating(team['Rating']),
-               'Vetos': self.getVetoDict(team['Vetos']),
-               'Drops': set(self.unpackInts(team['Drops'], self.SEP_DROPS)),
-               'Rank': self.unpackInt(team['Rank']),
-               'History': self.unpackInts(team['History'], self.SEP_TEAMS),
+               'Players': self._zipPlayers(team),
+               'Rating': self._splitRating(team['Rating']),
+               'Vetos': self._getVetoDict(team['Vetos']),
+               'Drops': set(self._unpackInts(team['Drops'], self.SEP_DROPS)),
+               'Rank': self._unpackInt(team['Rank']),
+               'History': self._unpackInts(team['History'], self.SEP_TEAMS),
                'Finished': int(team['Finished']),
                'Limit': int(team['Limit']),
                'Ongoing': int(team['Ongoing'])}
         if 'Probation Start' in team:
-            res['Probation Start'] = self.unpackDateTime(\
+            res['Probation Start'] = self._unpackDateTime(\
                                      team['Probation Start'])
         return res
 
     @classmethod
-    def unpackDateTime(cls, val):
+    def _unpackDateTime(cls, val):
         if val == '': return val
         return datetime.strptime(val, cls.TIMEFORMAT)
 
     @classmethod
-    def packageWinners(cls, winners):
+    def _packageWinners(cls, winners):
         if cls.MARK_DECLINE in winners:
-            winners = cls.removeDeclineMark(winners)
-        return set(cls.unpackInts(winners, cls.SEP_TEAMS))
+            winners = cls._removeDeclineMark(winners)
+        return set(cls._unpackInts(winners, cls.SEP_TEAMS))
 
-    def packageGame(self, game):
+    def _packageGame(self, game):
         return {'ID': int(game['ID']),
-                'WarlightID': self.unpackInt(game['WarlightID']),
-                'Created': self.unpackDateTime(game['Created']),
-                'Finished': self.unpackDateTime(game['Finished']),
+                'WarlightID': self._unpackInt(game['WarlightID']),
+                'Created': self._unpackDateTime(game['Created']),
+                'Finished': self._unpackDateTime(game['Finished']),
                 'Ongoing': not(len(game['Finished'])),
                 'Sides': self._getGameSidesFromData(game, int),
-                'Winners': self.packageWinners(game['Winners']),
+                'Winners': self._packageWinners(game['Winners']),
                 'Declined': (self.MARK_DECLINE in game['Winners']),
                 'EndedInVeto': (not(len(game['Winners']))
                                 and bool(len(game['Finished']))),
                 'Vetos': int(game['Vetos']),
-                'Vetoed': self.unpackInts(game['Vetoed'], self.SEP_VETOS),
-                'Template': self.unpackInt(game['Template'])}
+                'Vetoed': self._unpackInts(game['Vetoed'], self.SEP_VETOS),
+                'Template': self._unpackInt(game['Template'])}
 
-    def packageTemplate(self, template):
+    def _packageTemplate(self, template):
         return {'ID': int(template['ID']),
                 'Name': template['Name'],
                 'WarlightID': int(template['WarlightID']),
@@ -3246,36 +3246,36 @@ class League(object):
             results.append(packageFn(entity))
         return results
 
-    def packageTeams(self, *teams):
-        return self.packageEntities(teams, self.packageTeam)
+    def _packageTeams(self, *teams):
+        return self.packageEntities(teams, self._packageTeam)
 
-    def packageGames(self, *games):
-        return self.packageEntities(games, self.packageGame)
+    def _packageGames(self, *games):
+        return self.packageEntities(games, self._packageGame)
 
-    def packageTemplates(self, *templates):
-        return self.packageEntities(templates, self.packageTemplate)
+    def _packageTemplates(self, *templates):
+        return self.packageEntities(templates, self._packageTemplate)
 
     @staticmethod
-    def fetchAndPackage(fetchFn, packageFn, ID):
+    def _fetchAndPackage(fetchFn, packageFn, ID):
         return packageFn(fetchFn(ID))[0]
 
     def fetchTeam(self, teamID):
-        return self.fetchAndPackage(self._fetchTeamData, self.packageTeams,
-                                    teamID)
+        return self._fetchAndPackage(self._fetchTeamData, self._packageTeams,
+                                     teamID)
 
     def fetchAllTeams(self):
-        return self.packageTeams(*self.allTeams)
+        return self._packageTeams(*self.allTeams)
 
     def fetchGame(self, gameID):
-        return self.fetchAndPackage(self._fetchGameData, self.packageGames,
-                                    gameID)
+        return self._fetchAndPackage(self._fetchGameData, self._packageGames,
+                                     gameID)
 
     def fetchAllGames(self):
-        return self.packageGames(*self._getExtantEntities(self.games))
+        return self._packageGames(*self._getExtantEntities(self.games))
 
     def fetchTemplate(self, templateID):
-        return self.fetchAndPackage(self._fetchTemplateData,
-                                    self.packageTemplates, templateID)
+        return self._fetchAndPackage(self._fetchTemplateData,
+                                     self._packageTemplates, templateID)
 
     def fetchAllTemplates(self):
-        return self.packageTemplates(*self._getExtantEntities(self.templates))
+        return self._packageTemplates(*self._getExtantEntities(self.templates))
