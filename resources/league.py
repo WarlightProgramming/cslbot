@@ -54,6 +54,16 @@ def noisy(func):
         return tryOrLog(func, self, True, *args, **kwargs)
     return func_wrapper
 
+def checkAgent(func):
+    """
+    function decorator to check order interface agents
+    """
+    def func_wrapper(self, order):
+        if not self._agentAllowed(order['author']):
+            raise ImproperInput("Agent not authorized for this league")
+        return func(order)
+    return func_wrapper
+
 # errors
 class ImproperLeague(Exception):
     """raised for improperly formatted leagues"""
@@ -1090,7 +1100,7 @@ class League(object):
     def agents(self):
         return self._fetchProperty(self.SET_AGENTS, set(), self.getGroup)
 
-    def agentAllowed(self, agentID):
+    def _agentAllowed(self, agentID):
         """
         returns True if an Interface is authorized to execute orders
         :param agentID: Warlight ID of Interface owner
@@ -3279,3 +3289,124 @@ class League(object):
 
     def fetchAllTemplates(self):
         return self._packageTemplates(*self._getExtantEntities(self.templates))
+
+    @staticmethod
+    def _depackageOrder(order, *args):
+        results = list()
+        for arg in args:
+            results.append(order[arg])
+        return results
+
+    def _makeDummy(self, orderType, author, *orders):
+        orders = [self.name,] + list(orders)
+        return {'type': orderType, 'author': int(author),
+                'orders': orders}
+
+    @checkAgent
+    def addTeam(self, order):
+        author, teamName = self._depackageOrder('author', 'teamName')
+        self._addTeam(self._makeDummy('add_team', author, order['limit'],
+                                      *(order['players'])))
+
+    def _makeConfirmationOrder(self, order, orderType='confirm_team'):
+        author, teamName = self._depackageOrder('author', 'teamName')
+        players = order.get('players', list())
+        return self._makeDummy(orderType, author, teamName, *players)
+
+    @checkAgent
+    def confirmTeam(self, order):
+        self._confirmTeam(self._makeConfirmationOrder(order, 'confirm_team'))
+
+    @checkAgent
+    def unconfirmTeam(self, order):
+        self._unconfirmTeam(self._makeConfirmationOrder(order,
+                            'unconfirm_team'))
+
+    @checkAgent
+    def setLimit(self, order):
+        author, teamName, limit = self._depackageOrder('author', 'teamName',
+                                                       'limit')
+        self._setLimit(self._makeDummy('set_limit', author, teamName, limit))
+
+    @checkAgent
+    def renameTeam(self, order):
+        auth, name, new = self._depackageOrder('author', 'teamName', 'newName')
+        self._renameTeam(self._makeDummy('rename_team', auth, name, new))
+
+    @checkAgent
+    def removeTeam(self, order):
+        author, teamName = self._depackageOrder('author', 'teamName')
+        self._removeTeam(self._makeDummy('remove_team', author, teamName))
+
+    def _makeTemplateDropOrder(self, order, orderType='drop_templates'):
+        author, teamName = self._depackageOrder('author', 'teamName')
+        self._makeDummy(orderType, author, self.name, teamName,
+                        *order['templates'])
+
+    @checkAgent
+    def dropTemplates(self, order):
+        self._dropTemplates(self._makeTemplateDropOrder(order))
+
+    @checkAgent
+    def undropTemplates(self, order):
+        self._undropTemplates(self._makeTemplateDropOrder(order,
+                              'undrop_templates'))
+
+    @classmethod
+    def _makePrefixedList(cls, data, label, prefix, separator):
+        value, results = data[label], list()
+        if isinstance(value, dict): # recursive case
+            for label in value:
+                results += cls._makePrefixedList(value, label,
+                    (prefix + separator + label), separator)
+        else: # base case
+            results += [prefix, value]
+        return results
+
+    @classmethod
+    def _disassembleSettings(cls, settings):
+        results = list()
+        for setting in settings:
+            results += cls._makePrefixedList(settings, setting,
+                (cls.KW_TEMPSETTING + str(setting)), cls.SEP_TEMPSET)
+        return results
+
+    @classmethod
+    def _disassembleOverrides(cls, overrides):
+        results = list()
+        for override in overrides:
+            results += [(cls.KW_TEMPOVERRIDE + str(override)),
+                        str(overrides[override])]
+        return results
+
+    def _assembleAddOrder(self, order, templateName, warlightID):
+        orders = [self.name, templateName, warlightID]
+        if self.multischeme: orders.append(order['scheme'])
+        orders += self._disassembleSettings(order.get('settings', dict()))
+        orders += self._disassembleOverrides(order.get('overrides', dict()))
+        return orders
+
+    @checkAgent
+    def addTemplate(self, order):
+        author, tempName, warlightID = self._depackageOrder('author',
+                                           'templateName', 'warlightID')
+        orders = self._assembleAddOrder(order, tempName, warlightID)
+        self._addTemplate(self._makeDummy('add_template', author, *orders))
+
+    @checkAgent
+    def activateTemplate(self, order):
+        author, tempName = self._depackageOrder('author', 'templateName')
+        self._activateTemplate(self._makeDummy('activate_template', author,
+                                               tempName))
+
+    @checkAgent
+    def deactivateTemplate(self, order):
+        author, tempName = self._depackageOrder('author', 'templateName')
+        self._deactivateTemplate(self._makeDummy('deactivate_template', author,
+                                                 tempName))
+
+    @checkAgent
+    def quitLeague(self, order):
+        author = order['author']
+        self._quitLeague(self._makeDummy('quit_league', author,
+                                         *(order.get('players', list()))))

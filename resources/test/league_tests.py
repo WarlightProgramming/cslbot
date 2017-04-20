@@ -1084,12 +1084,12 @@ class TestLeague(TestCase):
 
     def test_agentAllowed(self):
         self._setProp(self.league.SET_AGENTS, "ALL,12,24,36")
-        assert_true(self.league.agentAllowed(12))
-        assert_true(self.league.agentAllowed("24"))
-        assert_true(self.league.agentAllowed("23"))
+        assert_true(self.league._agentAllowed(12))
+        assert_true(self.league._agentAllowed("24"))
+        assert_true(self.league._agentAllowed("23"))
         self._setProp(self.league.SET_AGENTS, "12,24,36")
-        assert_true(self.league.agentAllowed(24))
-        assert_false(self.league.agentAllowed(48))
+        assert_true(self.league._agentAllowed(24))
+        assert_false(self.league._agentAllowed(48))
 
     def test_bannedPlayers(self):
         self._groupPropertyTest('bannedPlayers',
