@@ -10,7 +10,7 @@ from nose.tools import assert_equals, assert_not_equal, assert_true,\
 assert_raises, assert_false, assert_almost_equal
 from mock import patch, MagicMock
 from resources.league import League, runPhase, noisy, ImproperLeague,\
-ImproperInput, NonexistentItem
+ImproperInput, NonexistentItem, checkAgent
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 
@@ -61,6 +61,20 @@ def test_noisy():
     failStr = ("Call to testFn failed due to "
                "ZeroDivisionError('integer division or modulo by zero',)")
     t.parent.log.assert_called_with(failStr, "name", True)
+
+def test_checkAgent():
+    class TestClass(object):
+
+        def _agentAllowed(self, author):
+            return int(author) == 2009
+
+        @checkAgent
+        def testFn(self, order):
+            return 8
+
+    t = TestClass()
+    assert_equals(t.testFn({'agent': 2009}), 8)
+    assert_raises(ImproperInput, t.testFn, {'agent': 2008})
 
 ## League class tests
 class TestLeague(TestCase):
@@ -1827,7 +1841,9 @@ class TestLeague(TestCase):
                            setLimit, removeTeam, dropTemplates,
                            undropTemplates, activateTemplate,
                            deactivateTemplate, quitLeague, addTemplate,
-                           _renameTeam, logFailedOrder, updateRanks):
+                           renameTeam, logFailedOrder, updateRanks):
+        self.league._makeOrderDict()
+        self._setProp(self.league.SET_DEBUG, "FALSE")
         existingLogs = self.parent.log.call_count
         self.league.orders = [{'type': 'ADD_team'}, {'type': 'add_team'},
             {'type': 'confirm_team'}, {'type': 'CONFIRM_TEAM'},
@@ -1891,7 +1907,7 @@ class TestLeague(TestCase):
         abandon.return_value = False
         declines.return_value = range(3)
         assert_equals(self.league._handleFinished(gameData),
-                      ('DECLINED', declines.return_value))
+                      ('DECLINED', declines.return_value, boots.return_value))
         declines.return_value = list()
         assert_equals(self.league._handleFinished(gameData),
                       ('FINISHED', find.return_value, boots.return_value))
@@ -1905,7 +1921,7 @@ class TestLeague(TestCase):
         created = datetime.now() - timedelta(5)
         decliners.return_value = range(3)
         assert_equals(self.league._handleWaiting(gameData, created),
-                      ('DECLINED', range(3)))
+                      ('DECLINED', range(3), list()))
         decliners.return_value = xrange(1, 6)
         assert_equals(self.league._handleWaiting(gameData, created),
                       ('ABANDONED', None))
@@ -1913,7 +1929,7 @@ class TestLeague(TestCase):
         decliners.return_value = list()
         assert_false(len(waiting.return_value) == len(gameData['players']))
         assert_equals(self.league._handleWaiting(gameData, created),
-                      ('DECLINED', range(3)))
+                      ('DECLINED', range(3), list()))
         waiting.return_value = xrange(1, 6)
         assert_equals(self.league._handleWaiting(gameData, created),
                       ('ABANDONED', None))
@@ -2197,6 +2213,7 @@ class TestLeague(TestCase):
         assert_equals(self.league._makeFakeSides(sides, set(xrange(1, 9))),
                       ([set(xrange(1, 9)),], None))
 
+    @patch('resources.league.League._removeBooted')
     @patch('resources.league.League._getGameSidesFromData')
     @patch('resources.league.League._findTeamsFromData')
     @patch('resources.league.League._fetchGameData')
@@ -2205,15 +2222,17 @@ class TestLeague(TestCase):
     @patch('resources.league.League._updateVeto')
     @patch('resources.league.League._updateResults')
     def test_updateDecline(self, updateRes, veto, make, handle,
-                           fetch, find, get):
+                           fetch, find, get, remove):
         make.return_value = set(), 0
-        self.league._updateDecline('ID', 'decliners')
+        self.league._updateDecline('ID', (set(), set()))
+        remove.assert_called_once_with(fetch.return_value, set())
         veto.assert_not_called()
         updateRes.assert_called_once_with('ID', set(), 0,
             adj=self.league.penalizeDeclines, declined=True)
         make.return_value = set(), None
-        self.league._updateDecline('ID', 'decliners')
+        self.league._updateDecline('ID', (set(), set()))
         veto.assert_called_once_with('ID')
+        remove.assert_called_with(fetch.return_value, set())
 
     @patch('resources.league.League._finishGameForTeams')
     @patch('resources.league.League._getGameSidesFromData')
@@ -2570,12 +2589,12 @@ class TestLeague(TestCase):
         veto.assert_not_called()
         fetch.return_value = ('FINISHED', set(), set())
         self.league._updateGame("wlID", "gameID", createdTime)
-        fetch.return_value = ('DECLINED', set())
+        fetch.return_value = ('DECLINED', set(), set())
         self.league._updateGame("wlID", "gameID", createdTime)
         fetch.return_value = ('ABANDONED', None)
         self.league._updateGame("wlID", "gameID", createdTime)
         win.assert_called_once_with("gameID", (set(), set()))
-        decline.assert_called_once_with("gameID", set())
+        decline.assert_called_once_with("gameID", (set(), set()))
         veto.assert_called_once_with("gameID")
 
     def test_wipeRank(self):
@@ -3268,6 +3287,149 @@ class TestLeague(TestCase):
         self.templates.findEntities.return_value = [template1,]
         assert_equals(self.league.fetchTemplate(1290), template1_out)
         assert_equals(self.league.fetchAllTemplates(), [template1_out,])
+
+    def test_depackageOrder(self):
+        order = {'author': '3920', 'type': 'some_type', 'label': 'value',
+                 'listval': ['a', 'bunch', 'of', 'values'], 'dict': dict()}
+        assert_equals(self.league._depackageOrder(order, 'author'), ['3920',])
+        assert_equals(self.league._depackageOrder(order, 'type'),
+            ['some_type',])
+        assert_equals(self.league._depackageOrder(order, 'label', 'author',
+            'type', 'listval', 'dict'), ['value', '3920', 'some_type',
+            ['a', 'bunch', 'of', 'values'], dict()])
+
+    def test_makeDummy(self):
+        assert_equals(self.league._makeDummy('order_type', '56490',
+            9, 'range', '490', ['this', 'is', 'a', 'weird', 'value']),
+            {'type': 'order_type', 'author': 56490, 'orders':
+             [self.league.name, 9, 'range', '490',
+              ['this', 'is', 'a', 'weird', 'value']]})
+
+    @patch('resources.league.League._addTeam')
+    def test_externalAddTeam(self, add):
+        self._setProp(self.league.SET_AGENTS, "")
+        assert_false(self.league._agentAllowed(940))
+        orders = [{'type': 'add_team', 'author': '9404', 'agent': '940',
+            'teamName': 'Some name', 'limit': '9',
+            'players': ['490843', '490384']},]
+        assert_raises(ImproperInput, self.league.addTeam, orders[0])
+        self.league.executeOrders('940', orders)
+        self.parent.log.assert_called_with(
+            "Agent not authorized for this league", self.league.name,
+            error=True)
+        self._setProp(self.league.SET_AGENTS, "940")
+        assert_true(self.league._agentAllowed(940))
+        self.league.addTeam(orders[0])
+        add.assert_called_once_with({'type': 'add_team', 'author': 9404,
+            'orders': [self.league.name, 'Some name', '9',
+                       '490843', '490384']})
+
+    @patch('resources.league.League._unconfirmTeam')
+    @patch('resources.league.League._confirmTeam')
+    def test_externalToggleConfirm(self, confirm, unconfirm):
+        self._setProp(self.league.SET_AGENTS, "ALL")
+        self.league.confirmTeam({'type': 'confirm_team', 'author': '49024',
+            'teamName': 'Thunderdome', 'agent': 'Numbuh Four'})
+        confirm.assert_called_once_with({'type': 'confirm_team',
+            'author': 49024, 'orders': [self.league.name, 'Thunderdome']})
+        self.league.unconfirmTeam({'type': 'unconfirm_team',
+            'author': '493403', 'teamName': 'Fury Road', 'agent': 'Max'})
+        unconfirm.assert_called_once_with({'type': 'unconfirm_team',
+            'author': 493403, 'orders': [self.league.name, 'Fury Road']})
+        self.league.unconfirmTeam({'type': 'unconfirm_team',
+            'author': 123456, 'teamName': 'Bag Raiders',
+            'agent': 'Shooting Star', 'players': ['129', '1294', '49030']})
+        unconfirm.assert_called_with({'type': 'unconfirm_team',
+            'author': 123456, 'orders': [self.league.name, 'Bag Raiders',
+            '129', '1294', '49030']})
+
+    @patch('resources.league.League._deactivateTemplate')
+    @patch('resources.league.League._activateTemplate')
+    @patch('resources.league.League._removeTeam')
+    @patch('resources.league.League._renameTeam')
+    @patch('resources.league.League._setLimit')
+    def test_externalSimpleOrders(self, setLimit, rename, remove,
+                                  activate, deactivate):
+        self.league._makeOrderDict()
+        self._setProp(self.league.SET_AGENTS, "ALL")
+        self.league.setLimit({'agent': 'agent', 'author': '40934',
+            'teamName': 'Team Name', 'limit': '9'})
+        setLimit.assert_called_once_with({'type': 'set_limit',
+            'author': 40934, 'orders': [self.league.name, 'Team Name', '9']})
+        self.league.renameTeam({'agent': 'orange', 'author': '349',
+            'teamName': 'Aspiring Grisly Novelist',
+            'newName': 'Reads His Own Work'})
+        rename.assert_called_once_with({'type': 'rename_team',
+            'author': 349, 'orders': [self.league.name,
+            'Aspiring Grisly Novelist', 'Reads His Own Work']})
+        self.league.removeTeam({'agent': 'x', 'author': '1280',
+            'teamName': 'The Sign Is Undeniable'})
+        remove.assert_called_once_with({'type': 'remove_team',
+            'author': 1280, 'orders': [self.league.name,
+            'The Sign Is Undeniable']})
+        self.league.activateTemplate({'agent': 'Numbuh Zero', 'author': '1',
+            'templateName': 'A Point Where Two Worlds Collide'})
+        activate.assert_called_once_with({'type': 'activate_template',
+            'author': 1, 'orders': [self.league.name,
+            'A Point Where Two Worlds Collide']})
+        self.league.deactivateTemplate({'agent': 'agent', 'author': '23',
+            'templateName': 'And If I Do This Thing Right'})
+        deactivate.assert_called_once_with({'type': 'deactivate_template',
+            'author': 23, 'orders': [self.league.name,
+            'And If I Do This Thing Right']})
+
+    @patch('resources.league.League._undropTemplates')
+    @patch('resources.league.League._dropTemplates')
+    def test_externalToggleDrops(self, drop, undrop):
+        self._setProp(self.league.SET_AGENTS, "ALL")
+        self.league.dropTemplates({'agent': 'agent', 'author': '1290',
+            'teamName': 'Team Name', 'templates': ['A', 'B', 'C', 'D'],
+            'type': 'drop_templates'})
+        drop.assert_called_once_with({'type': 'drop_templates',
+            'author': 1290, 'orders': [self.league.name, 'Team Name', 'A',
+            'B', 'C', 'D']})
+        self.league.undropTemplates({'agent': 'agent', 'author': '23904',
+            'teamName': 'Sunshine', 'type': 'undrop_templates',
+            'templates': ['is', 'gonna', 'rain', 'down']})
+        undrop.assert_called_once_with({'type': 'undrop_templates',
+            'author': 23904, 'orders': [self.league.name, 'Sunshine', 'is',
+            'gonna', 'rain', 'down']})
+        self.league.dropTemplates({'agent': 'agent', 'author': '1290',
+            'type': 'drop_template', 'teamName': 'A', 'template': 'B'})
+        drop.assert_called_with({'type': 'drop_template', 'author': 1290,
+            'orders': [self.league.name, 'A', 'B']})
+        self.league.undropTemplates({'agent': 'agent', 'author': '409',
+            'type': 'undrop_template', 'teamName': 'K', 'template': 'L'})
+        undrop.assert_called_with({'type': 'undrop_template', 'author': 409,
+            'orders': [self.league.name, 'K', 'L']})
+
+    @patch('resources.league.League._addTemplate')
+    def test_externalAddTemplate(self, add):
+        self._setProp(self.league.SET_AGENTS, "ALL")
+        self.league.addTemplate({'agent': '007', 'author': 9484012,
+            'templateName': 'Shelter', 'warlightID': 4904321})
+        add.assert_called_once_with({'type': 'add_template', 'author':
+            9484012, 'orders': [self.league.name, 'Shelter', 4904321]})
+        self.league.addTemplate({'agent': '007', 'author': 9484012,
+            'templateName': 'Shelter', 'warlightID': 4904321,
+            'settings': {'A': 'B', 'C': {'D': {'E': 'F', 'H': 'G'}, 'E': 'K'}},
+            'overrides': {'Mexico': 8, 'Kazakhstan': '129'}})
+        add.assert_called_with({'type': 'add_template', 'author':
+            9484012, 'orders': [self.league.name, 'Shelter', 4904321,
+            'SET_A', 'B', 'SET_C#E', 'K', 'SET_C#D#H', 'G',
+            'SET_C#D#E', 'F', 'OVERRIDE_Kazakhstan', '129',
+            'OVERRIDE_Mexico', '8']})
+
+    @patch('resources.league.League._quitLeague')
+    def test_externalQuitLeague(self, quit):
+        self._setProp(self.league.SET_AGENTS, "ALL")
+        self.league.quitLeague({'agent': 'agent', 'author': '12'})
+        quit.assert_called_once_with({'type': 'quit_league', 'orders':
+            [self.league.name,], 'author': 12})
+        self.league.quitLeague({'agent': 'agent', 'author': '32',
+            'players': ['1', '2', '3']})
+        quit.assert_called_with({'type': 'quit_league', 'orders':
+            [self.league.name, '1', '2', '3'], 'author': 32})
 
 # run tests
 if __name__ == '__main__':

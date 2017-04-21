@@ -59,9 +59,9 @@ def checkAgent(func):
     function decorator to check order interface agents
     """
     def func_wrapper(self, order):
-        if not self._agentAllowed(order['author']):
+        if not self._agentAllowed(order['agent']):
             raise ImproperInput("Agent not authorized for this league")
-        return func(order)
+        return func(self, order)
     return func_wrapper
 
 # errors
@@ -74,7 +74,7 @@ class ImproperInput(Exception):
     pass
 
 class NonexistentItem(Exception):
-    """raises for nonexistent games"""
+    """raises for nonexistent items"""
     pass
 
 # main League class
@@ -234,7 +234,7 @@ class League(object):
                      an open-source project maintained by knyte.
 
                      If you never signed up for this league or suspect abuse,
-                     message knyte - tinyurl.com/mail-knyte
+                     message the creator of this game.
                      """ % ("_LEAGUE_NAME", SET_SUPER_NAME, SET_URL,
                             "_LEAGUE_INTERFACE", "_VETOS",
                             SET_VETO_LIMIT, "_GAME_SIDES",
@@ -276,8 +276,9 @@ class League(object):
         self.thread = thread
         self.handler = self._makeHandler()
         self._checkFormat()
-        self.sysDict = None
+        self.sysDict, self.orderDict = None, None
         self._makeRateSysDict()
+        self._makeOrderDict()
         self._currentID, self._gameSize, self._sideSize = None, list(), list()
         self.debug = self._fetchProperty(self.SET_DEBUG, False,
                                         self._getBoolProperty)
@@ -313,6 +314,36 @@ class League(object):
                                             'prettify': (lambda r:
                                             str(r.split(self.SEP_RTG)[0])),
                                             'parity': self._getWinRateParity}}
+
+    def _makeOrderDict(self):
+        self.orderDict =  {self.ORD_ADD_TEAM:
+            {'internal': self._addTeam, 'external': self.addTeam},
+            self.ORD_CONFIRM_TEAM:
+            {'internal': self._confirmTeam, 'external': self.confirmTeam},
+            self.ORD_UNCONFIRM_TEAM:
+            {'internal': self._unconfirmTeam, 'external': self.unconfirmTeam},
+            self.ORD_SET_LIMIT:
+            {'internal': self._setLimit, 'external': self.setLimit},
+            self.ORD_REMOVE_TEAM:
+            {'internal': self._removeTeam, 'external': self.removeTeam},
+            self.ORD_DROP_TEMPLATE:
+            {'internal': self._dropTemplates, 'external': self.dropTemplates},
+            self.ORD_UNDROP_TEMPLATE: {'internal': self._undropTemplates,
+            'external': self.undropTemplates},
+            self.ORD_DROP_TEMPLATES:
+            {'internal': self._dropTemplates, 'external': self.dropTemplates},
+            self.ORD_UNDROP_TEMPLATES: {'internal': self._undropTemplates,
+            'external': self.undropTemplates},
+            self.ORD_ACTIVATE_TEMPLATE: {'internal': self._activateTemplate,
+            'external': self.activateTemplate},
+            self.ORD_DEACTIVATE_TEMPLATE: {'internal':
+                self._deactivateTemplate, 'external': self.deactivateTemplate},
+            self.ORD_QUIT_LEAGUE: {'internal': self._quitLeague,
+            'external': self.quitLeague},
+            self.ORD_ADD_TEMPLATE: {'internal': self._addTemplate,
+            'external': self.addTemplate},
+            self.ORD_RENAME_TEAM: {'internal': self._renameTeam,
+            'external': self.renameTeam}}
 
     @staticmethod
     def _makeHandler():
@@ -1678,32 +1709,22 @@ class League(object):
         self._updateEntityValue(self.teams, matchingTeam['ID'],
                                 identifier='ID', Name=newName)
 
-    @runPhase
-    def _executeOrders(self):
-        for order in self.orders:
+    @noisy
+    def _runOrderExecution(self, orders, accessType):
+        for order in orders:
             orderType = order['type'].lower()
             try:
-                {self.ORD_ADD_TEAM: self._addTeam,
-                 self.ORD_CONFIRM_TEAM: self._confirmTeam,
-                 self.ORD_UNCONFIRM_TEAM: self._unconfirmTeam,
-                 self.ORD_SET_LIMIT: self._setLimit,
-                 self.ORD_REMOVE_TEAM: self._removeTeam,
-                 self.ORD_DROP_TEMPLATE: self._dropTemplates,
-                 self.ORD_UNDROP_TEMPLATE: self._undropTemplates,
-                 self.ORD_DROP_TEMPLATES: self._dropTemplates,
-                 self.ORD_UNDROP_TEMPLATES: self._undropTemplates,
-                 self.ORD_ACTIVATE_TEMPLATE: self._activateTemplate,
-                 self.ORD_DEACTIVATE_TEMPLATE: self._deactivateTemplate,
-                 self.ORD_QUIT_LEAGUE: self._quitLeague,
-                 self.ORD_ADD_TEMPLATE: self._addTemplate,
-                 self.ORD_RENAME_TEAM: self._renameTeam
-                }[orderType](order)
+                self.orderDict[orderType][accessType](order)
             except Exception as e:
                 if len(str(e)): # exception has some description string
                     self.parent.log(str(e), self.name, error=True)
                 else:
                     self._logFailedOrder(order)
         self._updateRanks()
+
+    @runPhase
+    def _executeOrders(self):
+        self._runOrderExecution(self.orders, 'internal')
 
     @property
     def unfinishedGames(self):
@@ -1748,16 +1769,18 @@ class League(object):
             return 'ABANDONED', [int(p.get('id')) for p in gameData['players']]
         else:
             decliners = self._findDecliners(gameData['players'])
-            if len(decliners) > 0: return 'DECLINED', decliners
+            booted = self._findBooted(gameData['players'])
+            if len(decliners) > 0:
+                return ('DECLINED', decliners, booted)
             return ('FINISHED', self._findWinners(gameData['players']),
-                    self._findBooted(gameData['players']))
+                    booted)
 
     @noisy
     def _wrapUp(self, gameData, group):
         self.handler.deleteGame(gameData['id'])
         if len(group) == len(gameData['players']):
             return 'ABANDONED', None
-        return 'DECLINED', group
+        return 'DECLINED', group, list()
 
     @noisy
     def _handleWaiting(self, gameData, created):
@@ -2080,10 +2103,15 @@ class League(object):
             self._changeLimit(team, 0)
 
     @noisy
-    def _updateWinners(self, gameID, groups):
-        winners, booted = groups
+    def _handleBooted(self, gameID, groups):
+        group, booted = groups
         gameData = self._fetchGameData(gameID)
         self._removeBooted(gameData, booted)
+        return group, gameData
+
+    @noisy
+    def _updateWinners(self, gameID, groups):
+        winners, gameData = self._handleBooted(gameID, groups)
         sides = self._getGameSidesFromData(gameData)
         winningTeams = self._findTeamsFromData(gameData, winners)
         for i in xrange(len(sides)):
@@ -2113,8 +2141,8 @@ class League(object):
         return results, winningSide
 
     @noisy
-    def _updateDecline(self, gameID, decliners):
-        gameData = self._fetchGameData(gameID)
+    def _updateDecline(self, gameID, groups):
+        decliners, gameData = self._handleBooted(gameID, groups)
         sides = self._getGameSidesFromData(gameData)
         losingTeams = self._findTeamsFromData(gameData, decliners)
         template = str(gameData['Template'])
@@ -2551,7 +2579,8 @@ class League(object):
         status = self._fetchGameStatus(warlightID, created)
         if status is not None:
             updateWin = self._getOneArgFunc(self._updateWinners, status[1:])
-            updateDecline = self._getOneArgFunc(self._updateDecline, status[1])
+            updateDecline = self._getOneArgFunc(self._updateDecline,
+                                                status[1:])
             {'FINISHED': updateWin, 'DECLINED': updateDecline,
              'ABANDONED': self._updateVeto}.get(status[0])(gameID)
 
@@ -3300,23 +3329,22 @@ class League(object):
     @staticmethod
     def _depackageOrder(order, *args):
         results = list()
-        for arg in args:
-            results.append(order[arg])
+        for arg in args: results.append(order[arg])
         return results
 
     def _makeDummy(self, orderType, author, *orders):
         orders = [self.name,] + list(orders)
-        return {'type': orderType, 'author': int(author),
-                'orders': orders}
+        return {'type': orderType, 'author': int(author), 'orders': orders}
 
     @checkAgent
     def addTeam(self, order):
-        auth, name, limit = self._depackageOrder('author', 'teamName', 'limit')
+        auth, name, limit = self._depackageOrder(order, 'author', 'teamName',
+                                                 'limit')
         self._addTeam(self._makeDummy('add_team', auth, name, limit,
                                       *(order['players'])))
 
     def _makeConfirmationOrder(self, order, orderType='confirm_team'):
-        author, teamName = self._depackageOrder('author', 'teamName')
+        author, teamName = self._depackageOrder(order, 'author', 'teamName')
         players = order.get('players', list())
         return self._makeDummy(orderType, author, teamName, *players)
 
@@ -3329,38 +3357,45 @@ class League(object):
         self._unconfirmTeam(self._makeConfirmationOrder(order,
                             'unconfirm_team'))
 
-    def _executeSimpleOrder(self, order, orderFn, orderType, *args):
+    def _executeSimpleOrder(self, order, orderType, *args):
+        orderFn = self.orderDict[orderType]['internal']
         vals = [order[arg] for arg in args]
         orderFn(self._makeDummy(orderType, *vals))
 
     @checkAgent
     def setLimit(self, order):
-        self._executeSimpleOrder(order, 'set_limit', self._setLimit,
-                                 'author', 'teamName', 'limit')
+        self._executeSimpleOrder(order, 'set_limit', 'author',
+                                 'teamName', 'limit')
 
     @checkAgent
     def renameTeam(self, order):
-        self._executeSimpleOrder(order, 'rename_team', self._renameTeam,
-                                 'author', 'teamName', 'newName')
+        self._executeSimpleOrder(order, 'rename_team', 'author',
+                                 'teamName', 'newName')
 
     @checkAgent
     def removeTeam(self, order):
-        self._executeSimpleOrder(order, 'remove_team', self._removeTeam,
-                                 'author', 'teamName')
+        self._executeSimpleOrder(order, 'remove_team', 'author', 'teamName')
 
-    def _makeTemplateDropOrder(self, order, orderType='drop_templates'):
-        author, teamName = self._depackageOrder('author', 'teamName')
-        self._makeDummy(orderType, author, self.name, teamName,
-                        *order['templates'])
+    def _makeTemplateDropOrder(self, order):
+        orderType = order['type']
+        author, teamName = self._depackageOrder(order, 'author', 'teamName')
+        return self._makeDummy(orderType, author, teamName,
+                               *order.get('templates',
+                               [order.get('template'),]))
+
+    def _handleTemplateDropOrder(self, order, orderType, dropFn):
+        if 'type' not in order: order['type'] = orderType
+        dropFn(self._makeTemplateDropOrder(order))
 
     @checkAgent
     def dropTemplates(self, order):
-        self._dropTemplates(self._makeTemplateDropOrder(order))
+        self._handleTemplateDropOrder(order, 'drop_templates',
+                                      self._dropTemplates)
 
     @checkAgent
     def undropTemplates(self, order):
-        self._undropTemplates(self._makeTemplateDropOrder(order,
-                              'undrop_templates'))
+        self._handleTemplateDropOrder(order, 'undrop_templates',
+                                      self._undropTemplates)
 
     @classmethod
     def _makePrefixedList(cls, data, label, prefix, separator):
@@ -3390,7 +3425,7 @@ class League(object):
         return results
 
     def _assembleAddOrder(self, order, templateName, warlightID):
-        orders = [self.name, templateName, warlightID]
+        orders = [templateName, warlightID]
         if self.multischeme: orders.append(order['scheme'])
         orders += self._disassembleSettings(order.get('settings', dict()))
         orders += self._disassembleOverrides(order.get('overrides', dict()))
@@ -3398,23 +3433,28 @@ class League(object):
 
     @checkAgent
     def addTemplate(self, order):
-        author, tempName, warlightID = self._depackageOrder('author',
+        author, tempName, warlightID = self._depackageOrder(order, 'author',
                                            'templateName', 'warlightID')
         orders = self._assembleAddOrder(order, tempName, warlightID)
         self._addTemplate(self._makeDummy('add_template', author, *orders))
 
     @checkAgent
     def activateTemplate(self, order):
-        self._executeSimpleOrder(order, 'activate_template',
-            self._activateTemplate, 'author', 'templateName')
+        self._executeSimpleOrder(order, 'activate_template', 'author',
+            'templateName')
 
     @checkAgent
     def deactivateTemplate(self, order):
-        self._executeSimpleOrder(order, 'deactivate_template',
-            self._deactivateTemplate, 'author', 'templateName')
+        self._executeSimpleOrder(order, 'deactivate_template', 'author',
+            'templateName')
 
     @checkAgent
     def quitLeague(self, order):
         author = order['author']
         self._quitLeague(self._makeDummy('quit_league', author,
                                          *(order.get('players', list()))))
+
+    def executeOrders(self, agent, orders):
+        for order in orders:
+            order['agent'] = agent
+        self._runOrderExecution(orders, 'external')
