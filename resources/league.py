@@ -3383,19 +3383,18 @@ class League(object):
                                *order.get('templates',
                                [order.get('template'),]))
 
-    def _handleTemplateDropOrder(self, order, orderType, dropFn):
+    def _handleTemplateDropOrder(self, order, orderType):
         if 'type' not in order: order['type'] = orderType
+        dropFn = self.orderDict[order['type']]['internal']
         dropFn(self._makeTemplateDropOrder(order))
 
     @checkAgent
     def dropTemplates(self, order):
-        self._handleTemplateDropOrder(order, 'drop_templates',
-                                      self._dropTemplates)
+        self._handleTemplateDropOrder(order, 'drop_templates')
 
     @checkAgent
     def undropTemplates(self, order):
-        self._handleTemplateDropOrder(order, 'undrop_templates',
-                                      self._undropTemplates)
+        self._handleTemplateDropOrder(order, 'undrop_templates')
 
     @classmethod
     def _makePrefixedList(cls, data, label, prefix, separator):

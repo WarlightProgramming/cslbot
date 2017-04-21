@@ -3381,6 +3381,7 @@ class TestLeague(TestCase):
     @patch('resources.league.League._undropTemplates')
     @patch('resources.league.League._dropTemplates')
     def test_externalToggleDrops(self, drop, undrop):
+        self.league._makeOrderDict()
         self._setProp(self.league.SET_AGENTS, "ALL")
         self.league.dropTemplates({'agent': 'agent', 'author': '1290',
             'teamName': 'Team Name', 'templates': ['A', 'B', 'C', 'D'],
