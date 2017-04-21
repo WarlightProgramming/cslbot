@@ -859,10 +859,8 @@ class League(object):
             probStart = team['Probation Start']
             probStart = datetime.strptime(probStart, self.TIMEFORMAT)
             if ((datetime.now() - probStart).days >= restPd):
-                self.teams.updateMatchingEntities({'ID': {'value': team['ID'],
-                                                          'type': 'positive'}},
-                                                 {'Rating': self.defaultRating,
-                                                  'Probation Start': ''})
+                self._updateEntityValue(self.teams, team['ID'],
+                    Rating=self.defaultRating, **{'Probation Start': ''})
 
     @property
     def allowJoins(self):
@@ -1411,14 +1409,10 @@ class League(object):
         members, confirms = [x for (x, y) in temp], [y for (x, y) in temp]
         members = (self.SEP_PLYR).join([str(m) for m in members])
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
-        self.teams.addEntity({'ID': self.currentID,
-                              'Name': teamName,
-                              'Limit': gameLimit,
-                              'Players': members,
-                              'Confirmations': confirms,
-                              'Vetos': "", 'Drops': forcedDrops,
-                              'Ongoing': 0, 'Finished': 0,
-                              'Rating': self.defaultRating})
+        self._addSanitizedEntity(self.teams, {'ID': self.currentID,
+            'Name': teamName, 'Limit': gameLimit, 'Players': members,
+            'Confirmations': confirms, 'Vetos': "", 'Drops': forcedDrops,
+            'Ongoing': 0, 'Finished': 0, 'Rating': self.defaultRating})
         self._currentID += 1
 
     @noisy
@@ -1675,7 +1669,7 @@ class League(object):
         if self.multischeme: tempDict['Schemes'], nexti = orders[3], 4
         for i in xrange(nexti+1, len(orders), 2):
             tempDict[orders[i-1]] = orders[i]
-        self.templates.addEntity(tempDict)
+        self._addSanitizedEntity(self.templates, tempDict)
 
     @noisy
     def _renameTeam(self, order):
@@ -2039,11 +2033,19 @@ class League(object):
         """
         return self.sysDict[self.ratingSystem]['update'](sides, winningSide)
 
-    @staticmethod
-    def _updateEntityValue(table, ID, identifier='ID', **values):
+    @classmethod
+    def _sanitized(cls, data):
+        for label in data:
+            if (isinstance(data[label], str) and
+                not cls._strBeginsWith(data[label], "'")):
+                data[label] = "'" + data[label]
+        return data
+
+    @classmethod
+    def _updateEntityValue(cls, table, ID, identifier='ID', **values):
         table.updateMatchingEntities({identifier: {'value': ID,
                                                    'type': 'positive'}},
-                                     values)
+                                     cls._sanitized(values))
 
     @noisy
     def _updateTeamRating(self, teamID, rating):
@@ -2559,7 +2561,8 @@ class League(object):
 
     @noisy
     def _eligibleForRank(self, teamData):
-        return (int(teamData['Finished']) >= self.minToRank and
+        return ('FALSE' not in teamData['Confirmations'] and
+                int(teamData['Finished']) >= self.minToRank and
                 int(teamData['Limit']) >= self.minLimitToRank)
 
     @staticmethod
@@ -2988,16 +2991,20 @@ class League(object):
         assignments = pair.assign_templates(matchingsDict, templatesDict, True)
         return [{'Sides': a[0], 'Template': a[1]} for a in assignments]
 
+    @classmethod
+    def _addSanitizedEntity(cls, table, entity):
+        table.addEntity(cls._sanitized(entity))
+
     @noisy
     def _createBatch(self, batch):
         currentID = max(int(ID) for ID in self.gameIDs) + 1
         for game in batch:
             try:
-                self.games.addEntity({'ID': currentID, 'WarlightID': '',
-                                      'Created': '', 'Winners': '',
-                                      'Sides': game['Sides'], 'Vetos': 0,
-                                      'Vetoed': '', 'Finished': '',
-                                      'Template': game['Template']})
+                self._addSanitizedEntity(self.games,
+                    {'ID': currentID, 'WarlightID': '', 'Created': '',
+                     'Winners': '', 'Sides': game['Sides'], 'Vetos': 0,
+                     'Vetoed': '', 'Finished': '',
+                     'Template': game['Template']})
                 self._makeGame(currentID)
                 currentID += 1
             except (SheetErrors.DataError, SheetErrors.SheetError) as e:

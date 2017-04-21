@@ -1324,7 +1324,7 @@ class TestLeague(TestCase):
         assert_raises(ImproperInput, self.league._handleAutodrop, 2, [13,14])
         self.league._handleAutodrop(2, [12,13])
         self.teams.updateMatchingEntities.assert_called_once_with({'ID':
-            {'value': 2, 'type': 'positive'}}, {'Drops': '11/10/13/12'})
+            {'value': 2, 'type': 'positive'}}, {'Drops': "'11/10/13/12"})
 
     @patch('resources.league.League._checkTemplateAccess')
     @patch('resources.league.League._banned')
@@ -1485,14 +1485,14 @@ class TestLeague(TestCase):
         oldCurr = self.league.currentID
         self.league._addTeam(order)
         self.teams.addEntity.assert_called_with({'ID': oldCurr,
-                                                 'Name': 'name',
+                                                 'Name': "'name",
                                                  'Limit': 5,
-                                                 'Players': '12,41,3905,4042',
+                                                 'Players': "'12,41,3905,4042",
                                                  'Confirmations':
-                                                 'TRUE,FALSE,FALSE,TRUE',
-                                                 'Vetos': "", 'Drops': "",
+                                                 "'TRUE,FALSE,FALSE,TRUE",
+                                                 'Vetos': "'", 'Drops': "'",
                                                  'Ongoing': 0, 'Finished': 0,
-                                                 'Rating':
+                                                 'Rating': "'" +
                                                  self.league.defaultRating})
         assert_equals(self.league.currentID, oldCurr + 1)
 
@@ -1730,7 +1730,7 @@ class TestLeague(TestCase):
         assert_equals(self.league._deactivateTemplate(order), None)
         self.league.templates.updateMatchingEntities.assert_called_with({
             'Name': {'value': 'tempName', 'type': 'positive'}},
-            {'Active': 'FALSE'})
+            {'Active': "'FALSE"})
         self._setProp(self.league.SET_MIN_TEMPLATES, 210)
         assert_raises(ImproperInput, self.league._deactivateTemplate, order)
 
@@ -1747,9 +1747,9 @@ class TestLeague(TestCase):
                       {'1204','902','671'})
 
     def test_updateConfirms(self):
-        self.league._updateConfirms(13804, [True, False, False])
+        self.league._updateConfirms(13804, [True, False])
         self.teams.updateMatchingEntities.assert_called_with({'ID': {'value':
-            13804, 'type': 'positive'}}, {'Confirmations': 'TRUE,FALSE,FALSE'})
+            13804, 'type': 'positive'}}, {'Confirmations': "'TRUE,FALSE"})
 
     @patch('resources.league.League._updateConfirms')
     @patch('resources.league.League._getPlayersFromOrder')
@@ -1788,8 +1788,8 @@ class TestLeague(TestCase):
         order['author'] = 43
         self.league._addTemplate(order)
         self.templates.addEntity.assert_called_with({'ID': 92,
-            'Name': 'Template Name', 'WarlightID': '4902494',
-            'Active': 'TRUE', 'Usage': 0, 'SET_Setting#Sub': 'Val',
+            'Name': "'Template Name", 'WarlightID': "'4902494",
+            'Active': "'TRUE", 'Usage': 0, 'SET_Setting#Sub': "'Val",
             'OVERRIDE_Mexico': 3})
         self._setProp(self.league.SET_GAME_SIZE, "5,7,6")
         assert_true(self.league.multischeme)
@@ -1797,17 +1797,17 @@ class TestLeague(TestCase):
                            'SET_Setting#Sub', 'Val', 'OVERRIDE_Mexico', 3]
         self.league._addTemplate(order)
         self.templates.addEntity.assert_called_with({'ID': 92,
-            'Name': 'Template Name', 'WarlightID': '4902494',
-            'Active': 'TRUE', 'Usage': 0, 'SET_Setting#Sub': 'Val',
-            'OVERRIDE_Mexico': 3, 'Schemes': '1v1,2v2,3v3'})
+            'Name': "'Template Name", 'WarlightID': "'4902494",
+            'Active': "'TRUE", 'Usage': 0, 'SET_Setting#Sub': "'Val",
+            'OVERRIDE_Mexico': 3, 'Schemes': "'1v1,2v2,3v3"})
 
     @patch('resources.league.League._fetchMatchingTeam')
     def test_renameTeam(self, fetch):
         fetch.return_value = [{'ID': 3},]
         self._setProp(self.league.SET_NAME_LENGTH, None)
-        self.league._renameTeam({'orders': ['1v1', 'Old Name', 'New Name']})
+        self.league._renameTeam({'orders': ['1v1', 'Old Name', "'New Name"]})
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 3, 'type': 'positive'}}, {'Name': 'New Name'})
+            {'value': 3, 'type': 'positive'}}, {'Name': "'New Name"})
 
     @patch('resources.league.League._updateRanks')
     @patch('resources.league.League._logFailedOrder')
@@ -1962,25 +1962,27 @@ class TestLeague(TestCase):
         time.strftime.return_value = ''
         self.league._setWinners(48, {12, 13, 43})
         self.games.updateMatchingEntities.assert_called_with({'ID': {'value':
-            48, 'type': 'positive'}}, {'Winners': '12,13,43', 'Finished': ''})
+            48, 'type': 'positive'}}, {'Winners': "'12,13,43",
+            'Finished': "'"})
         self.league._setWinners(48, {12, 13, 14}, True)
         self.games.updateMatchingEntities.assert_called_with({'ID': {'value':
-            48, 'type': 'positive'}}, {'Winners': '12,13,14!', 'Finished': ''})
+            48, 'type': 'positive'}},
+            {'Winners': "'12,13,14!", 'Finished': "'"})
 
     @patch('resources.league.League._fetchTeamData')
     def test_adjustTeamGameCount(self, fetch):
         fetch.return_value = {'Ongoing': 3, 'Finished': 5}
         self.league._adjustTeamGameCount(3, 5, 4)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 3, 'type': 'positive'}}, {'Ongoing': '8',
-             'Finished': '9'})
+            {'value': 3, 'type': 'positive'}}, {'Ongoing': "'8",
+             'Finished': "'9"})
 
     @patch('resources.league.League._fetchTemplateData')
     def test_adjustTemplateGameCount(self, fetch):
         fetch.return_value = {'Usage': 8}
         self.league._adjustTemplateGameCount(12, 43)
         self.templates.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 12, 'type': 'positive'}}, {'Usage': '51'})
+            {'value': 12, 'type': 'positive'}}, {'Usage': "'51"})
 
     @patch('resources.league.League.eloEnv')
     def test_getEloDiff(self, eloEnv):
@@ -2123,14 +2125,14 @@ class TestLeague(TestCase):
         table = MagicMock()
         self.league._updateEntityValue(table, 'Harambe', 'Name', Blue='yellow')
         table.updateMatchingEntities.assert_called_once_with({'Name':
-            {'value': 'Harambe', 'type': 'positive'}}, {'Blue': 'yellow'})
+            {'value': 'Harambe', 'type': 'positive'}}, {'Blue': "'yellow"})
         self.league._updateTeamRating(4, '4390')
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 4, 'type': 'positive'}}, {'Rating': '4390'})
+            {'value': 4, 'type': 'positive'}}, {'Rating': "'4390"})
         oldCount = self.teams.updateMatchingEntities.call_count
-        self.league._updateRatings({4: '4390', 3: '2301', 1: '3909'})
+        self.league._updateRatings({4: '4390', 3: '2301', 1: "'3909"})
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 4, 'type': 'positive'}}, {'Rating': '4390'})
+            {'value': 4, 'type': 'positive'}}, {'Rating': "'4390"})
         assert_equals(self.teams.updateMatchingEntities.call_count,
                       oldCount+3)
 
@@ -2253,14 +2255,14 @@ class TestLeague(TestCase):
         self.teams.findEntities.return_value = [{'Rating': '33/43/490'},]
         self.league._adjustRating(43, 4)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 43, 'type': 'positive'}}, {'Rating': '37/43/490'})
+            {'value': 43, 'type': 'positive'}}, {'Rating': "'37/43/490"})
         self.games.findEntities.return_value = [{'Sides': '1,2,3/4,5/6,7,8'},]
         oldCount = self.teams.updateMatchingEntities.call_count
         self._setProp(self.league.SET_VETO_PENALTY, -9)
         self.league._penalizeVeto(self.games.findEntities.return_value[0])
         assert_equals(self.teams.updateMatchingEntities.call_count, oldCount+8)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': '8', 'type': 'positive'}}, {'Rating': '42/43/490'})
+            {'value': '8', 'type': 'positive'}}, {'Rating': "'42/43/490"})
         self.league.tempTeams = {'3': '43/4/3/2/1'}
         self.league._adjustRating('3', -12)
         assert_equals(self.league.tempTeams, {'3': '31/4/3/2/1'})
@@ -2272,18 +2274,18 @@ class TestLeague(TestCase):
         self.league._vetoCurrentTemplate(gameData)
         self.games.updateMatchingEntities.assert_called_with({'ID':
             {'value': '8', 'type': 'positive'}}, {'Vetos': 4,
-            'Vetoed': '12/38/349/420', 'Template': ''})
+            'Vetoed': "'12/38/349/420", 'Template': "'"})
         self.templates.updateMatchingEntities.assert_called_with({'ID':
-            {'value': '420', 'type': 'positive'}}, {'Usage': '9'})
+            {'value': '420', 'type': 'positive'}}, {'Usage': "'9"})
 
     def test_setGameTemplate(self):
         self.templates.findEntities.return_value = [{'Usage': '43'},]
         gameData = {'ID': 'gameID'}
         self.league._setGameTemplate(gameData, 'tempID')
         self.games.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 'gameID', 'type': 'positive'}}, {'Template': 'tempID'})
+            {'value': 'gameID', 'type': 'positive'}}, {'Template': "'tempID"})
         self.templates.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 'tempID', 'type': 'positive'}}, {'Usage': '44'})
+            {'value': 'tempID', 'type': 'positive'}}, {'Usage': "'44"})
         assert_equals(gameData['Template'], 'tempID')
 
     def test_getTeamPlayers(self):
@@ -2403,12 +2405,12 @@ class TestLeague(TestCase):
         self.teams.findEntities.return_value = [{'History': '1,2,3,4'},]
         self.league._updateTeamHistory(1, ['9','8'])
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 1, 'type': 'positive'}}, {'History': '1,2,3,4,9,8'})
+            {'value': 1, 'type': 'positive'}}, {'History': "'1,2,3,4,9,8"})
         self.teams.findEntities.return_value = [{'History': ''},]
         self.league._updateHistories(gameData)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': '448', 'type': 'positive'}},
-            {'History': '12,33,2390,49'})
+            {'History': "'12,33,2390,49"})
 
     def test_strBeginsWith(self):
         assert_true(self.league._strBeginsWith("lasdkjfvnalkjalk", "lasdkjfv"))
@@ -2448,8 +2450,8 @@ class TestLeague(TestCase):
         datetime.strftime.return_value = "strftime"
         self.league._createGame('gameID')
         self.games.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 'gameID', 'type': 'positive'}}, {'WarlightID': 'WLID',
-            'Created': 'strftime'})
+            {'value': 'gameID', 'type': 'positive'}}, {'WarlightID': "'WLID",
+            'Created': "'strftime"})
         self.handler.createGame.side_effect = IOError
         self.league._createGame('gameID')
         failStr = "Failed to make game with 1/2 on 43 because of IOError()"
@@ -2511,19 +2513,20 @@ class TestLeague(TestCase):
                       '1.3/3.2/5.9')
         self.league._updateTeamVetos('teamID', '4', 1)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 'teamID', 'type': 'positive'}}, {'Vetos': '4.1'})
+            {'value': 'teamID', 'type': 'positive'}}, {'Vetos': "'4.1"})
         self.teams.findEntities.return_value = [{'Vetos': '1.2/3.4/4.1'},]
         self.league._updateTeamVetos('teamID', '3', 3)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 'teamID', 'type': 'positive'}}, {'Vetos': '1.2/3.7/4.1'})
+            {'value': 'teamID', 'type': 'positive'}}, {'Vetos':
+             "'1.2/3.7/4.1"})
         self.league._updateTeamVetos('teamID', '490', 1)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': 'teamID', 'type': 'positive'}},
-            {'Vetos': '1.2/3.4/4.1/490.1'})
+            {'Vetos': "'1.2/3.4/4.1/490.1"})
         self.league._updateGameVetos({1, 2, 3}, '317')
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': 3, 'type': 'positive'}},
-            {'Vetos': '1.2/3.4/4.1/317.1'})
+            {'Vetos': "'1.2/3.4/4.1/317.1"})
 
     def test_getTeams(self):
         gameData = {'Sides': '67,30/105,495,384/2,5,81'}
@@ -2578,10 +2581,12 @@ class TestLeague(TestCase):
     def test_wipeRank(self):
         self.league._wipeRank('teamID')
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 'teamID', 'type': 'positive'}}, {'Rank': ''})
+            {'value': 'teamID', 'type': 'positive'}}, {'Rank': "'"})
 
     def test_rankTests(self):
-        teamData = {'Finished': 43, 'Limit': 4}
+        teamData = {'Finished': 43, 'Limit': 4, 'Confirmations': 'TRUE,FALSE'}
+        assert_false(self.league._eligibleForRank(teamData))
+        teamData = {'Finished': 43, 'Limit': 4, 'Confirmations': 'TRUE,TRUE'}
         self._setProp(self.league.SET_MIN_TO_RANK, 40)
         self._setProp(self.league.SET_MIN_LIMIT_TO_RANK, 5)
         assert_false(self.league._eligibleForRank(teamData))
@@ -2609,12 +2614,19 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_MIN_TO_RANK, 20)
         self._setProp(self.league.SET_MIN_LIMIT_TO_RANK, 2)
         self.teams.findEntities.return_value = [{'ID': '1', 'Rank': '',
+            'Confirmations': 'TRUE,TRUE,TRUE',
             'Rating': '43', 'Limit': '1', 'Finished': '32'}, {'ID': '2',
+            'Confirmations': 'TRUE,TRUE,TRUE',
             'Rank': '3', 'Rating': '49', 'Limit': '4', 'Finished': '18'},
             {'ID': '3', 'Rank': '1', 'Rating': '48', 'Limit': '2',
+             'Confirmations': 'TRUE,TRUE,TRUE',
              'Finished': '22'}, {'ID': '4', 'Rank': '2', 'Rating': '55',
+             'Confirmations': 'TRUE,TRUE,TRUE',
              'Limit': '3', 'Finished': '40'}, {'ID': '5', 'Rank': '3',
-             'Rating': '48', 'Limit': '12', 'Finished': '35'}]
+             'Confirmations': 'TRUE,TRUE,TRUE',
+             'Rating': '48', 'Limit': '12', 'Finished': '35'}, {'ID': '6',
+             'Rank': '', 'Confirmations': 'FALSE,TRUE,FALSE', 'Rating': '11',
+             'Limit': '9', 'Finished': '43'}]
         oldCount = self.teams.updateMatchingEntities.call_count
         self.league._updateRanks()
         self.teams.updateMatchingEntities.assert_called_with({'ID':
@@ -2663,11 +2675,11 @@ class TestLeague(TestCase):
         dt.strftime.return_value = 'now'
         self.league._wipeProbation('teamID')
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 'teamID', 'type': 'positive'}}, {'Probation Start': ''})
+            {'value': 'teamID', 'type': 'positive'}}, {'Probation Start': "'"})
         self.league._startProbation('teamID')
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': 'teamID', 'type': 'positive'}},
-            {'Probation Start': 'now'})
+            {'Probation Start': "'now"})
 
     def test_meetsRetention(self):
         self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
@@ -2696,7 +2708,7 @@ class TestLeague(TestCase):
         meets.return_value = True
         self.league._checkTeamRating('teamID')
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 'teamID', 'type': 'positive'}}, {'Probation Start': ''})
+            {'value': 'teamID', 'type': 'positive'}}, {'Probation Start': "'"})
         self.teams.findEntities.return_value[0]['Probation Start'] = ''
         oldCount = self.teams.updateMatchingEntities.call_count
         self.league._checkTeamRating('teamID')
@@ -3008,9 +3020,9 @@ class TestLeague(TestCase):
                  {'Sides': '1/2', 'Template': '4'},]
         self.games.findValue.return_value = range(33)
         self.league._createBatch(batch)
-        self.games.addEntity.assert_called_with({'ID': 34, 'WarlightID': '',
-            'Created': '', 'Winners': '', 'Sides': '1/2', 'Vetos': 0,
-            'Vetoed': '', 'Finished': '', 'Template': '4'})
+        self.games.addEntity.assert_called_with({'ID': 34, 'WarlightID': "'",
+            'Created': "'", 'Winners': "'", 'Sides': "'1/2", 'Vetos': 0,
+            'Vetoed': "'", 'Finished': "'", 'Template': "'4"})
         make.assert_called_with(34)
         make.side_effect = wl_api.wl_api.APIError
         self.league._createBatch(batch)
@@ -3066,7 +3078,7 @@ class TestLeague(TestCase):
         self.league._rescaleRatings()
         assert_equals(self.teams.updateMatchingEntities.call_count, oldCount+4)
         self.teams.updateMatchingEntities.assert_called_with({'ID': {'type':
-            'positive', 'value': 4}}, {'Rating': '30/3'})
+            'positive', 'value': 4}}, {'Rating': "'30/3"})
 
     def test_decayTime(self):
         now = datetime.now()
@@ -3094,7 +3106,7 @@ class TestLeague(TestCase):
              'Limit': '0', 'Confirmations': 'FALSE,FALSE,FALSE'}]
         self.league._decayRatings()
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': 2, 'type': 'positive'}}, {'Rating': '24/8'})
+            {'value': 2, 'type': 'positive'}}, {'Rating': "'24/8"})
         assert_equals(self.teams.updateMatchingEntities.call_count, 2)
 
     def test_dateUnexpired(self):
@@ -3146,20 +3158,20 @@ class TestLeague(TestCase):
         assert_equals(self.teams.updateMatchingEntities.call_count,
                       oldCount+6)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': '6', 'type': 'positive'}}, {'Rating': '1463'})
+            {'value': '6', 'type': 'positive'}}, {'Rating': "'1463"})
         self._setProp(self.league.SET_PENALIZE_DECLINES, "False")
         assert_false(self.league.penalizeDeclines)
         self.league._calculateRatings()
         assert_equals(self.teams.updateMatchingEntities.call_count,
                       oldCount+12)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': '6', 'type': 'positive'}}, {'Rating': '1471'})
+            {'value': '6', 'type': 'positive'}}, {'Rating': "'1471"})
         self._setProp(self.league.SET_VETO_PENALTY, "0")
         self.league._calculateRatings()
         assert_equals(self.teams.updateMatchingEntities.call_count,
                       oldCount+18)
         self.teams.updateMatchingEntities.assert_called_with({'ID':
-            {'value': '6', 'type': 'positive'}}, {'Rating': '1496'})
+            {'value': '6', 'type': 'positive'}}, {'Rating': "'1496"})
 
     @patch('resources.league.League._calculateRatings')
     @patch('resources.league.League._decayRatings')
