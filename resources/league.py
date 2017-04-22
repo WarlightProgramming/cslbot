@@ -3286,20 +3286,20 @@ class League(object):
                 'Usage': int(template['Usage'])}
 
     @staticmethod
-    def packageEntities(entities, packageFn):
+    def _packageEntities(entities, packageFn):
         results = list()
         for entity in entities:
             results.append(packageFn(entity))
         return results
 
     def _packageTeams(self, *teams):
-        return self.packageEntities(teams, self._packageTeam)
+        return self._packageEntities(teams, self._packageTeam)
 
     def _packageGames(self, *games):
-        return self.packageEntities(games, self._packageGame)
+        return self._packageEntities(games, self._packageGame)
 
     def _packageTemplates(self, *templates):
-        return self.packageEntities(templates, self._packageTemplate)
+        return self._packageEntities(templates, self._packageTemplate)
 
     @staticmethod
     def _fetchAndPackage(fetchFn, packageFn, ID):
