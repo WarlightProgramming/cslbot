@@ -331,8 +331,8 @@ class TestLeague(TestCase):
         self._propertyTest(prop, label, default, values)
 
     def _groupPropertyTest(self, prop, label, default):
-        values = {"": set(), ",": set(), "a,b,c,d,e": {"a","b","c","d","e"},
-                  "ab,cde,fg,": {"ab", "cde", "fg"}}
+        values = {"": set(), ";": set(), "a;b;c;d;e": {"a","b","c","d","e"},
+                  "ab;cde;fg;": {"ab", "cde", "fg"}}
         self._propertyTest(prop, label, default, values)
 
     def test_autoformat(self):
@@ -499,7 +499,7 @@ class TestLeague(TestCase):
         self._posPropertyTest("teamSize", self.league.SET_TEAM_SIZE, 1)
 
     def test_gameSize(self):
-        self._setProp(self.league.SET_GAME_SIZE, "3,4,5")
+        self._setProp(self.league.SET_GAME_SIZE, "3;4;5")
         assert_true(self.league.gameSize in {3,4,5})
         oldSize = self.league.gameSize
         self._posPropertyTest("_statedGameSize()",
@@ -507,7 +507,7 @@ class TestLeague(TestCase):
         assert_equals(self.league.gameSize, oldSize)
 
     def test_sideSize(self):
-        self._setProp(self.league.SET_TEAMS_PER_SIDE, "1,50,100")
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, "1;50;100")
         assert_true(self.league.sideSize in {1,50,100})
         oldSize = self.league.sideSize
         self._posPropertyTest("_statedSideSize()",
@@ -521,9 +521,9 @@ class TestLeague(TestCase):
         scheme = self.league.scheme
         assert_equals(scheme.count(str(teamSize * sideSize)), gameSize)
         assert_equals(scheme.count("v"), gameSize - 1)
-        self._setProp(self.league.SET_TEAMS_PER_SIDE, "1,50,100")
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, "1;50;100")
         assert_true(self.league.multischeme)
-        self._setProp(self.league.SET_GAME_SIZE, "2,3,4")
+        self._setProp(self.league.SET_GAME_SIZE, "2;3;4")
         assert_true(self.league.multischeme)
         self._setProp(self.league.SET_TEAMS_PER_SIDE, "5")
         assert_true(self.league.multischeme)
@@ -1083,25 +1083,25 @@ class TestLeague(TestCase):
                                 self.league.SET_MIN_ACH, 0.0)
 
     def test_getIDGroup(self):
-        assert_equals(self.league.getIDGroup("1,2,3,4"), {1, 2, 3, 4})
+        assert_equals(self.league.getIDGroup("1;2;3;4"), {1, 2, 3, 4})
         assert_equals(self.league.getIDGroup("", str), set())
-        assert_equals(self.league.getIDGroup("5.0, 4.0", float), {4.0, 5.0})
+        assert_equals(self.league.getIDGroup("5.0; 4.0", float), {4.0, 5.0})
         assert_equals(self.league.getIDGroup("4.0", float), {4.0,})
 
     def test_getGroup(self):
-        assert_equals(self.league.getGroup("a,b,c,d"), {"a","b","c","d"})
+        assert_equals(self.league.getGroup("a;b;c;d"), {"a","b","c","d"})
         assert_equals(self.league.getGroup("a"), {"a",})
-        assert_equals(self.league.getGroup("b,"), {"b",})
+        assert_equals(self.league.getGroup("b;"), {"b",})
 
     def test_agents(self):
         self._groupPropertyTest('agents', self.league.SET_AGENTS, set())
 
     def test_agentAllowed(self):
-        self._setProp(self.league.SET_AGENTS, "ALL,12,24,36")
+        self._setProp(self.league.SET_AGENTS, "ALL;12;24;36")
         assert_true(self.league._agentAllowed(12))
         assert_true(self.league._agentAllowed("24"))
         assert_true(self.league._agentAllowed("23"))
-        self._setProp(self.league.SET_AGENTS, "12,24,36")
+        self._setProp(self.league.SET_AGENTS, "12;24;36")
         assert_true(self.league._agentAllowed(24))
         assert_false(self.league._agentAllowed(48))
 
@@ -1143,14 +1143,14 @@ class TestLeague(TestCase):
         player.clanID = None
         assert_false(self.league._clanAllowed(player))
         player.clanID = 30
-        self._setProp(self.league.SET_ALLOWED_CLANS, "30,40,50")
+        self._setProp(self.league.SET_ALLOWED_CLANS, "30;40;50")
         assert_true(self.league._clanAllowed(player))
         self._setProp(self.league.SET_ALLOWED_CLANS, "ALL")
         assert_true(self.league._clanAllowed(player))
         self._setProp(self.league.SET_ALLOWED_CLANS, "")
-        self._setProp(self.league.SET_BANNED_CLANS, "12,13,14")
+        self._setProp(self.league.SET_BANNED_CLANS, "12;13;14")
         assert_true(self.league._clanAllowed(player))
-        self._setProp(self.league.SET_BANNED_CLANS, "30,40,50")
+        self._setProp(self.league.SET_BANNED_CLANS, "30;40;50")
         assert_false(self.league._clanAllowed(player))
         self._setProp(self.league.SET_BANNED_CLANS, "ALL")
         assert_false(self.league._clanAllowed(player))
@@ -1249,7 +1249,7 @@ class TestLeague(TestCase):
         player.location = "United States"
         self._setProp(self.league.SET_BANNED_LOCATIONS, "Azerbaijan")
         self._setProp(self.league.SET_ALLOWED_LOCATIONS,
-                      "Arizona,New Mexico,Texas")
+                      "Arizona;New Mexico;Texas")
         player.bootRate = 30
         self._setProp(self.league.SET_MAX_BOOT, "35")
         player.level = 20
@@ -1285,9 +1285,9 @@ class TestLeague(TestCase):
         assert_false(self.league._allowed(43))
         check.return_value = True
         assert_true(self.league._allowed(43))
-        self._setProp(self.league.SET_BANNED_PLAYERS, "40,ALL")
+        self._setProp(self.league.SET_BANNED_PLAYERS, "40;ALL")
         assert_false(self.league._allowed(43))
-        self._setProp(self.league.SET_ALLOWED_PLAYERS, "ALL,40")
+        self._setProp(self.league.SET_ALLOWED_PLAYERS, "ALL;40")
         assert_true(self.league._allowed(43))
 
     @patch('resources.league.League._allowed')
@@ -1646,8 +1646,8 @@ class TestLeague(TestCase):
                 3: {'Schemes': '1v1,ALL'}, 4: {'Schemes': '2v2,4v4'},
                 5: {'Schemes': '2v2'}, 6: {'Schemes': '3v3v3v3v3,4v4v4v4v4'}}
         self.league._gameSize, self.league._sideSize = list(), list()
-        self._setProp(self.league.SET_GAME_SIZE, '2,2,2,2,2')
-        self._setProp(self.league.SET_TEAMS_PER_SIDE, '1,1')
+        self._setProp(self.league.SET_GAME_SIZE, '2;2;2;2;2')
+        self._setProp(self.league.SET_TEAMS_PER_SIDE, '1;1')
         self._setProp(self.league.SET_TEAM_SIZE, '2')
         assert_equals(self.league.scheme, '2v2')
         assert_true(self.league.multischeme)
@@ -1805,7 +1805,7 @@ class TestLeague(TestCase):
             'Name': "'Template Name", 'WarlightID': "'4902494",
             'Active': "'TRUE", 'Usage': 0, 'SET_Setting#Sub': "'Val",
             'OVERRIDE_Mexico': 3})
-        self._setProp(self.league.SET_GAME_SIZE, "5,7,6")
+        self._setProp(self.league.SET_GAME_SIZE, "5;7;6")
         assert_true(self.league.multischeme)
         order['orders'] = ['1v1', 'Template Name', '4902494', '1v1,2v2,3v3',
                            'SET_Setting#Sub', 'Val', 'OVERRIDE_Mexico', 3]

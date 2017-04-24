@@ -61,7 +61,7 @@ the sheet.)
   specified using its name, like "1v1" if you have created a league called
   1v1.)
 * **Args**: the arguments to pass to a command; either a single value or a
-  comma-separated list (depending on the command type.)
+  semicolon-separated list (depending on the command type.)
 
 ## Commands List
 
@@ -78,7 +78,7 @@ ___
 
 #### LEAGUES
 
-A comma-separated list of all the leagues tied to this sheet.
+A semicolon-separated list of all the leagues tied to this sheet.
 
 *This command does not require a League to be specified*
 
@@ -193,7 +193,7 @@ ___
 
 #### MODS
 
-A comma-separated list of Warlight IDs of league mods.
+A semicolon-separated list of Warlight IDs of league mods.
 
 *Sample Args*: "3022124041", "1,2,3,4"
 
@@ -223,7 +223,7 @@ ___
 
 #### AUTHORIZED INTERFACES
 
-A comma-separated list of Warlight ID's corresponding to Interfaces authorized
+A semicolon-separated list of Warlight ID's corresponding to Interfaces authorized
 to execute Orders for your league.
 
 *Sample Args*: "", "ALL", "3022124041", "3022124041,62456969"
@@ -811,7 +811,7 @@ ___
 
 #### BANNED PLAYERS
 
-A comma-separated list of Warlight IDs of banned players.
+A semicolon-separated list of Warlight IDs of banned players.
 
 *Sample Args*: "3022124041", "1,2,3,4", "ALL"
 
@@ -828,7 +828,7 @@ ___
 
 #### ALLOWED PLAYERS
 
-A comma-separated list of Warlight IDs of explicitly allowed players.
+A semicolon-separated list of Warlight IDs of explicitly allowed players.
 
 *Sample Args*: "3022124041", "1,2,3,4"
 
@@ -853,7 +853,7 @@ ___
 
 #### BANNED CLANS
 
-A comma-separated list of Warlight clan IDs of banned clans.
+A semicolon-separated list of Warlight clan IDs of banned clans.
 
 *Sample Args*: "12", "160,161", "ALL"
 
@@ -869,7 +869,7 @@ ___
 
 #### ALLOWED CLANS
 
-A comma-separated list of Warlight clan IDs of explicitly allowed clans.
+A semicolon-separated list of Warlight clan IDs of explicitly allowed clans.
 
 *Sample Args*: "10,20,30", "5"
 
@@ -885,7 +885,7 @@ ___
 
 #### BANNED LOCATIONS
 
-A comma-separated list of banned location names.
+A semicolon-separated list of banned location names.
 
 *Sample Args*: "Morocco", "France,Germany,Denmark", "Pennsylvania,Texas", "ALL"
 
@@ -929,7 +929,7 @@ ___
 
 Any location explicitly allowed (at any degree of resolution, if there are
 multiple- e.g., a player from Texas will get in through this if either the US or Texas is
-explicitly allowed) to participate should be in this comma-separated list.
+explicitly allowed) to participate should be in this semicolon-separated list.
 
 See the discussion under [**BANNED LOCATIONS**](#banned-locations) for more details, especially if
 you're planning on dealing with American states.
@@ -1865,7 +1865,7 @@ ___
 Some of the documentation above (specifically with [**GAME SIZE**](#game-size)
 and [**TEAMS PER SIDE**](#teams-per-side)) is actually not quite accurate.
 Instead of just providing single integer values for these, you can actually
-supply comma-separated lists containing possible values among which cslbot will
+supply semicolon-separated lists containing possible values among which cslbot will
 randomly pick one each time it runs a league.
 
 Note that the [**REMATCH HORIZON**](#rematch-horizon) will now purely just
@@ -1877,13 +1877,13 @@ The template data sheet must also be altered to accommodate a multischeme
 ladder- each template must now specify **Schemes** (e.g., "3v3,2v2",
 "4v4v4v4,5v5v5") encoding the combinations of game size and the number of players per side that it's
 designed to support. The "ALL" keyword may be used for templates meant to be
-used with any scheme. Schemes must be supplied as a comma-separated list.
+used with any scheme. Schemes must be supplied as a semicolon-separated list.
 
 ___
 
 #### GAME SIZE
 
-A comma-separated list of possible game sizes (in terms of number of sides).
+A semicolon-separated list of possible game sizes (in terms of number of sides).
 
 *Sample Args*: "1,2,4", "1,3,5", "5", "1,1,1,2,2"
 
@@ -1902,7 +1902,7 @@ ___
 
 #### TEAMS PER SIDE
 
-A comma-separated list of possible numbers of teams per side.
+A semicolon-separated list of possible numbers of teams per side.
 
 *Sample Args*: "1,2", "1,2,3,4", "2", "1,1,1,2,2"
 

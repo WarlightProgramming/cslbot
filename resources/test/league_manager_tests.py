@@ -202,6 +202,18 @@ class TestLeagueManager(TestCase):
         assert_equals(self.manager._fetchThreadOrders('1294', '2'), set())
         assert_equals(log.call_count, 2)
 
+    def test_narrowOrders(self):
+        orders = [{'type': 'add_team', 'orders': ['3v3','4']},
+                  {'type': 'remove_team', 'orders': ['ALL', '9']},
+                  {'type': 'confirm_team', 'orders': ['1v1', '4']},
+                  {'type': 'set_limit'}]
+        assert_equals(self.manager._narrowOrders(orders, '3v3'), orders[:2])
+
+    def test_getLeagueSheets(self):
+        assert_equals(self.manager._getLeagueSheets('league'),
+                      tuple([self.database.fetchTable.return_value,] * 3))
+        self.database.fetchTable.assert_called_with("Template Data (league)")
+
 # run tests
 if __name__ == '__main__':
     run_tests()

@@ -16,10 +16,6 @@ class ThreadError(Exception):
     """error for improper thread"""
     pass
 
-class OrderError(Exception):
-    """error for high-level order issues"""
-    pass
-
 # main LeagueManager class
 class LeagueManager(object):
 
@@ -207,31 +203,12 @@ class LeagueManager(object):
         narrows a thread orders list to only orders that relate to a league
         """
         return [order for order in orders if
+                len(order.get('orders', list())) and
                 (order['orders'][0] == league or
                  order['orders'][0] == cls.LG_ALL)]
 
-    @classmethod
-    def _getNonSpecificOrders(cls, orders, leagues):
-        """
-        retrieves only orders that don't specify a league
-        """
-        return [order for order in orders if
-                (order['orders'][0] not in leagues and
-                 order['orders'][0] != cls.LG_ALL)]
-
-    def _runOrders(self, orders):
-        """runs orders that are not specific to any league"""
-        for order in orders:
-            orderType = order['type'].lower()
-            try:
-                {}[orderType](order)
-            except KeyError:
-                self.log("Unrecognized order: %s" % (order['type']))
-            except OrderError as err:
-                self.log("Order Error: %s" % (str(err)))
-
     def _getLeagueSheets(self, league):
-        suffix = " (%s)" % (self.league)
+        suffix = " (%s)" % (league)
         gamesTitle = self.SHEET_GAMES + suffix
         teamsTitle = self.SHEET_TEAMS + suffix
         templatesTitle = self.SHEET_TEMPLATES + suffix
@@ -242,8 +219,7 @@ class LeagueManager(object):
 
     @classmethod
     def _retrieveOffset(cls, found):
-        if len(found) == 0:
-            return 0
+        if len(found) == 0: return 0
         return found[0][cls.TITLE_ARG]
 
     def _handleInterfaces(self, league, interfaces):

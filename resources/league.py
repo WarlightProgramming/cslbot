@@ -246,7 +246,7 @@ class League(object):
     KW_TEMPOVERRIDE = "OVERRIDE_"
 
     # separators
-    SEP_CMD = ","
+    SEP_CMD = ";"
     SEP_PLYR = ","
     SEP_CONF = ","
     SEP_TEAMS = ","
