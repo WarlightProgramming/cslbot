@@ -16,6 +16,10 @@ class ThreadError(Exception):
     """error for improper thread"""
     pass
 
+class LeagueError(Exception):
+    """error for leagues"""
+    pass
+
 # main LeagueManager class
 class LeagueManager(object):
 
@@ -29,7 +33,7 @@ class LeagueManager(object):
     LG_ALL = "ALL"
     COMMANDS_HEADER = [TITLE_LG, TITLE_CMD, TITLE_ARG]
     CMD_MAKE = 'LEAGUES'
-    SEP_CMD = ","
+    SEP_CMD = ";"
     ABUSE_THRESHOLD = 5
     PREFIX = "[CSL]"
 
@@ -62,7 +66,7 @@ class LeagueManager(object):
     def _fetchLeagueNames(self):
         matches = self.commands.findEntities({self.TITLE_CMD: {'type':
             'positive', 'value': self.CMD_MAKE}})
-        if len(matches): return matches[0][self.TITLE_ARG].split(',')
+        if len(matches): return matches[0][self.TITLE_ARG].split(self.SEP_CMD)
         else: return list()
 
     def _validateAdmin(self, adminID):
@@ -155,9 +159,7 @@ class LeagueManager(object):
 
     @classmethod
     def _getCommandArgs(cls, commands, command, i):
-        args = commands[command][i][cls.TITLE_ARG].upper()
-        if cls.SEP_CMD in args: return args.split(cls.SEP_CMD)
-        return args
+        return commands[command][i][cls.TITLE_ARG].upper()
 
     def _addArgToResults(self, results, commands, command, i):
         args = self._getCommandArgs(commands, command, i)
@@ -220,48 +222,82 @@ class LeagueManager(object):
     @classmethod
     def _retrieveOffset(cls, found):
         if len(found) == 0: return 0
-        return found[0][cls.TITLE_ARG]
+        return int(found[0][cls.TITLE_ARG])
 
-    def _handleInterfaces(self, league, interfaces):
-        if len(interfaces) == 0: return "(no league interface specified)"
-        elif len(interfaces) > 1:
-            return self._fetchLeagueCommands(league).get('INTERFACE',
-                                                         interfaces[0])
-        return interfaces[0]
+    def _handleInterfaces(self, league, interface):
+        if interface is None: interface = "(no league interface specified)"
+        return self._fetchLeagueCommands(league).get('INTERFACE',
+                                                     interface)
 
     def _getInterfaceName(self, thread, league):
         if (isinstance(thread, int) or (isinstance(thread, str) and
             isInteger(thread))):
             return 'https://www.warlight.net/Forum/' + str(thread)
-        interfaces = self.commands.findEntities({self.TITLE_CMD: 'INTERFACE'})
+        elif len(thread): return thread
+        interfaces = self._fetchLeagueCommands("").get('INTERFACE')
         return self._handleInterfaces(league, interfaces)
+
+    def _checkLeagueExists(self, league):
+        if str(league) not in self.leagues:
+            raise LeagueError("Nonexistent league")
+
+    def _agentAuthorized(self, agent, league):
+        authorized = self.commands.findEntities({self.TITLE_CMD:
+            'AUTHORIZED INTERFACES', self.TITLE_LG: league})
+        if not len(authorized): return False
+        authorized = authorized[0][self.TITLE_ARG].split(self.SEP_CMD)
+        return (str(agent) in authorized)
+
+    def fetchLeague(self, league, threadName=None, orders=None):
+        """
+        fetches a League object for a league within this cluster
+        :param league: (str) name of the league to fetch
+        :param thread: (str) URL of League thread
+        """
+        self._checkLeagueExists(league)
+        if orders is None: orders = set()
+        if threadName is None: threadName = self._fetchThread()
+        interface = self._getInterfaceName(threadName, league)
+        games, teams, templates = self._getLeagueSheets(league)
+        commands = self._fetchLeagueCommands(league)
+        orders = self._narrowOrders(orders, league)
+        lgRunner = League(games, teams, templates, commands, orders,
+                          self.admin, self, league, interface)
+        return lgRunner
+
+    def fetchCommands(self):
+        result = dict()
+        for league in self.leagues + [self.LG_ALL,]:
+            result[league] = self._fetchLeagueCommands(league)
+        return result
+
+    def setCommand(self, agent, league, command, value):
+        if not self._agentAuthorized(agent, league):
+            raise LeagueError("Agent not authorized for this league")
+        self.commands.updateMatchingEntities({self.TITLE_CMD: command,
+            self.TITLE_LG: league}, {self.TITLE_ARG: value}, True)
+
+    def _fetchThread(self):
+        threadData = self.commands.findEntities({self.TITLE_CMD: 'THREAD'})
+        thread = threadData[0][self.TITLE_ARG] if len(threadData) else ""
+        return thread
 
     def run(self):
         """runs leagues and updates"""
-        threadData = self.commands.findEntities({self.TITLE_CMD: 'THREAD'})
+        if self.admin is None: return
+        thread = self._fetchThread()
         offsetData = self.commands.findEntities({self.TITLE_CMD: 'OFFSET'})
-        orders, offset = set(), 0
-        if (len(threadData) > 0):
-            thread, offset = (threadData[0],
-                              self._retrieveOffset(offsetData))
-            orders = self._fetchThreadOrders(thread, offset)
-            self._runOrders(self._getNonSpecificOrders(orders, self.leagues))
+        offset = self._retrieveOffset(offsetData)
+        orders = (self._fetchThreadOrders(thread, offset) if len(thread)
+                  else set())
         for league in self.leagues:
-            games, teams, templates = self._getLeagueSheets(league)
-            orders = self._narrowOrders(orders, league)
-            commands = self._fetchLeagueCommands(league)
-            thread = threadData[0][self.TITLE_ARG] if len(threadData) else ""
-            threadName = self._getInterfaceName(thread, league)
-            lgRunner = League(games, teams, templates, commands, orders,
-                              self.admin, self, league, threadName)
-            try:
-                lgRunner.run()
+            lgRunner = self.fetchLeague(league, thread, orders)
+            try: lgRunner.run()
             except Exception as e:
                 errStr = str(e)
                 failStr = "Failed to run league %s: %s" % (str(league), errStr)
                 self.log(failStr, league=league, error=True)
         newOffset = offset + len(orders)
         self.commands.updateMatchingEntities({self.TITLE_CMD:
-                                              {'value': 'OFFSET',
-                                               'type': 'positive'}},
-                                             {self.TITLE_ARG: str(newOffset)})
+            {'value': 'OFFSET', 'type': 'positive'}},
+            {self.TITLE_ARG: str(newOffset)})

@@ -5,7 +5,8 @@
 from unittest import TestCase, main as run_tests
 from nose.tools import assert_equals, assert_raises, assert_false, assert_true
 from mock import patch, MagicMock
-from resources.league_manager import LeagueManager, ThreadError, isInteger
+from resources.league_manager import LeagueManager, ThreadError, isInteger,\
+    LeagueError
 
 # tests
 ## LeagueManager class tests
@@ -19,7 +20,7 @@ class TestLeagueManager(TestCase):
         self.database = MagicMock()
         self.commands = MagicMock()
         self.commands.findEntities.return_value = [{LeagueManager.TITLE_ARG:
-            '1v1,2v2,3v3'},]
+            '1v1;2v2;3v3'},]
         self.database.fetchTable.return_value = self.commands
         self.manager = LeagueManager(self.database, self.globalManager)
 
@@ -34,7 +35,7 @@ class TestLeagueManager(TestCase):
 
     def test_fetchLeagueNames(self):
         self.commands.findEntities.return_value = [{LeagueManager.TITLE_ARG:
-            'a,b,c,d'}, {LeagueManager.TITLE_ARG: 'de,fg'}]
+            'a;b;c;d'}, {LeagueManager.TITLE_ARG: 'de;fg'}]
         assert_equals(self.manager._fetchLeagueNames(), ['a', 'b', 'c', 'd'])
         self.commands.findEntities.return_value = list()
         assert_equals(self.manager._fetchLeagueNames(), list())
@@ -176,14 +177,14 @@ class TestLeagueManager(TestCase):
 
     def test_fetchLeagueCommands(self):
         self.commands.getAllEntities.return_value = {'Cmd': [{'Args': 'Are',
-            'League': 'We'}], 'Human': [{'Args': 'Or', 'League': 'Are'}],
+            'League': ''}], 'Human': [{'Args': 'Or', 'League': 'Are'}],
             'We': [{'Args': 'Dancer', 'League': 'ALL'}], 'And': [{'Args':
-            '', 'League': 'We'}, {'Args': 'Are,We,Human', 'League': 'ALL'}],
+            '', 'League': ''}, {'Args': 'Are;We;Human', 'League': 'ALL'}],
             'WE': [{'Args': 'Human', 'League': 'Are'}]}
-        assert_equals(self.manager._fetchLeagueCommands('We'),
+        assert_equals(self.manager._fetchLeagueCommands(''),
             {'CMD': 'ARE', 'WE': 'DANCER', 'AND': ''})
         assert_equals(self.manager._fetchLeagueCommands('Are'),
-            {'HUMAN': 'OR', 'WE': 'HUMAN', 'AND': ['ARE','WE','HUMAN']})
+            {'HUMAN': 'OR', 'WE': 'HUMAN', 'AND': 'ARE;WE;HUMAN'})
 
     @patch('resources.league_manager.LeagueManager.log')
     @patch('resources.league_manager.LeagueManager._validateThread')
@@ -213,6 +214,115 @@ class TestLeagueManager(TestCase):
         assert_equals(self.manager._getLeagueSheets('league'),
                       tuple([self.database.fetchTable.return_value,] * 3))
         self.database.fetchTable.assert_called_with("Template Data (league)")
+
+    def test_retrieveOffset(self):
+        assert_equals(self.manager._retrieveOffset(list()), 0)
+        assert_equals(self.manager._retrieveOffset([{'Command': 'OFFSET',
+            'Args': '1204'},]), 1204)
+
+    def test_handleInterfaces(self):
+        self.commands.getAllEntities.return_value = list()
+        assert_equals(self.manager._handleInterfaces("4v4", None),
+                      "(no league interface specified)")
+        assert_equals(self.manager._handleInterfaces("4v4", "C"), 'C')
+        self.commands.getAllEntities.return_value = {"INTERFACE":
+            [{'League': 'ALL', 'Args': 'A'}, {'League': '4v4', 'Args': 'B'}]}
+        assert_equals(self.manager._handleInterfaces("4v4", None), 'B')
+        assert_equals(self.manager._handleInterfaces("4v4", "C"), 'B')
+
+    @patch('resources.league_manager.LeagueManager._handleInterfaces')
+    @patch('resources.league_manager.LeagueManager._fetchLeagueCommands')
+    def test_getInterfaceName(self, fetch, handle):
+        assert_equals(self.manager._getInterfaceName("thread", 'league'),
+                      "thread")
+        assert_equals(self.manager._getInterfaceName("4290", 'league'),
+            'https://www.warlight.net/Forum/4290')
+        assert_equals(self.manager._getInterfaceName("", "league"),
+                      handle.return_value)
+        handle.assert_called_once_with('league',
+                                       fetch.return_value.get.return_value)
+
+    def test_checkLeagueExists(self):
+        self.manager.leagues = ["A", "1"]
+        assert_equals(self.manager._checkLeagueExists(1), None)
+        assert_equals(self.manager._checkLeagueExists("A"), None)
+        assert_raises(LeagueError, self.manager._checkLeagueExists, "B")
+
+    def test_agentAuthorized(self):
+        self.commands.findEntities.return_value = list()
+        assert_false(self.manager._agentAuthorized("Agent Orange", "A"))
+        self.commands.findEntities.return_value = [{'Args': 'K;L;M'},]
+        assert_true(self.manager._agentAuthorized("K", "A"))
+        assert_false(self.manager._agentAuthorized("A", "A"))
+
+    @patch('resources.league_manager.League')
+    @patch('resources.league_manager.LeagueManager._fetchLeagueCommands')
+    @patch('resources.league_manager.LeagueManager._getLeagueSheets')
+    @patch('resources.league_manager.LeagueManager._getInterfaceName')
+    @patch('resources.league_manager.LeagueManager._fetchThread')
+    @patch('resources.league_manager.LeagueManager._checkLeagueExists')
+    def test_fetchLeague(self, check, fetch, interface, sheets, commands, lg):
+        sheets.return_value = ('games', 'teams', 'templates')
+        assert_equals(self.manager.fetchLeague('league'), lg.return_value)
+        lg.assert_called_once_with('games', 'teams', 'templates',
+            commands.return_value, list(), self.manager.admin, self.manager,
+            'league', interface.return_value)
+        assert_equals(self.manager.fetchLeague('league', 'name',
+            [{'orders': ['league',]}, {'orders': ['not league',]}]),
+            lg.return_value)
+        lg.assert_called_with('games', 'teams', 'templates',
+            commands.return_value, [{'orders': ['league',]},],
+            self.manager.admin, self.manager, 'league', interface.return_value)
+
+    @patch('resources.league_manager.LeagueManager._fetchLeagueCommands')
+    def test_fetchCommands(self, fetch):
+        fetch.side_effect = ['D', 'E', 'F', 'G']
+        self.manager.leagues = ['A', 'B', 'C']
+        assert_equals(self.manager.fetchCommands(), {'A': 'D', 'B': 'E',
+            'C': 'F', 'ALL': 'G'})
+
+    @patch('resources.league_manager.LeagueManager._agentAuthorized')
+    def test_setCommand(self, auth):
+        auth.return_value = False
+        assert_raises(LeagueError, self.manager.setCommand, 'a', 'l', 'c', 'v')
+        auth.return_value = True
+        self.manager.setCommand('a', 'l', 'c', 'v')
+        self.commands.updateMatchingEntities.assert_called_with({'Command':
+            'c', 'League': 'l'}, {'Args': 'v'}, True)
+
+    def test_fetchThread(self):
+        self.commands.findEntities.return_value = list()
+        assert_equals(self.manager._fetchThread(), "")
+        self.commands.findEntities.return_value = [{'Args': 'A'},]
+        assert_equals(self.manager._fetchThread(), "A")
+
+    @patch('resources.league_manager.LeagueManager.log')
+    @patch('resources.league_manager.LeagueManager.fetchLeague')
+    @patch('resources.league_manager.LeagueManager._fetchThreadOrders')
+    @patch('resources.league_manager.LeagueManager._retrieveOffset')
+    @patch('resources.league_manager.LeagueManager._fetchThread')
+    def test_run(self, thread, offset, orders, league, log):
+        offset.return_value = 4903
+        thread.return_value = "A"
+        orders.return_value = range(30)
+        self.manager.admin = None
+        self.manager.run()
+        thread.assert_not_called()
+        self.manager.admin = 1234
+        self.manager.leagues = ['A', 'B', 'C']
+        self.manager.run()
+        assert_equals(league.return_value.run.call_count,
+                      len(self.manager.leagues))
+        self.commands.updateMatchingEntities.assert_called_with({'Command':
+            {'value': 'OFFSET', 'type': 'positive'}}, {'Args': '4933'})
+        thread.return_value = ""
+        league.return_value.run.side_effect = Exception("SEGFAULT")
+        self.manager.run()
+        self.commands.updateMatchingEntities.assert_called_with({'Command':
+            {'value': 'OFFSET', 'type': 'positive'}}, {'Args': '4903'})
+        log.assert_called_with("Failed to run league C: SEGFAULT",
+                               error=True, league='C')
+        assert_equals(self.manager.log.call_count, 3)
 
 # run tests
 if __name__ == '__main__':
