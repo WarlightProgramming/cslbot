@@ -43,7 +43,7 @@ class TestLeagueManager(TestCase):
     @patch('resources.league_manager.LeagueManager.log')
     @patch('resources.league_manager.PlayerParser')
     def test_validateAdmin(self, parser, log):
-        verified = self.globalManager.adminVerified
+        verified = self.globalManager.verifyAdmin
         verified.return_value = True
         parser.return_value.isMember = True
         assert_equals(self.manager._validateAdmin("390089"), 390089)

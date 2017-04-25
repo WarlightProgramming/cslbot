@@ -71,7 +71,7 @@ class LeagueManager(object):
 
     def _validateAdmin(self, adminID):
         adminID = int(adminID)
-        if not (self.manager.adminVerified(adminID, self.database.sheet.ID) and
+        if not (self.manager.verifyAdmin(adminID, self.database.sheet.ID) and
                 PlayerParser(adminID).isMember):
             self.log("League admin is not authorized", error=True)
             return None
