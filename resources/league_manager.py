@@ -8,7 +8,7 @@ import datetime
 from resources.utility import isInteger
 from resources.order_parser import OrderParser
 from resources.league import League
-from resources.constants import TIMEFORMAT
+from resources.constants import TIMEFORMAT, LATEST_RUN
 from wl_parsers import ForumThreadParser, PlayerParser
 
 # errors
@@ -265,22 +265,55 @@ class LeagueManager(object):
                           self.admin, self, league, interface)
         return lgRunner
 
+    def fetchAllLeagues(self, threadName=None, orders=None):
+        results = list()
+        for league in self.leagues:
+            results.append(self.fetchLeague(league, threadName, orders))
+        return results
+
+    def fetchLeagueOrLeagues(self, league, threadName=None, orders=None):
+        if league == self.LG_ALL:
+            return self.fetchAllLeagues(threadName, orders)
+        return [self.fetchLeague(league, threadName, orders),]
+
     def fetchCommands(self):
         result = dict()
         for league in self.leagues + [self.LG_ALL,]:
             result[league] = self._fetchLeagueCommands(league)
         return result
 
-    def setCommand(self, agent, league, command, value):
-        if not self._agentAuthorized(agent, league):
-            raise LeagueError("Agent not authorized for this league")
+    def _setCommand(self, league, command, value):
         self.commands.updateMatchingEntities({self.TITLE_CMD: command,
             self.TITLE_LG: league}, {self.TITLE_ARG: value}, True)
+
+    def _checkAgent(self, agent, league):
+        if not self._agentAuthorized(agent, league):
+            raise LeagueError("Agent not authorized for this league")
+
+    def setCommand(self, agent, league, command, value):
+        self._checkAgent(agent, league)
+        self._setCommand(league, command, value)
 
     def _fetchThread(self):
         threadData = self.commands.findEntities({self.TITLE_CMD: 'THREAD'})
         thread = threadData[0][self.TITLE_ARG] if len(threadData) else ""
         return thread
+
+    def _runLeague(self, league, thread=None, orders=None):
+        lgRunner = self.fetchLeague(league, thread, orders)
+        try:
+            lgRunner.run()
+            latestTime = datetime.datetime.strftime(datetime.datetime.now(),
+                                                    TIMEFORMAT)
+            self._setCommand(league, LATEST_RUN, latestTime)
+        except Exception as e:
+            errStr = str(e)
+            failStr = "Failed to run league %s: %s" % (str(league), errStr)
+            self.log(failStr, league=league, error=True)
+
+    def runLeague(self, agent, league):
+        self._checkAgent(agent, league)
+        self._runLeague(league)
 
     def run(self):
         """runs leagues and updates"""
@@ -290,14 +323,8 @@ class LeagueManager(object):
         offset = self._retrieveOffset(offsetData)
         orders = (self._fetchThreadOrders(thread, offset) if len(thread)
                   else set())
-        for league in self.leagues:
-            lgRunner = self.fetchLeague(league, thread, orders)
-            try: lgRunner.run()
-            except Exception as e:
-                errStr = str(e)
-                failStr = "Failed to run league %s: %s" % (str(league), errStr)
-                self.log(failStr, league=league, error=True)
+        for league in self.leagues: self._runLeague(league, thread, orders)
         newOffset = offset + len(orders)
         self.commands.updateMatchingEntities({self.TITLE_CMD:
             {'value': 'OFFSET', 'type': 'positive'}},
-            {self.TITLE_ARG: str(newOffset)})
+            {self.TITLE_ARG: str(newOffset)}, True)

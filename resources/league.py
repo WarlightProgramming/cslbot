@@ -18,8 +18,7 @@ from wl_parsers import PlayerParser
 from wl_api import APIHandler
 from wl_api.wl_api import APIError
 from sheetDB import errors as SheetErrors
-from resources.constants import API_CREDS, TIMEFORMAT, DEBUG_KEY,\
-    ITERATIONS_PER_DAY
+from resources.constants import API_CREDS, TIMEFORMAT, DEBUG_KEY, LATEST_RUN
 from resources.utility import isInteger
 
 # decorators
@@ -203,6 +202,7 @@ class League(object):
     SET_FORBID_CLAN_MATCHUPS = "AVOID SAME-CLAN MATCHUPS"
     SET_ONLY_MODS_CAN_ADD = "ONLY MODS CAN ADD TEAMS"
     SET_AGENTS = "AUTHORIZED INTERFACES"
+    SET_LATEST_RUN = LATEST_RUN
     SET_DEBUG = DEBUG_KEY
 
     # rating systems
@@ -926,6 +926,11 @@ class League(object):
     def _getDateTimeProperty(cls, val):
         if isinstance(val, datetime): return val
         return (datetime.strptime(val, cls.TIMEFORMAT) - cls._timeZoneDiff())
+
+    @property
+    def latestRun(self):
+        return self._fetchProperty(self.SET_LATEST_RUN, '',
+                                   self._unpackDateTime)
 
     @property
     def joinPeriodStart(self):
@@ -3085,15 +3090,10 @@ class League(object):
             rating = self._adjustAndPackage(team, adjustment)
             self._updateTeamRating(team['ID'], rating)
 
-    @staticmethod
-    def _decayTime(iterations):
-        HOURS_PER_DAY, MINUTES_PER_HOUR, now = 24, 60, datetime.now()
-        midnight = datetime(year=now.year, month=now.month, day=now.day)
-        maxHours = Decimal(HOURS_PER_DAY) / Decimal(iterations)
-        maxMinutes = int(round((maxHours % 1) * Decimal(MINUTES_PER_HOUR)))
-        maxHours = int(round(maxHours))
-        maxDelta = timedelta(days=0, hours=maxHours, minutes=maxMinutes)
-        return ((now - midnight) <= maxDelta)
+    @property
+    def decayTime(self):
+        return (self.latestRun == '' or
+                ((datetime.now() - self.latestRun).days > 0))
 
     @noisy
     def _decayRating(self, team):
@@ -3105,7 +3105,7 @@ class League(object):
     @runPhase
     def _decayRatings(self):
         if (self.ratingDecay == 0 or
-            not self._decayTime(ITERATIONS_PER_DAY)): return
+            not self.decayTime): return
         allTeams = self.allTeams
         for team in allTeams: self._decayRating(team)
 

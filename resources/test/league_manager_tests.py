@@ -267,12 +267,16 @@ class TestLeagueManager(TestCase):
         lg.assert_called_once_with('games', 'teams', 'templates',
             commands.return_value, list(), self.manager.admin, self.manager,
             'league', interface.return_value)
-        assert_equals(self.manager.fetchLeague('league', 'name',
+        assert_equals(self.manager.fetchLeagueOrLeagues('league', 'name',
             [{'orders': ['league',]}, {'orders': ['not league',]}]),
-            lg.return_value)
+            [lg.return_value,])
         lg.assert_called_with('games', 'teams', 'templates',
             commands.return_value, [{'orders': ['league',]},],
             self.manager.admin, self.manager, 'league', interface.return_value)
+        self.manager.leagues = ['A', 'B', 'C',]
+        assert_equals(self.manager.fetchLeagueOrLeagues('ALL', 'name',
+            [{'orders': ['league',]}, {'orders': ['not league',]}]),
+            [lg.return_value,] * 3)
 
     @patch('resources.league_manager.LeagueManager._fetchLeagueCommands')
     def test_fetchCommands(self, fetch):
@@ -296,12 +300,21 @@ class TestLeagueManager(TestCase):
         self.commands.findEntities.return_value = [{'Args': 'A'},]
         assert_equals(self.manager._fetchThread(), "A")
 
+    @patch('resources.league_manager.LeagueManager._runLeague')
+    @patch('resources.league_manager.LeagueManager._checkAgent')
+    def test_runLeague(self, check, run):
+        self.manager.runLeague('agent', 'league')
+        check.assert_called_once_with('agent', 'league')
+        run.assert_called_once_with('league')
+
+    @patch('resources.league_manager.datetime.datetime')
+    @patch('resources.league_manager.LeagueManager._setCommand')
     @patch('resources.league_manager.LeagueManager.log')
     @patch('resources.league_manager.LeagueManager.fetchLeague')
     @patch('resources.league_manager.LeagueManager._fetchThreadOrders')
     @patch('resources.league_manager.LeagueManager._retrieveOffset')
     @patch('resources.league_manager.LeagueManager._fetchThread')
-    def test_run(self, thread, offset, orders, league, log):
+    def test_run(self, thread, offset, orders, league, log, setCom, dt):
         offset.return_value = 4903
         thread.return_value = "A"
         orders.return_value = range(30)
@@ -314,12 +327,14 @@ class TestLeagueManager(TestCase):
         assert_equals(league.return_value.run.call_count,
                       len(self.manager.leagues))
         self.commands.updateMatchingEntities.assert_called_with({'Command':
-            {'value': 'OFFSET', 'type': 'positive'}}, {'Args': '4933'})
+            {'value': 'OFFSET', 'type': 'positive'}}, {'Args': '4933'}, True)
+        setCom.assert_called_with('C', 'LATEST RUN',
+                                  dt.strftime.return_value)
         thread.return_value = ""
         league.return_value.run.side_effect = Exception("SEGFAULT")
         self.manager.run()
         self.commands.updateMatchingEntities.assert_called_with({'Command':
-            {'value': 'OFFSET', 'type': 'positive'}}, {'Args': '4903'})
+            {'value': 'OFFSET', 'type': 'positive'}}, {'Args': '4903'}, True)
         log.assert_called_with("Failed to run league C: SEGFAULT",
                                error=True, league='C')
         assert_equals(self.manager.log.call_count, 3)

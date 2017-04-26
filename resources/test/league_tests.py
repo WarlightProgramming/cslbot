@@ -877,6 +877,11 @@ class TestLeague(TestCase):
                                                 self.league.TIMEFORMAT)),
                       datetime(2000, 4, 20, 10, 30, 50) - timeDiff)
 
+    def test_latestRun(self):
+        values = {'2014-04-30 01:02:03': datetime(2014, 04, 30, 1, 2, 3),
+                  '2014': '', '': '', "none": ''}
+        self._propertyTest('latestRun', self.league.SET_LATEST_RUN, '', values)
+
     def test_joinPeriodStart(self):
         self._dateTimePropertyTest('joinPeriodStart',
                                    self.league.SET_JOIN_PERIOD_START, None)
@@ -3100,21 +3105,26 @@ class TestLeague(TestCase):
             'positive', 'value': 4}}, {'Rating': "'30/3"})
 
     def test_decayTime(self):
-        now = datetime.now()
-        iterations = 24 / (now.hour + 1)
-        assert_true(self.league._decayTime(iterations))
-        assert_false(self.league._decayTime(2881))
+        self._setProp(self.league.SET_LATEST_RUN, "")
+        assert_true(self.league.decayTime)
+        self._setProp(self.league.SET_LATEST_RUN,
+            datetime.strftime(datetime.now(), self.league.TIMEFORMAT))
+        assert_false(self.league.decayTime)
+        self._setProp(self.league.SET_LATEST_RUN,
+            datetime.strftime(datetime.now() - timedelta(days=3),
+                self.league.TIMEFORMAT))
+        assert_true(self.league.decayTime)
 
-    @patch('resources.league.League._decayTime')
-    def test_decayRatings(self, decayTime):
+    def test_decayRatings(self):
         oldCount = self.teams.updateMatchingEntities.call_count
         self._setProp(self.league.SET_RATING_DECAY, "0")
-        decayTime.return_value = False
+        current = datetime.strftime(datetime.now(), self.league.TIMEFORMAT)
+        self._setProp(self.league.SET_LATEST_RUN, current)
         self.league._decayRatings()
         self._setProp(self.league.SET_RATING_DECAY, "10")
         self.league._decayRatings()
         assert_equals(self.teams.updateMatchingEntities.call_count, oldCount)
-        decayTime.return_value = True
+        self._setProp(self.league.SET_LATEST_RUN, "")
         self.teams.findEntities.return_value = [{'ID': 1, 'Rating': '33/5',
             'Ongoing': '0', 'Finished': '8', 'Limit': '0', 'Confirmations': ''},
             {'ID': 2, 'Rating': '34/8', 'Ongoing': '1', 'Finished': '0',
