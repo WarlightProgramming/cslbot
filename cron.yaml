@@ -1,0 +1,4 @@
+cron:
+- description: "run all clusters"
+  url: /run
+  schedule: every 4 hours

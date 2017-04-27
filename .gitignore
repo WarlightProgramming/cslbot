@@ -26,6 +26,7 @@ pip-selfcheck.json
 man/
 share/
 lib/
+libs/
 lib64/
 parts/
 sdist/
