@@ -13,5 +13,5 @@ API_CREDS = (BASE_DIR + "resources/fake-credentials/wl_api.json")
 GOOGLE_CREDS = (BASE_DIR + "resources/fake-credentials/google_creds.json")
 TIMEFORMAT = "%Y-%m-%d %H:%M:%S"
 DEBUG_KEY = "DEBUG MODE"
-GLOBAL_MANAGER = 0
+GLOBAL_MANAGER = ""
 LATEST_RUN = "LATEST RUN"
