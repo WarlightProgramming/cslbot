@@ -4,8 +4,8 @@ threadsafe: true
 
 handlers:
 - url: /run
-  script: cslbot.app
+  script: main.app
   login: admin
 
 - url: /.*
-  script: cslbot.app
+  script: main.app

@@ -202,6 +202,7 @@ class League(object):
     SET_FORBID_CLAN_MATCHUPS = "AVOID SAME-CLAN MATCHUPS"
     SET_ONLY_MODS_CAN_ADD = "ONLY MODS CAN ADD TEAMS"
     SET_AGENTS = "AUTHORIZED INTERFACES"
+    SET_WAIT_PERIOD = "WAIT PERIOD"
     SET_LATEST_RUN = LATEST_RUN
     SET_DEBUG = DEBUG_KEY
 
@@ -877,7 +878,7 @@ class League(object):
         return (self.minRating is None and self.maxRank is None)
 
     @runPhase
-    def restoreTeams(self):
+    def _restoreTeams(self):
         restPd = self.restorationPeriod
         if self.cullingDisabled: restPd = 0
         if restPd is None: return
@@ -926,6 +927,10 @@ class League(object):
     def _getDateTimeProperty(cls, val):
         if isinstance(val, datetime): return val
         return (datetime.strptime(val, cls.TIMEFORMAT) - cls._timeZoneDiff())
+
+    @property
+    def waitPeriod(self):
+        return self._fetchProperty(self.SET_WAIT_PERIOD, 240, int)
 
     @property
     def latestRun(self):
@@ -3091,6 +3096,11 @@ class League(object):
             self._updateTeamRating(team['ID'], rating)
 
     @property
+    def runTime(self):
+        return ((datetime.now() - self.latestRun) >=
+                timedelta(minutes=self.waitPeriod))
+
+    @property
     def decayTime(self):
         return (self.latestRun == '' or
                 ((datetime.now() - self.latestRun).days > 0))
@@ -3206,12 +3216,14 @@ class League(object):
         3. update teams using prereqs
         4. create new games
         """
-        self._updateGames()
-        self._applyRatingAdjustments()
-        self.restoreTeams()
-        self._executeOrders()
-        self._validatePlayers()
-        if self.active: self._createGames()
+        if self.runTime:
+            self._updateGames()
+            self._applyRatingAdjustments()
+            self._restoreTeams()
+            self._executeOrders()
+            self._validatePlayers()
+            if self.active: self._createGames()
+        else: self._executeOrders()
 
     @classmethod
     def _unpackConfirms(cls, confirms):

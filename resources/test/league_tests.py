@@ -808,17 +808,17 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_MIN_RATING, None)
         self._setProp(self.league.SET_MIN_PERCENTILE, None)
         assert_true(self.league.cullingDisabled)
-        self.league.restoreTeams()
+        self.league._restoreTeams()
         assert_equals(getExtant.call_count, 1)
         self._setProp(self.league.SET_MIN_RATING, 50)
         assert_false(self.league.cullingDisabled)
-        self.league.restoreTeams()
+        self.league._restoreTeams()
         assert_equals(getExtant.call_count, 1)
         self._setProp(self.league.SET_GRACE_PERIOD, 5)
         self._setProp(self.league.SET_RESTORATION_PERIOD, 10)
         assert_equals(self.league.restorationPeriod, 15)
         getExtant.return_value = list()
-        self.league.restoreTeams()
+        self.league._restoreTeams()
         assert_equals(getExtant.call_count, 2)
         self.teams.updateMatchingEntities.assert_not_called()
         makeProb = lambda x: datetime.strftime(datetime.now() - timedelta(x),
@@ -828,7 +828,7 @@ class TestLeague(TestCase):
                                   {'ID': 2, 'Probation Start': makeProb(0)},
                                   {'ID': 3, 'Probation Start': makeProb(16)},
                                   {'ID': 4, 'Probation Start': makeProb(12)}]
-        self.league.restoreTeams()
+        self.league._restoreTeams()
         assert_equals(self.teams.updateMatchingEntities.call_count, 2)
 
     def test_allowJoins(self):
@@ -876,6 +876,9 @@ class TestLeague(TestCase):
                                                          50),
                                                 self.league.TIMEFORMAT)),
                       datetime(2000, 4, 20, 10, 30, 50) - timeDiff)
+
+    def test_waitPeriod(self):
+        self._intPropertyTest('waitPeriod', self.league.SET_WAIT_PERIOD, 240)
 
     def test_latestRun(self):
         values = {'2014-04-30 01:02:03': datetime(2014, 04, 30, 1, 2, 3),
@@ -3104,6 +3107,17 @@ class TestLeague(TestCase):
         self.teams.updateMatchingEntities.assert_called_with({'ID': {'type':
             'positive', 'value': 4}}, {'Rating': "'30/3"})
 
+    def test_runTime(self):
+        self._setProp(self.league.SET_WAIT_PERIOD, 120)
+        self._setProp(self.league.SET_LATEST_RUN,
+            datetime.strftime(datetime.now() - timedelta(minutes=400),
+                self.league.TIMEFORMAT))
+        assert_true(self.league.runTime)
+        self._setProp(self.league.SET_WAIT_PERIOD, 401)
+        assert_false(self.league.runTime)
+        self._setProp(self.league.SET_WAIT_PERIOD, 400)
+        assert_true(self.league.runTime)
+
     def test_decayTime(self):
         self._setProp(self.league.SET_LATEST_RUN, "")
         assert_true(self.league.decayTime)
@@ -3206,18 +3220,27 @@ class TestLeague(TestCase):
     @patch('resources.league.League._decayRatings')
     @patch('resources.league.League._rescaleRatings')
     @patch('resources.league.League._createGames')
-    @patch('resources.league.League.restoreTeams')
+    @patch('resources.league.League._restoreTeams')
     @patch('resources.league.League._validatePlayers')
     @patch('resources.league.League._executeOrders')
     @patch('resources.league.League._updateGames')
     def test_run(self, update, execute, validate, restore, create,
                  rescale, decay, calculate):
+        self._setProp(self.league.SET_WAIT_PERIOD, 500)
+        self._setProp(self.league.SET_LATEST_RUN,
+            datetime.strftime(datetime.now() - timedelta(minutes=400),
+                self.league.TIMEFORMAT))
+        self.league.run()
+        update.assert_not_called()
+        execute.assert_called_once_with()
+        self._setProp(self.league.SET_WAIT_PERIOD, 300)
         self._setProp(self.league.SET_ACTIVE, "FALSE")
         self.league.run()
         create.assert_not_called()
-        for fn in {update, execute, validate, restore, rescale, decay,
-                   calculate}:
+        for fn in {update, validate, restore, rescale, decay, calculate}:
             fn.assert_called_once_with()
+        assert_equals(execute.call_count, 2)
+        execute.assert_called_with()
         self._setProp(self.league.SET_ACTIVE, "TRUE")
         self.teams.findEntities.return_value = [{'Limit': '10'},] * 10
         self.templates.findEntities.return_value = xrange(5)

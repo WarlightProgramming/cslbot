@@ -1,14 +1,15 @@
 ######################
-# cslbot.py
+# main.py
 # toplevel application
 ######################
 
 # imports
 import os
 import json
+from wl_api import validateToken
 from flask import Flask, Response, redirect, request
 from sheetDB import Credentials
-from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER
+from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID
 from resources.league_manager import LeagueManager
 
 # global variables
@@ -17,6 +18,10 @@ creds = Credentials(GOOGLE_CREDS)
 globalManager = creds.getDatabase(GLOBAL_MANAGER, checkFormat=False)
 
 # helper functions
+def _buildAuthURL(state=""):
+    authURL = "https://www.WarLight.net/CLOT/Auth"
+    return ''.join([authURL, "?p=", str(OWNER_ID), "&state=", str(state)])
+
 def _fetchLeagues(clusterID, leagueName):
     cluster = _fetchCluster(clusterID)
     return cluster.fetchLeagueOrLeagues(leagueName)
@@ -46,7 +51,7 @@ def run():
         events += manager.events['events']
     return _packageDict({'events': events, 'error': False})
 
-@app.errorhandler(500):
+@app.errorhandler(500)
 def error(e):
     msg = "Error: " + str(e)
     return _packageMessage(msg, error=True)

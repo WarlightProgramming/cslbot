@@ -13,8 +13,8 @@
     * [Basic League Design](#basic-league-design)
       * [Game Setting Configurations](#game-setting-configurations)
       * [League Mechanics](#league-mechanics)
-      * [Activity Controls](#activity-controls)
-      * [League Definition](#league-definition)
+        * [Activity Controls](#activity-controls)
+        * [League Definition](#league-definition)
       * [Participation Control](#participation-control)
         * [Player/Clan/Location Restrictions](#playerclanlocation-restrictions)
         * [Player Join Prerequisites](#player-join-prerequisites)
@@ -797,6 +797,30 @@ one another.
 
 If this is set to True, the league will not create any matchups where players
 belonging to the same clan appear on multiple sides.
+
+___
+
+#### WAIT PERIOD
+
+Minimum number of minutes to wait between iterations of the league.
+
+*Sample Args*: "15", "180", "240"
+
+*Default*: 240 (4 hours)
+
+Use this command responsibly and set it to values that are reasonable for your
+league. Do not set this any lower than your league needs it to be.
+
+If you want to set up a real-time league, set this to a value like 15. Keep in
+mind that this does not guarantee that your league will run every WAIT
+PERIOD minutes- that depends on how often the cslbot your league uses runs. If
+your WAIT PERIOD is less than the number of minutes between each iteration of
+the cslbot's run process, then you can expect that your league will be run at
+least once every (WAIT PERIOD * 2) minutes. Ideally, you should set this to a
+multiple of the number of minutes between each cslbot run process.
+
+If you're using this command to set up a real-time league, you will likely also
+want to use the [**MAX LAST SEEN**](#max-last-seen) prerequisite.
 
 ___
 
