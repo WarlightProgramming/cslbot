@@ -1130,7 +1130,7 @@ ___
 
 Maximum number of hours since the player was last online.
 
-*Sample Args*: "3", "24", "100"
+*Sample Args*: "3", "24", "100", "0.25", "1.80"
 
 *Default*: no maximum
 
