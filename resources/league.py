@@ -1437,15 +1437,20 @@ class League(object):
             raise ImproperInput("Team name %s is too long" % (teamName))
         return teamName
 
+    @classmethod
+    def _getMembersAndConfirms(cls, temp):
+        members, confirms = [x for (x, y) in temp], [y for (x, y) in temp]
+        members = (cls.SEP_PLYR).join([str(m) for m in members])
+        confirms = (cls.SEP_CONF).join([str(c).upper() for c in confirms])
+        return members, confirms
+
     @noisy
     def _addTeam(self, order):
         self._checkJoins()
         teamName = self._getTeamNameFromOrder(order)
         gameLimit, forcedDrops, members, confirms = self._checkEligible(order)
         temp = sorted(zip(members, confirms))
-        members, confirms = [x for (x, y) in temp], [y for (x, y) in temp]
-        members = (self.SEP_PLYR).join([str(m) for m in members])
-        confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
+        members, confirms = self._getMembersAndConfirms(temp)
         with teamLock:
             self._addSanitizedEntity(self.teams, {'ID': self._currentID(),
                 'Name': teamName, 'Limit': gameLimit, 'Players': members,

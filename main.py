@@ -221,7 +221,7 @@ def fetchEntity(clusterID, leagueName, ID):
 @app.route(leaguePath('/unconfirmTeam'), methods=['GET', 'POST'])
 def runTeamOrder(clusterID, leagueName):
     urlRule = rule(request)
-    fetchFn = {'addTeam': lambda lg, order: lg.addteam(order),
+    fetchFn = {'addTeam': lambda lg, order: lg.addTeam(order),
         'confirmTeam': lambda lg, order: lg.confirmTeam(order),
         'unconfirmTeam': lambda lg, order: lg.unconfirmTeam(order)}[urlRule]
     return runLeagueOrder(clusterID, leagueName, replicate(request,
