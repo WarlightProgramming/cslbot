@@ -9,6 +9,7 @@ import math
 import time
 import random
 import pair
+from threading import Lock
 from decimal import Decimal
 from elo import Elo
 from glicko2.glicko2 import Player
@@ -21,8 +22,10 @@ from sheetDB import errors as SheetErrors
 from resources.constants import API_CREDS, TIMEFORMAT, DEBUG_KEY, LATEST_RUN
 from resources.utility import isInteger
 
-# decorators
+# global locks
+teamLock, tempLock = Lock(), Lock()
 
+# decorators
 def makeFailStr(func, err):
     return ("Call to %s failed due to %s" % (func.__name__, repr(err)))
 
@@ -1443,10 +1446,11 @@ class League(object):
         members, confirms = [x for (x, y) in temp], [y for (x, y) in temp]
         members = (self.SEP_PLYR).join([str(m) for m in members])
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
-        self._addSanitizedEntity(self.teams, {'ID': self._currentID(),
-            'Name': teamName, 'Limit': gameLimit, 'Players': members,
-            'Confirmations': confirms, 'Vetos': "", 'Drops': forcedDrops,
-            'Ongoing': 0, 'Finished': 0, 'Rating': self.defaultRating})
+        with teamLock:
+            self._addSanitizedEntity(self.teams, {'ID': self._currentID(),
+                'Name': teamName, 'Limit': gameLimit, 'Players': members,
+                'Confirmations': confirms, 'Vetos': "", 'Drops': forcedDrops,
+                'Ongoing': 0, 'Finished': 0, 'Rating': self.defaultRating})
 
     @noisy
     def _retrieveTeamWithName(self, name):
@@ -1693,16 +1697,17 @@ class League(object):
     @noisy
     def _addTemplate(self, order):
         self._confirmAdmin(int(order['author']), order['type'])
-        used, nexti, orders = self.usedTemplates, 3, order['orders']
+        nexti, orders = 3, order['orders']
         tempName, warlightID = orders[1:3]
-        ID = (max(used) + 1) if len(used) else 0
-        gameCount = self._newTempGameCount
-        tempDict = {'ID': ID, 'Name': tempName, 'WarlightID': warlightID,
-                    'Active': 'TRUE', 'Usage': gameCount}
-        if self.multischeme: tempDict['Schemes'], nexti = orders[3], 4
-        for i in xrange(nexti+1, len(orders), 2):
-            tempDict[orders[i-1]] = orders[i]
-        self._addSanitizedEntity(self.templates, tempDict)
+        with tempLock:
+            used, gameCount = self.usedTemplates, self._newTempGameCount
+            ID = (max(used) + 1) if len(used) else 0
+            tempDict = {'ID': ID, 'Name': tempName, 'WarlightID': warlightID,
+                        'Active': 'TRUE', 'Usage': gameCount}
+            if self.multischeme: tempDict['Schemes'], nexti = orders[3], 4
+            for i in xrange(nexti+1, len(orders), 2):
+                tempDict[orders[i-1]] = orders[i]
+            self._addSanitizedEntity(self.templates, tempDict)
 
     @noisy
     def _renameTeam(self, order):
