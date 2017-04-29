@@ -1404,13 +1404,11 @@ class TestLeague(TestCase):
         self.teams.findValue.return_value = ["1","2","3","4","5"]
         self.games.findValue.return_value = ["12,13/1,2", "3,4/5"]
         assert_equals(self.league.existingIDs, {1, 2, 3, 4, 5, 12, 13})
-        self.league._setCurrentID()
-        assert_equals(self.league.currentID, 14)
+        assert_equals(self.league._currentID(), 14)
         self.teams.findValue.return_value = list()
         self.games.findValue.return_value = list()
         assert_equals(self.league.existingIDs, set())
-        self.league._setCurrentID()
-        assert_equals(self.league.currentID, 0)
+        assert_equals(self.league._currentID(), 0)
 
     def test_defaultRating(self):
         self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
@@ -1497,16 +1495,16 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_NAME_LENGTH, 8)
         assert_equals(self.league._getTeamNameFromOrder(order), "TeamName")
 
+    @patch('resources.league.League._currentID')
     @patch('resources.league.League._checkEligible')
     @patch('resources.league.League._checkJoins')
-    def test_addTeam(self, joinCheck, eligible):
+    def test_addTeam(self, joinCheck, eligible, curr):
         order = {'author': 1403, 'type': 'add_team',
                  'orders': ['1v1', 'name', '3', '41', '4042', '3905', '12']}
         eligible.return_value = (5, "", [41, 4042, 3905, 12], [False,
                                  True, False, True])
-        oldCurr = self.league.currentID
         self.league._addTeam(order)
-        self.teams.addEntity.assert_called_with({'ID': oldCurr,
+        self.teams.addEntity.assert_called_with({'ID': curr.return_value,
                                                  'Name': "'name",
                                                  'Limit': 5,
                                                  'Players': "'12,41,3905,4042",
@@ -1516,7 +1514,6 @@ class TestLeague(TestCase):
                                                  'Ongoing': 0, 'Finished': 0,
                                                  'Rating': "'" +
                                                  self.league.defaultRating})
-        assert_equals(self.league.currentID, oldCurr + 1)
 
     def test_retrieveTeamWithName(self):
         self.teams.findEntities.return_value = list()

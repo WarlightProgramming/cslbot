@@ -280,7 +280,7 @@ class League(object):
         self.sysDict, self.orderDict = None, None
         self._makeRateSysDict()
         self._makeOrderDict()
-        self._currentID, self._gameSize, self._sideSize = None, list(), list()
+        self._gameSize, self._sideSize = list(), list()
         self.debug = self._fetchProperty(self.SET_DEBUG, False,
                                         self._getBoolProperty)
         self.tempTeams = None
@@ -1379,18 +1379,11 @@ class League(object):
             unofficialIDs.add(int(ID))
         return unofficialIDs
 
-    @property
-    def currentID(self):
-        if self._currentID is None: self._setCurrentID()
-        return self._currentID
-
     @noisy
-    def _setCurrentID(self):
+    def _currentID(self):
         existingIDs = self.existingIDs
-        if len(existingIDs) == 0:
-            self._currentID = 0
-        else:
-            self._currentID = max(existingIDs) + 1
+        if len(existingIDs) == 0: return 0
+        else: return max(existingIDs) + 1
 
     @property
     def defaultRating(self):
@@ -1450,11 +1443,10 @@ class League(object):
         members, confirms = [x for (x, y) in temp], [y for (x, y) in temp]
         members = (self.SEP_PLYR).join([str(m) for m in members])
         confirms = (self.SEP_CONF).join([str(c).upper() for c in confirms])
-        self._addSanitizedEntity(self.teams, {'ID': self.currentID,
+        self._addSanitizedEntity(self.teams, {'ID': self._currentID(),
             'Name': teamName, 'Limit': gameLimit, 'Players': members,
             'Confirmations': confirms, 'Vetos': "", 'Drops': forcedDrops,
             'Ongoing': 0, 'Finished': 0, 'Rating': self.defaultRating})
-        self._currentID += 1
 
     @noisy
     def _retrieveTeamWithName(self, name):
