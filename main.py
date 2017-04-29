@@ -5,18 +5,21 @@
 
 # imports
 import json
-from wl_api import validateToken
+from wl_api import APIHandler
 from flask import Flask, Response, redirect, request
 from sheetDB import Credentials
-from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID
+from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID,\
+    API_CREDS
 from resources.league_manager import LeagueManager
 
 # global variables
 app = Flask(__name__)
 creds = Credentials(GOOGLE_CREDS)
 globalManager = creds.getDatabase(GLOBAL_MANAGER, checkFormat=False)
+
 LEAGUE_PREFIX = '/<string:clusterID>/<string:leagueName>'
 CLUSTER_PREFIX = '/<string:clusterID>'
+KW_REGISTER = "REGISTER"
 
 # errors
 class AuthError(Exception):
@@ -24,6 +27,12 @@ class AuthError(Exception):
     pass
 
 # helper functions
+def WLHandler():
+    with open(API_CREDS) as credsFile:
+        wlCreds = json.load(credsFile)
+        wlHandler = APIHandler(wlCreds['E-mail'], wlCreds['APIToken'])
+    return wlHandler
+
 def buildAuthURL(state=None):
     authURL = "https://www.WarLight.net/CLOT/Auth"
     data = [authURL, "?p=", str(OWNER_ID)]
@@ -33,6 +42,10 @@ def buildAuthURL(state=None):
 def fetchLeagues(clusterID, leagueName):
     cluster = fetchCluster(clusterID)
     return cluster.fetchLeagueOrLeagues(leagueName)
+
+def fetchLeague(clusterID, leagueName):
+    cluster = fetchCluster(clusterID)
+    return cluster.fetchLeague(leagueName)
 
 def fetchCluster(clusterID):
     cluster = creds.getDatabase(clusterID, checkFormat=False)
@@ -63,12 +76,37 @@ def verifyAgent(request):
     if ('token' not in keys): raise AuthError("Missing agent token")
     _runVerification(request.args['agent'], request.args['token'])
 
-def replicate(request, *keys):
-    result = dict()
+def _noneList(obj):
+    return list() if obj is None else obj
+
+def replicate(request, keys=None, lists=None):
+    result, keys, lists = dict(), _noneList(keys), _noneList(lists)
     for key in request.args:
         if key in keys: result[key] = json.loads(request.args[key])
+        elif key in lists: request[key] = request.args.getlist(key)
         else: result[key] = request.args[key]
     return result
+
+def validateAuth(token, clotpass):
+    data = WLHandler().validateToken(token, clotpass)
+    return ((data['clotpass'] == clotpass),
+            (data['isMember'].lower() == 'true'),
+            data['name'])
+
+def fetchLeagueData(clusterID, leagueName, fetchFn):
+    result, leagues = dict(), fetchLeagues(clusterID, leagueName)
+    for league in leagues: result[league.name] = fetchFn(league)
+    return packageDict(result)
+
+def runLeagueOrder(clusterID, leagueName, order, orderFn):
+    verifyAgent(request)
+    league = fetchLeague(clusterID, leagueName)
+    orderFn(league, order)
+    return packageDict(league.parent.events)
+
+def runSimpleOrder(clusterID, leagueName, request, orderFn):
+    return runLeagueOrder(clusterID, leagueName, replicate(request),
+        orderFn)
 
 # [START app]
 ## toplevel
@@ -80,12 +118,33 @@ def address():
 @app.route('/agentToken')
 def getAgentToken():
     """lets agents/interfaces get their tokens"""
-    pass
+    return redirect(buildAuthURL(KW_REGISTER))
 
-@app.route('/login')
+@app.route('/agentSuccess/<string:token>')
+def agentSuccess(token):
+    return packageDict({'error': False, 'token': token})
+
+@app.route('/adminSuccess/<string:name>')
+def adminSuccess(name):
+    msg = 'Successful authorization by %s' % (name)
+    return packageMessage(msg)
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     """handles login from Warlight"""
-    pass
+    args = request.args
+    token, clotpass = args.get('token'), args.get('clotpass')
+    valid, isMember, name = validateAuth(token, clotpass)
+    if not valid: raise AuthError("Invalid clotpass")
+    state = args.get('state')
+    if state == KW_REGISTER:
+        token = globalManager.updateAgentToken(token)
+        return redirect('/agentSuccess/' + token)
+    if not isMember:
+        failStr = "%s is not a Warlight member" % (name)
+        raise AuthError(failStr)
+    globalManager.updateAdmin(token, state)
+    return redirect('/adminSuccess/' + name)
 
 @app.route('/run')
 def run():
@@ -105,18 +164,27 @@ def clusterCommands(clusterID):
     """fetches commands for all leagues in the cluster"""
     return packageDict(fetchCluster(clusterID).fetchCommands())
 
+@app.route(clusterPath('/authorize'))
+def authorize(clusterID):
+    """authorizes a cluster-admin relationship"""
+    return redirect(buildAuthURL(clusterID))
+
 @app.route(clusterPath('/run'), methods=['GET', 'POST'])
 def runCluster(clusterID):
     """runs all leagues in the cluster"""
     verifyAgent(request)
-    with fetchCluster(clusterID) as cluster:
-        cluster.run()
-        return packageDict(cluster.events)
+    cluster = fetchCluster(clusterID)
+    cluster.run()
+    return packageDict(cluster.events)
 
 ## league operations
 @app.route(leaguePath())
 def showLeague(clusterID, leagueName):
-    pass
+    teams = fetchTeams(clusterID, leagueName)
+    games = fetchGames(clusterID, leagueName)
+    templates = fetchTemplates(clusterID, leagueName)
+    return packageDict({'teams': teams, 'games': games,
+        'templates': templates})
 
 @app.route(leaguePath('/commands'))
 def leagueCommands(clusterID, leagueName):
@@ -124,85 +192,109 @@ def leagueCommands(clusterID, leagueName):
 
 @app.route(leaguePath('/teams'))
 def fetchTeams(clusterID, leagueName):
-    pass
+    return fetchLeagueData(clusterID, leagueName,
+        fetchFn=lambda lg: lg.fetchAllTeams())
 
 @app.route(leaguePath('/games'))
 def fetchGames(clusterID, leagueName):
-    pass
+    return fetchLeagueData(clusterID, leagueName,
+        fetchFn=lambda lg: lg.fetchAllGames())
 
 @app.route(leaguePath('/templates'))
 def fetchTemplates(clusterID, leagueName):
-    pass
+    return fetchLeagueData(clusterID, leagueName,
+        fetchFn=lambda lg: lg.fetchAllTemplates())
 
 @app.route(leaguePath('/team/<int:teamID>'))
 def fetchTeam(clusterID, leagueName, teamID):
-    pass
+    return packageDict(fetchLeague(clusterID, leagueName).fetchTeam(teamID))
 
 @app.route(leaguePath('/team/<int:gameID>'))
 def fetchGame(clusterID, leagueName, gameID):
-    pass
+    return packageDict(fetchLeague(clusterID, leagueName).fetchGame(gameID))
 
 @app.route(leaguePath('/team/<int:templateID>'))
 def fetchTemplate(clusterID, leagueName, templateID):
-    pass
+    return packageDict(fetchLeague(clusterID,
+        leagueName).fetchTemplate(templateID))
 
-@app.route(leaguePath('/addTeam'))
+@app.route(leaguePath('/addTeam'), methods=['GET', 'POST'])
 def addTeam(clusterID, leagueName):
-    pass
+    return runLeagueOrder(clusterID, leagueName, replicate(request,
+        lists=['players']), lambda lg, order: lg.addTeam(order))
 
-@app.route(leaguePath('/confirmTeam'))
+@app.route(leaguePath('/confirmTeam'), methods=['GET', 'POST'])
 def confirmTeam(clusterID, leagueName):
-    pass
+    return runLeagueOrder(clusterID, leagueName, replicate(request,
+        lists=['players']), lambda lg, order: lg.confirmTeam(order))
 
-@app.route(leaguePath('/renameTeam'))
-def renameTeam(clusterID, leagueName):
-    pass
+@app.route(leaguePath('/unconfirmTeam'), methods=['GET', 'POST'])
+def unconfirmTeam(clusterID, leagueName):
+    return runLeagueOrder(clusterID, leagueName, replicate(request,
+        lists=['players']), lambda lg, order: lg.unconfirmTeam(order))
 
-@app.route(leaguePath('/removeTeam'))
-def removeTeam(clusterID, leagueName):
-    pass
-
-@app.route(leaguePath('/quitLeague'))
-def quitLeague(clusterID, leagueName):
-    pass
-
-@app.route(leaguePath('/setLimit'))
+@app.route(leaguePath('/setLimit'), methods=['GET', 'POST'])
 def setLimit(clusterID, leagueName):
-    pass
+    return runSimpleOrder(clusterID, leagueName, request,
+        lambda lg, order: lg.setLimit(order))
 
-@app.route(leaguePath('/dropTemplate'))
-@app.route(leaguePath('/dropTemplates'))
+@app.route(leaguePath('/renameTeam'), methods=['GET', 'POST'])
+def renameTeam(clusterID, leagueName):
+    return runSimpleOrder(clusterID, leagueName, request,
+        lambda lg, order: lg.renameTeam(order))
+
+@app.route(leaguePath('/removeTeam'), methods=['GET', 'POST'])
+def removeTeam(clusterID, leagueName):
+    return runSimpleOrder(clusterID, leagueName, request,
+        lambda lg, order: lg.removeTeam(order))
+
+@app.route(leaguePath('/quitLeague'), methods=['GET', 'POST'])
+def quitLeague(clusterID, leagueName):
+    return runSimpleOrder(clusterID, leagueName, request,
+        lambda lg, order: lg.quitLeague(order))
+
+@app.route(leaguePath('/dropTemplate'), methods=['GET', 'POST'])
+@app.route(leaguePath('/dropTemplates'), methods=['GET', 'POST'])
 def dropTemplates(clusterID, leagueName):
-    pass
+    return runLeagueOrder(clusterID, leagueName, replicate(request,
+        lists=['templates']), lambda lg, order: lg.dropTemplates(order))
 
-@app.route(leaguePath('/undropTemplate'))
-@app.route(leaguePath('/undropTemplates'))
+@app.route(leaguePath('/undropTemplate'), methods=['GET', 'POST'])
+@app.route(leaguePath('/undropTemplates'), methods=['GET', 'POST'])
 def undropTemplates(clusterID, leagueName):
-    pass
+    return runLeagueOrder(clusterID, leagueName, replicate(request,
+        lists=['templates']), lambda lg, order: lg.undropTemplates(order))
 
-@app.route(leaguePath('/addTemplate'))
+@app.route(leaguePath('/addTemplate'), methods=['GET', 'POST'])
 def addTemplate(clusterID, leagueName):
-    pass
+    return runSimpleOrder(clusterID, leagueName, request,
+        lambda lg, order: lg.addTemplate(order))
 
-@app.route(leaguePath('/activateTemplate'))
+@app.route(leaguePath('/activateTemplate'), methods=['GET', 'POST'])
 def activateTemplate(clusterID, leagueName):
-    pass
+    return runSimpleOrder(clusterID, leagueName, request,
+        lambda lg, order: lg.activateTemplate(order))
 
-@app.route(leaguePath('/deactivateTemplate'))
+@app.route(leaguePath('/deactivateTemplate'), methods=['GET', 'POST'])
 def deactivateTemplate(clusterID, leagueName):
-    pass
+    return runSimpleOrder(clusterID, leagueName, request,
+        lambda lg, order: lg.deactivateTemplate(order))
 
-@app.route(leaguePath('/executeOrders'))
+@app.route(leaguePath('/executeOrders'), methods=['GET', 'POST'])
 def executeOrders(clusterID, leagueName):
-    pass
+    verifyAgent(request)
+    league = fetchLeague(clusterID, leagueName)
+    orderList = [json.loads(order) for order in request.args.getlist('orders')]
+    league.executeOrders(request.args.get('agent'), orderList)
+    return packageDict(league.parent.events)
 
 @app.route(leaguePath('/run'), methods=['GET', 'POST'])
 def runLeague(clusterID, leagueName):
     verifyAgent(request)
     agent = request.args.get('agent')
-    with fetchCluster(clusterID) as cluster:
-        cluster.runLeague(agent, leagueName)
-        return packageDict(cluster.events)
+    cluster = fetchCluster(clusterID)
+    cluster.runLeague(agent, leagueName)
+    return packageDict(cluster.events)
 
 ## error handling
 @app.errorhandler(400)
