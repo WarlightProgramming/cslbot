@@ -219,66 +219,43 @@ def fetchTemplate(clusterID, leagueName, templateID):
         leagueName).fetchTemplate(templateID))
 
 @app.route(leaguePath('/addTeam'), methods=['GET', 'POST'])
-def addTeam(clusterID, leagueName):
-    return runLeagueOrder(clusterID, leagueName, replicate(request,
-        lists=['players']), lambda lg, order: lg.addTeam(order))
-
 @app.route(leaguePath('/confirmTeam'), methods=['GET', 'POST'])
-def confirmTeam(clusterID, leagueName):
-    return runLeagueOrder(clusterID, leagueName, replicate(request,
-        lists=['players']), lambda lg, order: lg.confirmTeam(order))
-
 @app.route(leaguePath('/unconfirmTeam'), methods=['GET', 'POST'])
-def unconfirmTeam(clusterID, leagueName):
+def runTeamOrder(clusterID, leagueName):
+    rule = request.url_rule
+    fetchFn = {'/addTeam': lambda lg, order: lg.addteam(order),
+        '/confirmTeam': lambda lg, order: lg.confirmTeam(order),
+        '/unconfirmTeam': lambda lg, order: lg.unconfirmTeam(order)}[rule]
     return runLeagueOrder(clusterID, leagueName, replicate(request,
-        lists=['players']), lambda lg, order: lg.unconfirmTeam(order))
+        lists=['players']), fetchFn)
 
 @app.route(leaguePath('/setLimit'), methods=['GET', 'POST'])
-def setLimit(clusterID, leagueName):
-    return runSimpleOrder(clusterID, leagueName, request,
-        lambda lg, order: lg.setLimit(order))
-
 @app.route(leaguePath('/renameTeam'), methods=['GET', 'POST'])
-def renameTeam(clusterID, leagueName):
-    return runSimpleOrder(clusterID, leagueName, request,
-        lambda lg, order: lg.renameTeam(order))
-
 @app.route(leaguePath('/removeTeam'), methods=['GET', 'POST'])
-def removeTeam(clusterID, leagueName):
-    return runSimpleOrder(clusterID, leagueName, request,
-        lambda lg, order: lg.removeTeam(order))
-
 @app.route(leaguePath('/quitLeague'), methods=['GET', 'POST'])
-def quitLeague(clusterID, leagueName):
-    return runSimpleOrder(clusterID, leagueName, request,
-        lambda lg, order: lg.quitLeague(order))
+@app.route(leaguePath('/addTemplate'), methods=['GET', 'POST'])
+@app.route(leaguePath('/activateTemplate'), methods=['GET', 'POST'])
+@app.route(leaguePath('/deactivateTemplate'), methods=['GET', 'POST'])
+def handleSimpleOrder(clusterID, leagueName):
+    fetchFn = {'/setLimit': lambda lg, o: lg.setLimit(o),
+        '/renameTeam': lambda lg, o: lg.renameTeam(o),
+        '/removeTeam': lambda lg, o: lg.removeTeam(o),
+        '/addTemplate': lambda lg, o: lg.addTemplate(o),
+        '/activateTemplate': lambda lg, o: lg.activateTemplate(o),
+        '/deactivateTemplate': lambda lg, o: lg.deactivateTemplate(o),
+        '/quitLeague': lambda lg, o: lg.quitLeague(o)}[request.url_rule]
+    return runSimpleOrder(clusterID, leagueName, request, fetchFn)
 
 @app.route(leaguePath('/dropTemplate'), methods=['GET', 'POST'])
 @app.route(leaguePath('/dropTemplates'), methods=['GET', 'POST'])
-def dropTemplates(clusterID, leagueName):
-    return runLeagueOrder(clusterID, leagueName, replicate(request,
-        lists=['templates']), lambda lg, order: lg.dropTemplates(order))
-
 @app.route(leaguePath('/undropTemplate'), methods=['GET', 'POST'])
 @app.route(leaguePath('/undropTemplates'), methods=['GET', 'POST'])
-def undropTemplates(clusterID, leagueName):
+def dropOrUndrop(clusterID, leagueName):
+    if 'undrop' in request.url_rule:
+        fetchFn = lambda lg, order: lg.undropTemplates(order)
+    else: fetchFn = lambda lg, order: lg.dropTemplates(order)
     return runLeagueOrder(clusterID, leagueName, replicate(request,
-        lists=['templates']), lambda lg, order: lg.undropTemplates(order))
-
-@app.route(leaguePath('/addTemplate'), methods=['GET', 'POST'])
-def addTemplate(clusterID, leagueName):
-    return runSimpleOrder(clusterID, leagueName, request,
-        lambda lg, order: lg.addTemplate(order))
-
-@app.route(leaguePath('/activateTemplate'), methods=['GET', 'POST'])
-def activateTemplate(clusterID, leagueName):
-    return runSimpleOrder(clusterID, leagueName, request,
-        lambda lg, order: lg.activateTemplate(order))
-
-@app.route(leaguePath('/deactivateTemplate'), methods=['GET', 'POST'])
-def deactivateTemplate(clusterID, leagueName):
-    return runSimpleOrder(clusterID, leagueName, request,
-        lambda lg, order: lg.deactivateTemplate(order))
+        lists=['templates']), fetchFn)
 
 @app.route(leaguePath('/executeOrders'), methods=['GET', 'POST'])
 def executeOrders(clusterID, leagueName):
