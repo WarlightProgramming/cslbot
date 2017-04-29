@@ -5,17 +5,14 @@
 
 # imports
 import json
-from wl_api import APIHandler
 from flask import Flask, Response, redirect, request
 from sheetDB import Credentials
-from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID,\
-    API_CREDS
+from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID
 from resources.league_manager import LeagueManager
+from resources.utility import WLHandler
 
 # global variables
 app = Flask(__name__)
-creds = Credentials(GOOGLE_CREDS)
-globalManager = creds.getDatabase(GLOBAL_MANAGER, checkFormat=False)
 
 LEAGUE_PREFIX = '/<string:clusterID>/<string:leagueName>'
 CLUSTER_PREFIX = '/<string:clusterID>'
@@ -27,14 +24,14 @@ class AuthError(Exception):
     pass
 
 # helper functions
-def WLHandler():
-    with open(API_CREDS) as credsFile:
-        wlCreds = json.load(credsFile)
-        wlHandler = APIHandler(wlCreds['E-mail'], wlCreds['APIToken'])
-    return wlHandler
+def creds():
+    return Credentials(GOOGLE_CREDS)
+
+def globalManager():
+    return creds().getDatabase(GLOBAL_MANAGER, checkFormat=False)
 
 def buildAuthURL(state=None):
-    authURL = "https://www.WarLight.net/CLOT/Auth"
+    authURL = "https://www.warlight.net/CLOT/Auth"
     data = [authURL, "?p=", str(OWNER_ID)]
     if state is not None: data += ["&state=", str(state)]
     return ''.join(data)
@@ -48,8 +45,8 @@ def fetchLeague(clusterID, leagueName):
     return cluster.fetchLeague(leagueName)
 
 def fetchCluster(clusterID):
-    cluster = creds.getDatabase(clusterID, checkFormat=False)
-    return LeagueManager(cluster, globalManager)
+    cluster = creds().getDatabase(clusterID, checkFormat=False)
+    return LeagueManager(cluster, globalManager())
 
 def packageDict(data):
     return Response(json.dumps(data), mimetype='application/json')
@@ -67,7 +64,7 @@ def clusterPath(path=""):
     return CLUSTER_PREFIX + path
 
 def _runVerification(agent, token):
-    if not globalManager.verifyAgent(agent, token):
+    if not globalManager().verifyAgent(agent, token):
         raise AuthError("Unregistered or banned agent")
 
 def verifyAgent(request):
@@ -120,7 +117,8 @@ def rule(request, backoff=1):
 @app.route('/address')
 def address():
     """fetches the service e-mail associated with the cslbot instance"""
-    return creds.client.auth._service_account_email
+    with open(GOOGLE_CREDS, 'r*') as googleCreds: data = json.load(googleCreds)
+    return data['client_email']
 
 @app.route('/agentToken')
 def getAgentToken():
@@ -145,21 +143,22 @@ def login():
     if not valid: raise AuthError("Invalid clotpass")
     state = args.get('state')
     if state == KW_REGISTER:
-        token = globalManager.updateAgentToken(token)
+        token = globalManager().updateAgentToken(token)
         return redirect('/agentSuccess/' + token)
     if not isMember:
         failStr = "%s is not a Warlight member" % (name)
         raise AuthError(failStr)
-    globalManager.updateAdmin(token, state)
+    globalManager().updateAdmin(token, state)
     return redirect('/adminSuccess/' + name)
 
 @app.route('/run')
 def run():
     """runs all clusters linked to the cslbot instance"""
-    events, clusters = list(), creds.getAllDatabases(checkFormat=False)
+    events, clusters = list(), creds().getAllDatabases(checkFormat=False)
+    globalMgr = globalManager()
     for cluster in clusters:
-        if cluster.sheet.ID == globalManager.sheet.ID: continue
-        manager = LeagueManager(cluster, globalManager)
+        if cluster.sheet.ID == globalMgr.sheet.ID: continue
+        manager = LeagueManager(cluster, globalMgr)
         manager.run()
         events += manager.events['events']
     return packageDict({'events': events, 'error': False})

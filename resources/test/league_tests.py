@@ -80,7 +80,7 @@ def test_checkAgent():
 class TestLeague(TestCase):
 
     @patch('resources.league.League._checkFormat')
-    @patch('resources.league.League._makeHandler')
+    @patch('resources.league.WLHandler')
     @patch('resources.league.League._getMods')
     def setUp(self, getMods, makeHandler, checkFormat):
         getMods.return_value = 'MODS'
@@ -107,19 +107,6 @@ class TestLeague(TestCase):
         assert_equals(self.league.handler, self.handler)
         assert_equals(self.league.debug, False)
         assert_equals(self.league.tempTeams, None)
-
-    @patch('resources.league.json.load')
-    @patch('resources.league.APIHandler')
-    @patch('resources.league.open')
-    @patch('resources.league.API_CREDS')
-    def test_makeHandler(self, apiCreds, openFn, handler, loadFn):
-        loadFn.return_value = {'E-mail': 'dummyEmail',
-                               'APIToken': 'dummyAPIToken'}
-        makeHandler = League._makeHandler
-        assert_equals(makeHandler(), handler.return_value)
-        handler.assert_called_once_with('dummyEmail', 'dummyAPIToken')
-        loadFn.assert_called_once_with(openFn.return_value)
-        openFn.assert_called_once_with(apiCreds)
 
     @patch('resources.league.League._fetchProperty')
     def test_getMods(self, fetch):

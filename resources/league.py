@@ -4,7 +4,6 @@
 #########################
 
 # imports
-import json
 import math
 import time
 import random
@@ -16,11 +15,10 @@ from glicko2.glicko2 import Player
 from trueskill import TrueSkill
 from datetime import datetime, timedelta, date
 from wl_parsers import PlayerParser
-from wl_api import APIHandler
 from wl_api.wl_api import APIError
 from sheetDB import errors as SheetErrors
-from resources.constants import API_CREDS, TIMEFORMAT, DEBUG_KEY, LATEST_RUN
-from resources.utility import isInteger
+from resources.constants import TIMEFORMAT, DEBUG_KEY, LATEST_RUN
+from resources.utility import isInteger, WLHandler
 
 # global locks
 teamLock, tempLock = Lock(), Lock()
@@ -278,7 +276,7 @@ class League(object):
         self.parent = parent
         self.name = name
         self.thread = thread
-        self.handler = self._makeHandler()
+        self.handler = WLHandler()
         self._checkFormat()
         self.sysDict, self.orderDict = None, None
         self._makeRateSysDict()
@@ -348,13 +346,6 @@ class League(object):
             'external': self.addTemplate},
             self.ORD_RENAME_TEAM: {'internal': self._renameTeam,
             'external': self.renameTeam}}
-
-    @staticmethod
-    def _makeHandler():
-        credsFile = open(API_CREDS)
-        creds = json.load(credsFile)
-        email, token = creds['E-mail'], creds['APIToken']
-        return APIHandler(email, token)
 
     @noisy
     def _getMods(self):
