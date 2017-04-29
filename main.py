@@ -208,8 +208,8 @@ def fetchGroup(clusterID, leagueName):
     return fetchLeagueData(clusterID, leagueName, fetchFn)
 
 @app.route(leaguePath('/team/<int:teamID>'))
-@app.route(leaguePath('/team/<int:gameID>'))
-@app.route(leaguePath('/team/<int:templateID>'))
+@app.route(leaguePath('/game/<int:gameID>'))
+@app.route(leaguePath('/template/<int:templateID>'))
 def fetchEntity(clusterID, leagueName, ID):
     fetchFn = {'team': lambda lg, ID: lg.fetchTeam(ID),
         'game': lambda lg, ID: lg.fetchGame(ID),
