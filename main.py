@@ -98,6 +98,10 @@ def fetchLeagueData(clusterID, leagueName, fetchFn):
     for league in leagues: result[league.name] = fetchFn(league)
     return packageDict(result)
 
+def fetchLeagueDatum(clusterID, leagueName, ID, fetchFn):
+    league = fetchLeague(clusterID, leagueName)
+    return packageDict(fetchFn(league, ID))
+
 def runLeagueOrder(clusterID, leagueName, order, orderFn):
     verifyAgent(request)
     league = fetchLeague(clusterID, leagueName)
@@ -107,6 +111,9 @@ def runLeagueOrder(clusterID, leagueName, order, orderFn):
 def runSimpleOrder(clusterID, leagueName, request, orderFn):
     return runLeagueOrder(clusterID, leagueName, replicate(request),
         orderFn)
+
+def rule(request, backoff=1):
+    return request.url_rule.split('/')[-backoff]
 
 # [START app]
 ## toplevel
@@ -180,9 +187,10 @@ def runCluster(clusterID):
 ## league operations
 @app.route(leaguePath())
 def showLeague(clusterID, leagueName):
-    teams = fetchTeams(clusterID, leagueName)
-    games = fetchGames(clusterID, leagueName)
-    templates = fetchTemplates(clusterID, leagueName)
+    league = fetchLeague(clusterID, leagueName)
+    teams = league.fetchAllTeams()
+    games = league.fetchAllGames()
+    templates = league.fetchAllTemplates()
     return packageDict({'teams': teams, 'games': games,
         'templates': templates})
 
@@ -191,41 +199,31 @@ def leagueCommands(clusterID, leagueName):
     return packageDict(clusterCommands(clusterID).get(leagueName, dict()))
 
 @app.route(leaguePath('/teams'))
-def fetchTeams(clusterID, leagueName):
-    return fetchLeagueData(clusterID, leagueName,
-        fetchFn=lambda lg: lg.fetchAllTeams())
-
 @app.route(leaguePath('/games'))
-def fetchGames(clusterID, leagueName):
-    return fetchLeagueData(clusterID, leagueName,
-        fetchFn=lambda lg: lg.fetchAllGames())
-
 @app.route(leaguePath('/templates'))
-def fetchTemplates(clusterID, leagueName):
-    return fetchLeagueData(clusterID, leagueName,
-        fetchFn=lambda lg: lg.fetchAllTemplates())
+def fetchGroup(clusterID, leagueName):
+    fetchFn = {'teams': lambda lg: lg.fetchAllTeams(),
+        'games': lambda lg: lg.fetchAllGames(),
+        'templates': lambda lg: lg.fetchAllTemplates}[rule(request)]
+    return fetchLeagueData(clusterID, leagueName, fetchFn)
 
 @app.route(leaguePath('/team/<int:teamID>'))
-def fetchTeam(clusterID, leagueName, teamID):
-    return packageDict(fetchLeague(clusterID, leagueName).fetchTeam(teamID))
-
 @app.route(leaguePath('/team/<int:gameID>'))
-def fetchGame(clusterID, leagueName, gameID):
-    return packageDict(fetchLeague(clusterID, leagueName).fetchGame(gameID))
-
 @app.route(leaguePath('/team/<int:templateID>'))
-def fetchTemplate(clusterID, leagueName, templateID):
-    return packageDict(fetchLeague(clusterID,
-        leagueName).fetchTemplate(templateID))
+def fetchEntity(clusterID, leagueName, ID):
+    fetchFn = {'team': lambda lg, ID: lg.fetchTeam(ID),
+        'game': lambda lg, ID: lg.fetchGame(ID),
+        'template': lambda lg, ID: lg.fetchTemplate(ID)}[rule(request, 2)]
+    return fetchLeagueDatum(clusterID, leagueName, ID, fetchFn)
 
 @app.route(leaguePath('/addTeam'), methods=['GET', 'POST'])
 @app.route(leaguePath('/confirmTeam'), methods=['GET', 'POST'])
 @app.route(leaguePath('/unconfirmTeam'), methods=['GET', 'POST'])
 def runTeamOrder(clusterID, leagueName):
-    rule = request.url_rule
-    fetchFn = {'/addTeam': lambda lg, order: lg.addteam(order),
-        '/confirmTeam': lambda lg, order: lg.confirmTeam(order),
-        '/unconfirmTeam': lambda lg, order: lg.unconfirmTeam(order)}[rule]
+    urlRule = rule(request)
+    fetchFn = {'addTeam': lambda lg, order: lg.addteam(order),
+        'confirmTeam': lambda lg, order: lg.confirmTeam(order),
+        'unconfirmTeam': lambda lg, order: lg.unconfirmTeam(order)}[urlRule]
     return runLeagueOrder(clusterID, leagueName, replicate(request,
         lists=['players']), fetchFn)
 
@@ -237,13 +235,13 @@ def runTeamOrder(clusterID, leagueName):
 @app.route(leaguePath('/activateTemplate'), methods=['GET', 'POST'])
 @app.route(leaguePath('/deactivateTemplate'), methods=['GET', 'POST'])
 def handleSimpleOrder(clusterID, leagueName):
-    fetchFn = {'/setLimit': lambda lg, o: lg.setLimit(o),
-        '/renameTeam': lambda lg, o: lg.renameTeam(o),
-        '/removeTeam': lambda lg, o: lg.removeTeam(o),
-        '/addTemplate': lambda lg, o: lg.addTemplate(o),
-        '/activateTemplate': lambda lg, o: lg.activateTemplate(o),
-        '/deactivateTemplate': lambda lg, o: lg.deactivateTemplate(o),
-        '/quitLeague': lambda lg, o: lg.quitLeague(o)}[request.url_rule]
+    fetchFn = {'setLimit': lambda lg, o: lg.setLimit(o),
+        'renameTeam': lambda lg, o: lg.renameTeam(o),
+        'removeTeam': lambda lg, o: lg.removeTeam(o),
+        'addTemplate': lambda lg, o: lg.addTemplate(o),
+        'activateTemplate': lambda lg, o: lg.activateTemplate(o),
+        'deactivateTemplate': lambda lg, o: lg.deactivateTemplate(o),
+        'quitLeague': lambda lg, o: lg.quitLeague(o)}[rule(request)]
     return runSimpleOrder(clusterID, leagueName, request, fetchFn)
 
 @app.route(leaguePath('/dropTemplate'), methods=['GET', 'POST'])
@@ -251,7 +249,7 @@ def handleSimpleOrder(clusterID, leagueName):
 @app.route(leaguePath('/undropTemplate'), methods=['GET', 'POST'])
 @app.route(leaguePath('/undropTemplates'), methods=['GET', 'POST'])
 def dropOrUndrop(clusterID, leagueName):
-    if 'undrop' in request.url_rule:
+    if 'undrop' in rule(request):
         fetchFn = lambda lg, order: lg.undropTemplates(order)
     else: fetchFn = lambda lg, order: lg.dropTemplates(order)
     return runLeagueOrder(clusterID, leagueName, replicate(request,
