@@ -67,21 +67,21 @@ def _runVerification(agent, token):
     if not globalManager().verifyAgent(agent, token):
         raise AuthError("Unregistered or banned agent")
 
-def verifyAgent(request):
-    keys = request.args.keys()
+def verifyAgent(req):
+    keys = req.args.keys()
     if ('agent' not in keys): raise AuthError("Missing agent ID")
     if ('token' not in keys): raise AuthError("Missing agent token")
-    _runVerification(request.args['agent'], request.args['token'])
+    _runVerification(req.args['agent'], req.args['token'])
 
 def _noneList(obj):
     return list() if obj is None else obj
 
-def replicate(request, keys=None, lists=None):
+def replicate(req, keys=None, lists=None):
     result, keys, lists = dict(), _noneList(keys), _noneList(lists)
-    for key in request.args:
-        if key in keys: result[key] = json.loads(request.args[key])
-        elif key in lists: request[key] = request.args.getlist(key)
-        else: result[key] = request.args[key]
+    for key in req.args:
+        if key in keys: result[key] = json.loads(req.args[key])
+        elif key in lists: result[key] = req.args[key].split(',')
+        else: result[key] = req.args[key]
     return result
 
 def validateAuth(token, clotpass):
@@ -99,18 +99,18 @@ def fetchLeagueDatum(clusterID, leagueName, ID, fetchFn):
     league = fetchLeague(clusterID, leagueName)
     return packageDict(fetchFn(league, ID))
 
-def runLeagueOrder(clusterID, leagueName, order, orderFn):
-    verifyAgent(request)
+def runLeagueOrder(clusterID, leagueName, req, order, orderFn):
+    verifyAgent(req)
     league = fetchLeague(clusterID, leagueName)
     orderFn(league, order)
     return packageDict(league.parent.events)
 
-def runSimpleOrder(clusterID, leagueName, request, orderFn):
-    return runLeagueOrder(clusterID, leagueName, replicate(request),
+def runSimpleOrder(clusterID, leagueName, req, orderFn):
+    return runLeagueOrder(clusterID, leagueName, req, replicate(req),
         orderFn)
 
-def rule(request, backoff=1):
-    return request.url_rule.split('/')[-backoff]
+def rule(req, backoff=1):
+    return req.url_rule.split('/')[-backoff]
 
 # [START app]
 ## toplevel
@@ -223,7 +223,7 @@ def runTeamOrder(clusterID, leagueName):
     fetchFn = {'addTeam': lambda lg, order: lg.addTeam(order),
         'confirmTeam': lambda lg, order: lg.confirmTeam(order),
         'unconfirmTeam': lambda lg, order: lg.unconfirmTeam(order)}[urlRule]
-    return runLeagueOrder(clusterID, leagueName, replicate(request,
+    return runLeagueOrder(clusterID, leagueName, request, replicate(request,
         lists=['players']), fetchFn)
 
 @app.route(leaguePath('/setLimit'), methods=['GET', 'POST'])
@@ -251,7 +251,7 @@ def dropOrUndrop(clusterID, leagueName):
     if 'undrop' in rule(request):
         fetchFn = lambda lg, order: lg.undropTemplates(order)
     else: fetchFn = lambda lg, order: lg.dropTemplates(order)
-    return runLeagueOrder(clusterID, leagueName, replicate(request,
+    return runLeagueOrder(clusterID, leagueName, request, replicate(request,
         lists=['templates']), fetchFn)
 
 @app.route(leaguePath('/executeOrders'), methods=['GET', 'POST'])
