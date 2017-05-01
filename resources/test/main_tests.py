@@ -2,11 +2,12 @@
 ## automated tests for toplevel app
 
 # imports
+import main
 from werkzeug import ImmutableMultiDict
 from unittest import TestCase, main as run_tests
 from mock import MagicMock, patch
-from nose.tools import assert_equals, assert_false, assert_true, assert_raises
-from main import AuthError, WLHandler, buildAuthURL, fetchLeagues,\
+from nose.tools import assert_equals, assert_raises
+from main import AuthError, buildAuthURL, fetchLeagues,\
     fetchLeague, fetchCluster, packageDict, packageMessage, buildRoute,\
     leaguePath, clusterPath, verifyAgent, replicate, validateAuth,\
     fetchLeagueData, fetchLeagueDatum, runLeagueOrder, runSimpleOrder, rule,\
@@ -159,7 +160,24 @@ def test_rule():
 class TestMainApp(TestCase):
 
     def setUp(self):
-        pass
+        main.app.testing = True
+        self.app = main.app.test_client()
+
+    @patch('main.json.load')
+    def test_address(self, load):
+        load.return_value = {'client_email': 'email'}
+        r = self.app.get('/address')
+        assert_equals(r.status_code, 200)
+        assert_equals(r.data, 'email')
+
+    @patch('main.redirect')
+    def test_getAgentToken(self, redir):
+        redir.return_value = "redir"
+        r = self.app.get('/agentToken')
+        assert_equals(r.status_code, 200)
+        assert_equals(r.data, redir.return_value)
+        exp = "https://www.warlight.net/CLOT/Auth?p=3022124041&state=REGISTER"
+        redir.assert_called_once_with(exp)
 
 # run tests
 if __name__ == '__main__':
