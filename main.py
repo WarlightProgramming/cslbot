@@ -88,7 +88,7 @@ def validateAuth(token, clotpass):
     data = WLHandler().validateToken(token, clotpass)
     return ((data['clotpass'] == clotpass),
             (data['isMember'].lower() == 'true'),
-            data['name'])
+            data['name'].encode('ascii', 'replace'))
 
 def fetchLeagueData(clusterID, leagueName, fetchFn):
     result, leagues = dict(), fetchLeagues(clusterID, leagueName)
@@ -110,7 +110,23 @@ def runSimpleOrder(clusterID, leagueName, req, orderFn):
         orderFn)
 
 def rule(req, backoff=1):
-    return req.url_rule.split('/')[-backoff]
+    return str(req.url_rule).split('/')[-backoff]
+
+def _clusterCommands(clusterID):
+    """helper for clusterCommands"""
+    return fetchCluster(clusterID).fetchCommands()
+
+def _orderLabel(index):
+    """appends index to the string 'order'"""
+    return "order" + str(index)
+
+def _getOrderList(req):
+    """fetches orders from req"""
+    results, index = list(), 0
+    while (_orderLabel(index)) in req.args:
+        results.append(json.loads(req.args.get(_orderLabel(index))))
+        index += 1
+    return results
 
 # [START app]
 ## toplevel
@@ -140,7 +156,7 @@ def login():
     args = request.args
     token, clotpass = args.get('token'), args.get('clotpass')
     valid, isMember, name = validateAuth(token, clotpass)
-    if not valid: raise AuthError("Invalid clotpass")
+    if not valid: raise AuthError("Invalid clotpass for %s" % (name))
     state = args.get('state')
     if state == KW_REGISTER:
         token = globalManager().updateAgentToken(token)
@@ -168,7 +184,7 @@ def run():
 @app.route(clusterPath('/commands'))
 def clusterCommands(clusterID):
     """fetches commands for all leagues in the cluster"""
-    return packageDict(fetchCluster(clusterID).fetchCommands())
+    return packageDict(_clusterCommands(clusterID))
 
 @app.route(clusterPath('/authorize'))
 def authorize(clusterID):
@@ -195,7 +211,7 @@ def showLeague(clusterID, leagueName):
 
 @app.route(leaguePath('/commands'))
 def leagueCommands(clusterID, leagueName):
-    return packageDict(clusterCommands(clusterID).get(leagueName, dict()))
+    return packageDict(_clusterCommands(clusterID).get(leagueName, dict()))
 
 @app.route(leaguePath('/teams'))
 @app.route(leaguePath('/games'))
@@ -203,12 +219,12 @@ def leagueCommands(clusterID, leagueName):
 def fetchGroup(clusterID, leagueName):
     fetchFn = {'teams': lambda lg: lg.fetchAllTeams(),
         'games': lambda lg: lg.fetchAllGames(),
-        'templates': lambda lg: lg.fetchAllTemplates}[rule(request)]
+        'templates': lambda lg: lg.fetchAllTemplates()}[rule(request)]
     return fetchLeagueData(clusterID, leagueName, fetchFn)
 
-@app.route(leaguePath('/team/<int:teamID>'))
-@app.route(leaguePath('/game/<int:gameID>'))
-@app.route(leaguePath('/template/<int:templateID>'))
+@app.route(leaguePath('/team/<int:ID>'))
+@app.route(leaguePath('/game/<int:ID>'))
+@app.route(leaguePath('/template/<int:ID>'))
 def fetchEntity(clusterID, leagueName, ID):
     fetchFn = {'team': lambda lg, ID: lg.fetchTeam(ID),
         'game': lambda lg, ID: lg.fetchGame(ID),
@@ -256,9 +272,10 @@ def dropOrUndrop(clusterID, leagueName):
 
 @app.route(leaguePath('/executeOrders'), methods=['GET', 'POST'])
 def executeOrders(clusterID, leagueName):
+    print request, request.args
     verifyAgent(request)
     league = fetchLeague(clusterID, leagueName)
-    orderList = [json.loads(order) for order in request.args.getlist('orders')]
+    orderList = _getOrderList(request)
     league.executeOrders(request.args.get('agent'), orderList)
     return packageDict(league.parent.events)
 

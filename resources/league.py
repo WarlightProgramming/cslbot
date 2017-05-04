@@ -135,6 +135,7 @@ class League(object):
     SET_GLICKO_DEFAULT = "GLICKO DEFAULT"
     SET_TRUESKILL_SIGMA = "TRUESKILL SIGMA"
     SET_TRUESKILL_DEFAULT = "TRUESKILL MU"
+    SET_DEFAULT_NONE = "DEFAULT RATING"
     SET_REVERSE_PARITY = "PREFER SKEWED MATCHUPS"
     SET_REVERSE_GROUPING = "PREFER SKEWED GROUPINGS"
     SET_LEAGUE_MESSAGE = "MESSAGE"
@@ -213,6 +214,7 @@ class League(object):
     RATE_TRUESKILL = "TRUESKILL"
     RATE_WINCOUNT = "WINCOUNT"
     RATE_WINRATE = "WINRATE"
+    RATE_NONE = "NONE"
     WINRATE_SCALE = 1000
 
     # timeformat
@@ -315,7 +317,11 @@ class League(object):
                                             'update': self._getNewWinRates,
                                             'prettify': (lambda r:
                                             str(r.split(self.SEP_RTG)[0])),
-                                            'parity': self._getWinRateParity}}
+                                            'parity': self._getWinRateParity},
+                        self.RATE_NONE: {'default': lambda: self.defaultNone,
+                                        'update': lambda *args, **kwargs: [],
+                                        'prettify': str,
+                                        'parity': self._getWinCountParity}}
 
     def _makeOrderDict(self):
         self.orderDict =  {self.ORD_ADD_TEAM:
@@ -377,7 +383,7 @@ class League(object):
     @noisy
     def _checkTeamSheet(self):
         teamConstraints = {'ID': 'UNIQUE INT',
-                           'Name': 'UNIQUE STRING',
+                           'Name': 'SANITIZED UNIQUE STRING',
                            'Players': 'UNIQUE STRING',
                            'Confirmations': 'STRING',
                            'Rating': 'STRING',
@@ -410,7 +416,7 @@ class League(object):
     @noisy
     def _checkTemplatesSheet(self):
         templatesConstraints = {'ID': 'UNIQUE INT',
-                                'Name': 'UNIQUE STRING',
+                                'Name': 'SANITIZED UNIQUE STRING',
                                 'WarlightID': 'INT',
                                 'Active': 'BOOL',
                                 'Usage': 'INT'}
@@ -713,7 +719,7 @@ class League(object):
     @property
     def ratingSystem(self):
         """rating system to use"""
-        system = self._fetchProperty(self.SET_SYSTEM, self.RATE_ELO,
+        system = self._fetchProperty(self.SET_SYSTEM, self.RATE_NONE,
                                      lambda x: x.upper())
         if system not in self.sysDict:
             raise ImproperInput("Unrecognized rating system. Aborting.")
@@ -776,6 +782,10 @@ class League(object):
     @property
     def defaultWinRate(self):
         return (self.SEP_RTG).join(str(i) for i in [0, 0])
+
+    @property
+    def defaultNone(self):
+        return self._fetchProperty(self.SET_DEFAULT_NONE, "0")
 
     @property
     def reverseParity(self):
@@ -1443,7 +1453,7 @@ class League(object):
         temp = sorted(zip(members, confirms))
         members, confirms = self._getMembersAndConfirms(temp)
         with teamLock:
-            self._addSanitizedEntity(self.teams, {'ID': self._currentID(),
+            self._addEntity(self.teams, {'ID': self._currentID(),
                 'Name': teamName, 'Limit': gameLimit, 'Players': members,
                 'Confirmations': confirms, 'Vetos': "", 'Drops': forcedDrops,
                 'Ongoing': 0, 'Finished': 0, 'Rating': self.defaultRating})
@@ -1703,7 +1713,7 @@ class League(object):
             if self.multischeme: tempDict['Schemes'], nexti = orders[3], 4
             for i in xrange(nexti+1, len(orders), 2):
                 tempDict[orders[i-1]] = orders[i]
-            self._addSanitizedEntity(self.templates, tempDict)
+            self._addEntity(self.templates, tempDict)
 
     @noisy
     def _renameTeam(self, order):
@@ -2060,18 +2070,10 @@ class League(object):
         return self.sysDict[self.ratingSystem]['update'](sides, winningSide)
 
     @classmethod
-    def _sanitized(cls, data):
-        for label in data:
-            if (isinstance(data[label], str) and
-                not cls._strBeginsWith(data[label], "'")):
-                data[label] = "'" + data[label]
-        return data
-
-    @classmethod
     def _updateEntityValue(cls, table, ID, identifier='ID', **values):
         table.updateMatchingEntities({identifier: {'value': ID,
                                                    'type': 'positive'}},
-                                     cls._sanitized(values))
+                                     values)
 
     @noisy
     def _updateTeamRating(self, teamID, rating):
@@ -3024,15 +3026,15 @@ class League(object):
         return [{'Sides': a[0], 'Template': a[1]} for a in assignments]
 
     @classmethod
-    def _addSanitizedEntity(cls, table, entity):
-        table.addEntity(cls._sanitized(entity))
+    def _addEntity(cls, table, entity):
+        table.addEntity(entity)
 
     @noisy
     def _createBatch(self, batch):
         currentID = max(int(ID) for ID in self.gameIDs) + 1
         for game in batch:
             try:
-                self._addSanitizedEntity(self.games,
+                self._addEntity(self.games,
                     {'ID': currentID, 'WarlightID': '', 'Created': '',
                      'Winners': '', 'Sides': game['Sides'], 'Vetos': 0,
                      'Vetoed': '', 'Finished': '',

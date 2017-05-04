@@ -532,7 +532,7 @@ The rating system used by the league.
 
 *Possible Args*: "ELO", "GLICKO", "TRUESKILL", "WINCOUNT", "WINRATE"
 
-*Deault*: Elo
+*Deault*: no rating system
 
 Do not change this argument once your league has already started running. It
 will likely have serious side-effects.
@@ -543,6 +543,9 @@ strongly discouraged to do so. On top of that, your ratings will be less
 accurate since league pairings and rating updates are based on prior ratings.
 
 Here's quick descriptions of each rating system you can use:
+
+* **NONE**: No rating system. Use [**DEFAULT RATING**] to supply a default
+value or formula and perform any updates yourself.
 
 * **ELO**: The classic Elo system. Simple, easy to configure and debug.
 
@@ -1531,6 +1534,29 @@ use the drop feature very carefullly.
 using keywords in the template data sheet.
 
 ### Rating System Configuration
+
+### No Rating System
+
+___
+
+#### DEFAULT RATING
+
+Default value to use as rating for new teams
+
+*Sample Args*: "0", "2000", "'=R[-3]C[0] + 9"
+
+*Default*: 0
+
+This value will be used as the rating for any new teams if you've left the
+[**RATING SYSTEM**](#rating-system) command as default or explictly set it to
+NONE. You can supply an integer or formulas that yield an integer. If you plan on
+supplying a formula, due to input sanitation and for the sake of safety, you
+should use the ' escape character at the beginning and enter your formula in
+row/column notation- to refer to a row or column (from the perspective of an
+arbitrary cell in the Rating column of the team data worksheet). Instead of
+using specific A1 values like "F$3" or "AX9", use values like "R[3]C3",
+"R3C3", or "R[3]C[3]" that specify the source cell in terms of the destination
+cell, with relative references in square brackets and absolute ones outside.
 
 ### Elo
 
