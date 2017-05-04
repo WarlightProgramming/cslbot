@@ -6,10 +6,10 @@ def getOwnDir():
     return dirname(realpath(__file__))
 
 BASE_DIR = normpath(pathjoin(getOwnDir(), pardir))
-API_CREDS = pathjoin(BASE_DIR, "credentials", "knyte.json")
-GOOGLE_CREDS = pathjoin(BASE_DIR, "credentials", "optimus.json")
+API_CREDS = pathjoin(BASE_DIR, "resources", "fake-credentials", "wl_api.json")
+GOOGLE_CREDS = pathjoin(BASE_DIR, "resources", "fake-credentials", "google_creds.json")
 TIMEFORMAT = "%Y-%m-%d %H:%M:%S"
-DEBUG_KEY = "LhayjQvAeW8Nxs&L5s9fK%yKe+hP9zDSqkZqYbNfsufX+zcdyB!$tZMEE29v?-Px"
-GLOBAL_MANAGER = "1Pi7AEy3elEeL_oHhJ92ZsOwzQl0oPcsi2sy3Y8RfgGI"
+DEBUG_KEY = "DEBUG MODE"
+GLOBAL_MANAGER = ""
 LATEST_RUN = "LATEST RUN"
-OWNER_ID = 3022124041
+OWNER_ID = 0
