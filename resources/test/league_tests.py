@@ -162,13 +162,13 @@ class TestLeague(TestCase):
         self.league._checkTeamSheet()
         expectedConstraints = {'ID': 'UNIQUE INT',
                                'Name': 'SANITIZED UNIQUE STRING',
-                               'Players': 'UNIQUE STRING',
-                               'Confirmations': 'STRING',
-                               'Rating': 'STRING',
-                               'Vetos': 'STRING',
-                               'Drops': 'STRING',
+                               'Players': 'SANITIZED UNIQUE STRING',
+                               'Confirmations': 'SANITIZED STRING',
+                               'Rating': 'SANITIZED STRING',
+                               'Vetos': 'SANITIZED STRING',
+                               'Drops': 'SANITIZED STRING',
                                'Rank': 'INT',
-                               'History': 'STRING',
+                               'History': 'SANITIZED STRING',
                                'Finished': 'INT',
                                'Limit': 'INT',
                                'Ongoing': 'INT'}
@@ -189,12 +189,12 @@ class TestLeague(TestCase):
     def test_checkGamesSheet(self, checkSheet):
         expectedConstraints = {'ID': 'UNIQUE INT',
                                'WarlightID': 'UNIQUE INT',
-                               'Created': 'STRING',
-                               'Finished': 'STRING',
-                               'Sides': 'STRING',
-                               'Winners': 'STRING',
+                               'Created': 'SANITIZED STRING',
+                               'Finished': 'SANITIZED STRING',
+                               'Sides': 'SANITIZED STRING',
+                               'Winners': 'SANITIZED STRING',
                                'Vetos': 'INT',
-                               'Vetoed': 'STRING',
+                               'Vetoed': 'SANITIZED STRING',
                                'Template': 'INT'}
         self.league._checkGamesSheet()
         checkSheet.assert_called_once_with(self.league.games,
