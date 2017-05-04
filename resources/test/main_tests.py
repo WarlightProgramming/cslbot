@@ -11,7 +11,7 @@ from nose.tools import assert_equals, assert_raises
 from main import AuthError, buildAuthURL, fetchLeagues,\
     fetchLeague, fetchCluster, packageDict, packageMessage, buildRoute,\
     leaguePath, clusterPath, verifyAgent, replicate, validateAuth,\
-    fetchLeagueData, fetchLeagueDatum, runLeagueOrder, runSimpleOrder, rule,\
+    fetchLeagueData, runLeagueOrder, runSimpleOrder, rule,\
     creds, globalManager, badRequest
 from resources.constants import OWNER_ID
 
@@ -121,11 +121,6 @@ def test_fetchLeagueData(leagues, league, package):
     assert_equals(fetchLeagueData('ID', 'name', lambda lg: lg.magic()),
         package.return_value)
     package.assert_called_once_with({'name': 'mock'})
-    league.return_value = leagueMock
-    leagueMock.science.return_value = {"magic": "Clarke's Third Law"}
-    assert_equals(fetchLeagueDatum('ID', 'name', 'identity', lambda lg, ID:
-        lg.science(ID)), package.return_value)
-    package.assert_called_with({'magic': "Clarke's Third Law"})
 
 @patch('main.packageDict')
 @patch('main.fetchLeague')
@@ -295,7 +290,7 @@ class TestMainApp(TestCase):
         assert_equals(r.status_code, 200)
         assert_equals(r.data, json.dumps({'one': 'all one games',
             'two': 'all two games', 'three': 'all three games'}))
-        r = self.app.get('/clusterID/ALL/templates')
+        r = self.app.get('/clusterID/ALL/allTemplates')
         assert_equals(r.status_code, 200)
         assert_equals(r.data, json.dumps({'one': 'all one templates',
             'two': 'all two templates', 'three': 'all three templates'}))

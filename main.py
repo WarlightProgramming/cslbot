@@ -95,10 +95,6 @@ def fetchLeagueData(clusterID, leagueName, fetchFn):
     for league in leagues: result[league.name] = fetchFn(league)
     return packageDict(result)
 
-def fetchLeagueDatum(clusterID, leagueName, ID, fetchFn):
-    league = fetchLeague(clusterID, leagueName)
-    return packageDict(fetchFn(league, ID))
-
 def runLeagueOrder(clusterID, leagueName, req, order, orderFn):
     verifyAgent(req)
     league = fetchLeague(clusterID, leagueName)
@@ -216,20 +212,24 @@ def leagueCommands(clusterID, leagueName):
 @app.route(leaguePath('/teams'))
 @app.route(leaguePath('/games'))
 @app.route(leaguePath('/templates'))
+@app.route(leaguePath('/allTeams'))
+@app.route(leaguePath('/allGames'))
+@app.route(leaguePath('/allTemplates'))
 def fetchGroup(clusterID, leagueName):
+    urlRule = rule(request).replace('all', '').lower()
     fetchFn = {'teams': lambda lg: lg.fetchAllTeams(),
         'games': lambda lg: lg.fetchAllGames(),
-        'templates': lambda lg: lg.fetchAllTemplates()}[rule(request)]
+        'templates': lambda lg: lg.fetchAllTemplates()}[urlRule]
     return fetchLeagueData(clusterID, leagueName, fetchFn)
 
 @app.route(leaguePath('/team/<int:ID>'))
 @app.route(leaguePath('/game/<int:ID>'))
 @app.route(leaguePath('/template/<int:ID>'))
 def fetchEntity(clusterID, leagueName, ID):
-    fetchFn = {'team': lambda lg, ID: lg.fetchTeam(ID),
-        'game': lambda lg, ID: lg.fetchGame(ID),
-        'template': lambda lg, ID: lg.fetchTemplate(ID)}[rule(request, 2)]
-    return fetchLeagueDatum(clusterID, leagueName, ID, fetchFn)
+    league = fetchLeague(clusterID, leagueName)
+    value =  {'team': league.fetchTeam, 'game': league.fetchGame,
+        'template': league.fetchTemplate}[rule(request, 2)](ID)
+    return packageDict(value)
 
 @app.route(leaguePath('/addTeam'), methods=['GET', 'POST'])
 @app.route(leaguePath('/confirmTeam'), methods=['GET', 'POST'])
