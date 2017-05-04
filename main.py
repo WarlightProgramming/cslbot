@@ -272,7 +272,6 @@ def dropOrUndrop(clusterID, leagueName):
 
 @app.route(leaguePath('/executeOrders'), methods=['GET', 'POST'])
 def executeOrders(clusterID, leagueName):
-    print request, request.args
     verifyAgent(request)
     league = fetchLeague(clusterID, leagueName)
     orderList = _getOrderList(request)
