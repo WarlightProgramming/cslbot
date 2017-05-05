@@ -9,6 +9,44 @@
 
 A bot to automate Warlight ladders, leagues, and tournaments using the Community-Supported League (CSL) framework.
 
-## Installation
+## Features
 
-No releases yet
+* Automatically run multiple Warlight leagues using Google Sheets.
+
+* Control a wide range of details such as rating system, whether the league is
+  multi-day/real-time, which players are allowed in the league, and how to
+  handle boots and declines.
+
+* Ability to set up a league in minutes without any knowledge of code or
+  servers.
+
+## Installation and Usage
+
+See the [project wiki](https://github.com/knyte/cslbot/wiki) for an explanation
+for the CSL framework, the Interface API, and setting up cslbot instances and
+League Clusters.
+
+## How to Contribute
+
+#### Ask Questions
+
+Message the project maintainer, use Warlight's
+[Programming forum](https://www.warlight.net/Forum/f6-Programming), and be sure
+you've checked relevant sections of the wiki. If it's simply a documentation
+issue with the wiki, please edit the wiki to help future users.
+
+#### Report Issues
+
+Found a bug? Got a feature or enhancement idea? Create an Issue.
+
+#### Browse Issues
+
+Check [this project's Issues](https://github.com/knyte/cslbot/issues) for bugs
+that people have found or features they've suggested. Sort by labels
+(especially the priority labels) to find Issues with the most importance, but
+feel free to work on anything that doesn't have a 'do not implement' label.
+
+#### Check the Guidelines
+
+If you've got a feature request, bug report, or some code to submit, be sure to
+check the project [contribution guidelines](https://github.com/knyte/cslbot/blob/master/.github/CONTRIBUTING.md).
