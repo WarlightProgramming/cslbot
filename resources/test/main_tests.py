@@ -21,9 +21,11 @@ from resources.constants import OWNER_ID
 def test_creds(gCreds):
     assert_equals(creds(), gCreds.return_value)
 
+@patch('main.GlobalManager')
 @patch('main.creds')
-def test_globalManager(credsFn):
-    assert_equals(globalManager(),
+def test_globalManager(credsFn, managerFn):
+    assert_equals(globalManager(), managerFn.return_value)
+    managerFn.assert_called_once_with(
         credsFn.return_value.getDatabase.return_value)
 
 def test_buildAuthURL():

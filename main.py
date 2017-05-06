@@ -10,6 +10,7 @@ from flask import Flask, Response, redirect, request
 from sheetDB import Credentials
 from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID
 from resources.league_manager import LeagueManager
+from resources.global_manager import GlobalManager
 from resources.utility import WLHandler
 
 # app engine monkeypatch for requests
@@ -32,7 +33,8 @@ def creds():
     return Credentials(GOOGLE_CREDS)
 
 def globalManager():
-    return creds().getDatabase(GLOBAL_MANAGER, checkFormat=False)
+    return GlobalManager(creds().getDatabase(GLOBAL_MANAGER,
+                                             checkFormat=False))
 
 def buildAuthURL(state=None):
     authURL = "https://www.warlight.net/CLOT/Auth"
