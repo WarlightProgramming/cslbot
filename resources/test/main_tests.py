@@ -212,13 +212,15 @@ class TestMainApp(TestCase):
     def test_login(self, manager, validate):
         manager.return_value.updateAgentToken.return_value = 'token'
         validate.return_value = (False, False, 'Bob')
-        assert_raises(AuthError, self.app.post, '/login',
-            query_string={'token': '1234', 'clotpass': '5678',
-                          'state': 'REGISTER'})
-        validate.return_value = (True, False, 'Bob')
-        assert_raises(AuthError, self.app.post, '/login',
-            query_string={'token': '1234', 'clotpass': '7890',
-                          'state': 'MINNESOTA'})
+        r = self.app.get('/login?state=REGISTER?token=1234&clotpass=5678')
+        assert_equals(r.status_code, 200)
+        assert_equals(r.data,
+            '{"message": "Error: Invalid clotpass for Bob", "error": true}')
+        validate.return_value = (True, False, 'Bo')
+        r = self.app.get('/login?state=REGISTER?token=1234&clotpass=5678')
+        assert_equals(r.status_code, 200)
+        assert_equals(r.data,
+            '{"message": "Error: Bo is not a Warlight member", "error": true}')
         validate.return_value = (True, True, 'Bob')
         r = self.app.get('/login?state=REGISTER&token=1234&clotpass=7890')
         assert_equals(r.status_code, 302)
