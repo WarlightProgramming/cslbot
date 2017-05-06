@@ -5,11 +5,15 @@
 
 # imports
 import json
+from requests_toolbelt.adapters import appengine
 from flask import Flask, Response, redirect, request
 from sheetDB import Credentials
 from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID
 from resources.league_manager import LeagueManager
 from resources.utility import WLHandler
+
+# app engine monkeypatch for requests
+appengine.monkeypatch()
 
 # global variables
 app = Flask(__name__)
