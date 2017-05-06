@@ -275,7 +275,7 @@ class League(object):
         self.orders = orders
         self.admin = admin
         self.debug = self._fetchProperty(self.SET_DEBUG, False,
-                                        self._getBoolProperty)
+                                         self._getBoolProperty)
         self.mods = self._getMods()
         self.parent = parent
         self.name = name
