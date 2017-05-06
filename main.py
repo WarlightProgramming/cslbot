@@ -21,7 +21,7 @@ def fixAppengine():
         from requests_toolbelt.adapters import appengine
         from google.appengine.api import urlfetch
         appengine.monkeypatch()
-        urlfetch.set_default_fetch_limit(600)
+        urlfetch.set_default_fetch_deadline(600)
 
 fixAppengine()
 
