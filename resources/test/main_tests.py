@@ -7,16 +7,29 @@ import json
 from werkzeug import ImmutableMultiDict
 from unittest import TestCase, main as run_tests
 from mock import MagicMock, patch
-from nose.tools import assert_equals, assert_raises
+from nose.tools import assert_equals, assert_raises, assert_false
 from main import AuthError, buildAuthURL, fetchLeagues,\
     fetchLeague, fetchCluster, packageDict, packageMessage, buildRoute,\
     leaguePath, clusterPath, verifyAgent, replicate, validateAuth,\
     fetchLeagueData, runLeagueOrder, runSimpleOrder, rule,\
-    creds, globalManager, badRequest
+    creds, globalManager, badRequest, fixAppengine
 from resources.constants import OWNER_ID
 
 # tests
 ## helper functions
+@patch('__builtin__.__import__')
+@patch('main.os')
+def test_fixAppengine(osMod, importFn):
+    osMod.environ = dict()
+    fixAppengine()
+    assert_false(hasattr(main, 'appengine'))
+    osMod.environ['SERVER_SOFTWARE'] = 'Google App/4.2.0'
+    fixAppengine()
+    assert_false(hasattr(main, 'appengine'))
+    osMod.environ['SERVER_SOFTWARE'] = 'Google App Engine/4.2.0'
+    fixAppengine()
+    assert_equals(importFn.call_count, 2)
+
 @patch('main.Credentials')
 def test_creds(gCreds):
     assert_equals(creds(), gCreds.return_value)
@@ -167,6 +180,9 @@ class TestMainApp(TestCase):
         r = self.app.get('/address')
         assert_equals(r.status_code, 200)
         assert_equals(r.data, 'email')
+        r = self.app.get('/')
+        assert_equals(r.status_code, 200)
+        assert_equals(r.data, 'email')
 
     @patch('main.redirect')
     def test_getAgentToken(self, redir):
@@ -221,7 +237,7 @@ class TestMainApp(TestCase):
         creds.getAllDatabases.return_value = [cluster1, cluster2, cluster3]
         credsFn.return_value = creds
         lgMan.return_value.events = {'events': [1, 2, 3]}
-        glMan.return_value.sheet.ID = 4
+        glMan.return_value.database.sheet.ID = 4
         r = self.app.get('/run')
         assert_equals(r.status_code, 200)
         assert_equals(r.data, json.dumps({'events': [1, 2, 3, 1, 2, 3],

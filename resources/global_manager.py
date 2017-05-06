@@ -38,8 +38,8 @@ class GlobalManager(object):
 
     @staticmethod
     def _randStr(length):
-        return ''.join(random.SystemRandom().choice(string.printable) for
-            _ in xrange(length))
+        return ''.join(random.SystemRandom().choice(string.letters +
+            string.digits) for _ in xrange(length))
 
     def updateAgentToken(self, agentID):
         TOKEN_LEN = 64

@@ -4,8 +4,8 @@
 ######################
 
 # imports
+import os
 import json
-from requests_toolbelt.adapters import appengine
 from flask import Flask, Response, redirect, request
 from sheetDB import Credentials
 from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID
@@ -13,8 +13,17 @@ from resources.league_manager import LeagueManager
 from resources.global_manager import GlobalManager
 from resources.utility import WLHandler
 
-# app engine monkeypatch for requests
-appengine.monkeypatch()
+# google app engine fixes
+def fixAppengine():
+    software = os.environ.get('SERVER_SOFTWARE')
+    if (isinstance(software, str) and (software.startswith('Development')
+        or software.startswith('Google App Engine'))):
+        from requests_toolbelt.adapters import appengine
+        from google.appengine.api import urlfetch
+        appengine.monkeypatch()
+        urlfetch.set_default_fetch_limit(600)
+
+fixAppengine()
 
 # global variables
 app = Flask(__name__)
@@ -132,6 +141,7 @@ def _getOrderList(req):
 
 # [START app]
 ## toplevel
+@app.route('/')
 @app.route('/address')
 def address():
     """fetches the service e-mail associated with the cslbot instance"""
@@ -175,7 +185,7 @@ def run():
     events, clusters = list(), creds().getAllDatabases(checkFormat=False)
     globalMgr = globalManager()
     for cluster in clusters:
-        if cluster.sheet.ID == globalMgr.sheet.ID: continue
+        if cluster.sheet.ID == globalMgr.database.sheet.ID: continue
         manager = LeagueManager(cluster, globalMgr)
         manager.run()
         events += manager.events['events']

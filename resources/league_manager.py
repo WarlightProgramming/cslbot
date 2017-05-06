@@ -54,6 +54,7 @@ class LeagueManager(object):
     def __init__(self, database, manager):
         """takes a sheetDB Database object and a GlobalManager object"""
         self.database = database
+        self.manager = manager
         self.commands = self.database.fetchTable(self.COMMANDS_TITLE,
                                          header=self.COMMANDS_HEADER)
         self.logSheet = self.database.fetchTable(self.LOG_TITLE,
@@ -61,7 +62,6 @@ class LeagueManager(object):
         self.leagues = self._fetchLeagueNames()
         self.admin = self._validateAdmin(self._getAdmin())
         self.events = {'error': False, 'events': list()}
-        self.manager = manager
 
     def _fetchLeagueNames(self):
         matches = self.commands.findEntities({self.TITLE_CMD: {'type':

@@ -274,6 +274,8 @@ class League(object):
         self.settings = settings
         self.orders = orders
         self.admin = admin
+        self.debug = self._fetchProperty(self.SET_DEBUG, False,
+                                        self._getBoolProperty)
         self.mods = self._getMods()
         self.parent = parent
         self.name = name
@@ -284,8 +286,6 @@ class League(object):
         self._makeRateSysDict()
         self._makeOrderDict()
         self._gameSize, self._sideSize = list(), list()
-        self.debug = self._fetchProperty(self.SET_DEBUG, False,
-                                        self._getBoolProperty)
         self.tempTeams = None
 
     def _makeRateSysDict(self):
