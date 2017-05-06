@@ -308,7 +308,6 @@ def badRequest():
     return error("Your request had flawed or missing parameters")
 
 @app.errorhandler(500)
-@app.errorhandler(Exception)
 def error(e):
     msg = "Error: " + str(e)
     return packageMessage(msg, error=True)
