@@ -268,25 +268,25 @@ class League(object):
 
     def __init__(self, games, teams, templates, settings, orders,
                  admin, parent, name, thread):
+        self.parent = parent
         self.games = games
         self.teams = teams
         self.templates = templates
         self.settings = settings
         self.orders = orders
         self.admin = admin
+        self.name = name
+        self.sysDict, self.orderDict = None, None
+        self._gameSize, self._sideSize = list(), list()
+        self.tempTeams = None
+        self.thread = thread
         self.debug = self._fetchProperty(self.SET_DEBUG, False,
                                          self._getBoolProperty)
         self.mods = self._getMods()
-        self.parent = parent
-        self.name = name
-        self.thread = thread
         self.handler = WLHandler()
         self._checkFormat()
-        self.sysDict, self.orderDict = None, None
         self._makeRateSysDict()
         self._makeOrderDict()
-        self._gameSize, self._sideSize = list(), list()
-        self.tempTeams = None
 
     def _makeRateSysDict(self):
         self.sysDict = {self.RATE_ELO: {'default':
@@ -1326,6 +1326,7 @@ class League(object):
         team = teams[0]
         existingDrops = set(team['Drops'].split(self.SEP_DROPS))
         existingDrops.update(str(t) for t in templates)
+        existingDrops.discard('')
         if (len(existingDrops) > self.dropLimit):
             raise ImproperInput("Team %s has already reached its drop limit" %
                                 (str(teamID)))
@@ -1342,7 +1343,8 @@ class League(object):
 
     @noisy
     def _autodropEligible(self, badTemps):
-        return (self.autodrop and (len(badTemps) <= self.dropLimit))
+        return (len(badTemps) == 0 or
+                (self.autodrop and (len(badTemps) <= self.dropLimit)))
 
     @noisy
     def _handleTeamAutodrop(self, teamID, members, badTemps):
@@ -1700,8 +1702,8 @@ class League(object):
 
     @property
     def _newTempGameCount(self):
-        if self.favorNewTemplates: return 0
         existingTemps = self.activeTemplates
+        if (self.favorNewTemplates or len(existingTemps) == 0): return 0
         countSum = sum(t['Usage'] for t in existingTemps)
         return int(round(Decimal(countSum) / Decimal(len(existingTemps))))
 
@@ -2683,7 +2685,7 @@ class League(object):
                  self._valueInRange(teamRank, None, self.maxRank)))
 
     @noisy
-    def _checkTeamRatingUsingData(self, teamID, teamData):
+    def _checkTeamProbationUsingData(self, teamID, teamData):
         start = teamData['Probation Start']
         if self._meetsRetention(teamData):
             if len(start) > 0: self._wipeProbation(teamID)
@@ -2693,6 +2695,11 @@ class League(object):
             start = datetime.strptime(start, self.TIMEFORMAT)
             if (datetime.now() - start).days >= self.gracePeriod:
                 raise ImproperInput("Team %s has been culled" % (str(teamID)))
+
+    @noisy
+    def _checkTeamRatingUsingData(self, teamID, teamData):
+        if 'Probation Start' not in teamData: return
+        self._checkTeamProbationUsingData(teamID, teamData)
 
     @noisy
     def _checkTeamRating(self, teamID):
@@ -2848,7 +2855,7 @@ class League(object):
     @classmethod
     def _getHistory(cls, team):
         history = team['History'].split(cls.SEP_TEAMS)
-        return [int(t) for t in history]
+        return [int(t) for t in history if len(t)]
 
     @staticmethod
     def _addToSetWithinDict(data, label, value):

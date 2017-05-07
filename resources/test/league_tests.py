@@ -1773,6 +1773,8 @@ class TestLeague(TestCase):
         update.assert_called_with(3, ['FALSE', 'FALSE'])
 
     def test_newTempGameCount(self):
+        self.templates.findEntities.return_value = list()
+        assert_equals(self.league._newTempGameCount, 0)
         self.templates.findEntities.return_value = [{'Usage': 8},
             {'Usage': 12}, {'Usage': 12}, {'Usage': 8}, {'Usage': 11}]
         assert_equals(self.league._newTempGameCount, 10)
@@ -2727,6 +2729,9 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_GRACE_PERIOD, 5)
         start = datetime.strftime(datetime.now() - timedelta(3),
                                   self.league.TIMEFORMAT)
+        self.teams.findEntities.return_value = [dict()]
+        self.league._checkTeamRating('teamID')
+        self.teams.updateMatchingEntities.assert_not_called()
         self.teams.findEntities.return_value = [{'Probation Start':
             start},]
         meets.return_value = True
