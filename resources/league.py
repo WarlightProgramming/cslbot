@@ -881,8 +881,8 @@ class League(object):
     def cullingDisabled(self):
         return (self.minRating is None and self.maxRank is None)
 
-    @runPhase
-    def _restoreTeams(self):
+    @noisy
+    def _restoreLeagueTeams(self):
         restPd = self.restorationPeriod
         if self.cullingDisabled: restPd = 0
         if restPd is None: return
@@ -897,6 +897,11 @@ class League(object):
             if ((datetime.now() - probStart).days >= restPd):
                 self._updateEntityValue(self.teams, team['ID'],
                     Rating=self.defaultRating, **{'Probation Start': ''})
+
+    @runPhase
+    def _restoreTeams(self):
+        try: self._restoreLeagueTeams()
+        except SheetErrors.DataError: return
 
     @property
     def allowJoins(self):

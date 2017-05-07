@@ -817,6 +817,9 @@ class TestLeague(TestCase):
                                   {'ID': 4, 'Probation Start': makeProb(12)}]
         self.league._restoreTeams()
         assert_equals(self.teams.updateMatchingEntities.call_count, 2)
+        getExtant.side_effect = sheetDB.errors.DataError
+        assert_equals(self.league._restoreTeams(), None)
+        assert_equals(self.teams.updateMatchingEntities.call_count, 2)
 
     def test_allowJoins(self):
         self._boolPropertyTest('allowJoins', self.league.SET_ALLOW_JOINS, True)
