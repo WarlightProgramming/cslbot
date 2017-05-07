@@ -1791,6 +1791,8 @@ class League(object):
     @noisy
     def _wrapUp(self, gameData, group):
         self.handler.deleteGame(gameData['id'])
+        self._updateEntityValue(self.games, gameData['id'], 'WarlightID',
+                                WarlightID='')
         if len(group) == len(gameData['players']):
             return 'ABANDONED', None
         return 'DECLINED', group, list()
@@ -2216,7 +2218,7 @@ class League(object):
         if vetos[0] == self.SEP_VETOS: vetos = vetos[1:]
         vetoCount = int(gameData['Vetos']) + 1
         self._updateEntityValue(self.games, gameData['ID'], Vetoed=vetos,
-                                Vetos=vetoCount, Template='')
+                                Vetos=vetoCount, Template='', WarlightID='')
         self._adjustTemplateGameCount(gameData['Template'], -1)
 
     @noisy

@@ -1935,6 +1935,8 @@ class TestLeague(TestCase):
                      self.league.expiryThreshold)
         assert_equals(self.league._handleWaiting(gameData, created), None)
         assert_equals(self.handler.deleteGame.call_count, 4)
+        self.games.updateMatchingEntities.assert_called_with({'WarlightID':
+            {'value': '3', 'type': 'positive'}}, {'WarlightID': ''})
 
     @patch('resources.league.League._handleWaiting')
     @patch('resources.league.League._handleFinished')
@@ -2300,7 +2302,7 @@ class TestLeague(TestCase):
         self.league._vetoCurrentTemplate(gameData)
         self.games.updateMatchingEntities.assert_called_with({'ID':
             {'value': '8', 'type': 'positive'}}, {'Vetos': 4,
-            'Vetoed': "12/38/349/420", 'Template': ""})
+             'Vetoed': "12/38/349/420", 'Template': "", 'WarlightID': ''})
         self.templates.updateMatchingEntities.assert_called_with({'ID':
             {'value': '420', 'type': 'positive'}}, {'Usage': "9"})
 
