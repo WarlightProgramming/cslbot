@@ -3042,8 +3042,14 @@ class League(object):
         table.addEntity(entity)
 
     @noisy
+    def _getBatchStartingID(self):
+        gameIDs = self.gameIDs
+        if len(gameIDs): return max(int(ID) for ID in gameIDs) + 1
+        return 0
+
+    @noisy
     def _createBatch(self, batch):
-        currentID = max(int(ID) for ID in self.gameIDs) + 1
+        currentID = self._getBatchStartingID()
         for game in batch:
             try:
                 self._addEntity(self.games,

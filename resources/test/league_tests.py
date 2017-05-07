@@ -3047,13 +3047,14 @@ class TestLeague(TestCase):
     def test_createBatch(self, make):
         batch = [{'Sides': '3/4', 'Template': '6'},
                  {'Sides': '1/2', 'Template': '4'},]
-        self.games.findValue.return_value = range(33)
+        self.games.findValue.return_value = list()
         self.league._createBatch(batch)
-        self.games.addEntity.assert_called_with({'ID': 34, 'WarlightID': "",
+        self.games.addEntity.assert_called_with({'ID': 1, 'WarlightID': "",
             'Created': "", 'Winners': "", 'Sides': "1/2", 'Vetos': 0,
             'Vetoed': "", 'Finished': "", 'Template': "4"})
-        make.assert_called_with(34)
+        make.assert_called_with(1)
         make.side_effect = wl_api.wl_api.APIError
+        self.games.findValue.return_value = range(33)
         self.league._createBatch(batch)
         self.parent.log.assert_called_with("Failed to create game with ID 33",
             self.league.name, error=True)
