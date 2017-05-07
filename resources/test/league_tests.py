@@ -3103,6 +3103,8 @@ class TestLeague(TestCase):
 
     def test_runTime(self):
         self._setProp(self.league.SET_WAIT_PERIOD, 120)
+        self._setProp(self.league.SET_LATEST_RUN, '')
+        assert_true(self.league.runTime)
         self._setProp(self.league.SET_LATEST_RUN,
             datetime.strftime(datetime.now() - timedelta(minutes=400),
                 self.league.TIMEFORMAT))

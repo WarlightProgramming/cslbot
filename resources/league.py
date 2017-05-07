@@ -3092,8 +3092,8 @@ class League(object):
 
     @property
     def runTime(self):
-        return ((datetime.now() - self.latestRun) >=
-                timedelta(minutes=self.waitPeriod))
+        return (self.latestRun == '' or ((datetime.now() - self.latestRun) >=
+                timedelta(minutes=self.waitPeriod)))
 
     @property
     def decayTime(self):
