@@ -2479,6 +2479,7 @@ class League(object):
     def _createGame(self, gameID):
         gameData = self._fetchGameData(gameID)
         self._createGameFromData(gameData)
+        return gameData
 
     @noisy
     def _makeGame(self, gameID):
