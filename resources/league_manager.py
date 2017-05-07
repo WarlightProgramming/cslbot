@@ -159,7 +159,7 @@ class LeagueManager(object):
 
     @classmethod
     def _getCommandArgs(cls, commands, command, i):
-        return commands[command][i][cls.TITLE_ARG].upper()
+        return commands[command][i][cls.TITLE_ARG]
 
     def _addArgToResults(self, results, commands, command, i):
         args = self._getCommandArgs(commands, command, i)

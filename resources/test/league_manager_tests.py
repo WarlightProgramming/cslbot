@@ -182,9 +182,9 @@ class TestLeagueManager(TestCase):
             '', 'League': ''}, {'Args': 'Are;We;Human', 'League': 'ALL'}],
             'WE': [{'Args': 'Human', 'League': 'Are'}]}
         assert_equals(self.manager._fetchLeagueCommands(''),
-            {'CMD': 'ARE', 'WE': 'DANCER', 'AND': ''})
+            {'CMD': 'Are', 'WE': 'Dancer', 'AND': ''})
         assert_equals(self.manager._fetchLeagueCommands('Are'),
-            {'HUMAN': 'OR', 'WE': 'HUMAN', 'AND': 'ARE;WE;HUMAN'})
+            {'HUMAN': 'Or', 'WE': 'Human', 'AND': 'Are;We;Human'})
 
     @patch('resources.league_manager.LeagueManager.log')
     @patch('resources.league_manager.LeagueManager._validateThread')

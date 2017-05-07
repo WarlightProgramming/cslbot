@@ -221,28 +221,21 @@ class League(object):
     TIMEFORMAT = TIMEFORMAT
 
     # default message
-    DEFAULT_MSG = """This is a game for the {{%s}} league, part of {{%s}}.
+    DEFAULT_MSG = ("This is a game for the {{%s}} league, part of {{%s}}.\n"
+                   "\nTo view information about the league, head to {{%s}}.\n"
+                   "To change your limit, add/confirm a team, etc., "
+                   "head to the league interface at {{%s}}.\n\n"
+                   "Vetos so far: {{%s}}; Max: {{%s}}\n"
+                   "\n{{%s}}\n\n"
+                   "Got questions about the league? "
+                   "Contact the league admin {{%s}}.\n\n"
+                   "This league is run using the CSL framework, "
+                   "an open-source project maintained by knyte.\n"
 
-                     To view information about the league, head to {{%s}}.
-                     To change your limit, add/confirm a team, etc.,
-                     head to the league thread at {{%s}}.
-
-                     Vetos so far: {{%s}}; Max: {{%s}}
-
-                     {{%s}}
-
-                     Got questions about the league?
-                     Contact the league admin {{%s}}.
-
-                     This league is run using the CSL framework,
-                     an open-source project maintained by knyte.
-
-                     If you never signed up for this league or suspect abuse,
-                     message the creator of this game.
-                     """ % ("_LEAGUE_NAME", SET_SUPER_NAME, SET_URL,
-                            "_LEAGUE_INTERFACE", "_VETOS",
-                            SET_VETO_LIMIT, "_GAME_SIDES",
-                            "_LEAGUE_ADMIN")
+                   "If you never signed up for this league or suspect abuse, "
+                   "message the creator of this game.") % ("_LEAGUE_NAME",
+                   SET_SUPER_NAME, SET_URL, "_LEAGUE_INTERFACE", "_VETOS",
+                   SET_VETO_LIMIT, "_GAME_SIDES", "_LEAGUE_ADMIN")
 
     # keywords
     KW_ALL = "ALL"
