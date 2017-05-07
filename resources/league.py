@@ -1807,12 +1807,21 @@ class League(object):
             return self._wrapUp(gameData, waiting)
 
     @noisy
-    def _fetchGameStatus(self, gameID, created):
-        gameData = self.handler.queryGame(gameID)
+    def _fetchGameStatusFromData(self, gameData, created):
         if gameData.get('state') == 'Finished':
             return self._handleFinished(gameData)
         elif gameData.get('state') == 'WaitingForPlayers':
             return self._handleWaiting(gameData, created)
+
+    @noisy
+    def _fetchGameStatus(self, gameID, created):
+        try:
+            gameData = self.handler.queryGame(gameID)
+            return self._fetchGameStatusFromData(gameData, created)
+        except APIError:
+            self._updateEntityValue(self.games, gameID, WarlightID='')
+            self._deleteGameByID(gameID)
+            return None
 
     @staticmethod
     def _fetchDataByID(table, ID, itemType):
@@ -2173,6 +2182,10 @@ class League(object):
         else: self._removeEntity(self.games, gameData['ID'])
         sides = self._getGameSidesFromData(gameData)
         self._finishGameForTeams(sides)
+
+    @noisy
+    def _deleteGameByID(self, gameID):
+        self._deleteGame(self._fetchGameData(gameID))
 
     @classmethod
     def _getGameSidesFromData(cls, gameData, processFn=str):
