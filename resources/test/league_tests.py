@@ -1945,7 +1945,8 @@ class TestLeague(TestCase):
         self.handler.queryGame.side_effect = wl_api.APIError
         self.games.findEntities.return_value = range(3)
         assert_equals(self.league._fetchGameStatus(3, 'created'), None)
-        delete.assert_called_once_with(self.games.findEntities.return_value[0])
+        delete.assert_called_once_with(self.games.findEntities.return_value[0],
+                                       True, True)
         self.games.findEntities.assert_called_with({'ID': {'value': 3,
             'type': 'positive'}})
         self.handler.queryGame.side_effect = None
@@ -2273,6 +2274,11 @@ class TestLeague(TestCase):
                                                     {'value': 'OtherNewID',
                                                      'type': 'positive'}})
         assert_equals(self.games.updateMatchingEntities.call_count, old+1)
+        self.league._deleteGame({'ID': "OtherID"}, True, False)
+        self.games.removeMatchingEntities.assert_called_with({'ID':
+                                                    {'value': 'OtherNewID',
+                                                     'type': 'positive'}})
+        assert_equals(finish.call_count, 3)
 
     @patch('resources.league.League._fetchGameData')
     def test_getGameSidesFromData(self, fetch):
@@ -2677,8 +2683,9 @@ class TestLeague(TestCase):
                       oldCount+4) # not called for team 1
         self.league._getOfficialRating = oldOfficial
 
+    @patch('resources.league.League._deleteGameByID')
     @patch('resources.league.League._updateGame')
-    def test_updateGames(self, update):
+    def test_updateGames(self, update, delete):
         self.games.findEntities.return_value = {1: {'ID': '1', 'Created': 'c'},
             2: {'ID': '2', 'Created': 'r'}, 4: {'ID': '3', 'Created': 'e'},
             56: {'ID': '9', 'Created': 'a'}}
@@ -2689,6 +2696,10 @@ class TestLeague(TestCase):
         self.league._updateGames()
         self.parent.log.assert_called_with("Failed to update game: 4",
             league=self.league.name, error=True)
+        update.side_effect = ValueError
+        self.league._updateGames()
+        delete.assert_called_with('3', True, False)
+        assert_equals(delete.call_count, 4)
 
     def test_checkExcess(self):
         self._setProp(self.league.SET_MAX_TEAMS, "")

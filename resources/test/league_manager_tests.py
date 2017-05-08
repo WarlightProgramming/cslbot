@@ -254,6 +254,8 @@ class TestLeagueManager(TestCase):
         self.commands.findEntities.return_value = [{'Args': 'K;L;M'},]
         assert_true(self.manager._agentAuthorized("K", "A"))
         assert_false(self.manager._agentAuthorized("A", "A"))
+        self.commands.findEntities.return_value = [{'Args': 'K;L;M;ALL'},]
+        assert_true(self.manager._agentAuthorized("A", "A"))
 
     @patch('resources.league_manager.League')
     @patch('resources.league_manager.LeagueManager._fetchLeagueCommands')

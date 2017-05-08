@@ -2174,18 +2174,19 @@ class League(object):
                                                    'type': 'positive'}})
 
     @noisy
-    def _deleteGame(self, gameData, preserve=True):
+    def _deleteGame(self, gameData, preserve=True, adjust=True):
         if self.preserveRecords and preserve:
             finStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
             self._updateEntityValue(self.games, gameData['ID'],
                                     Finished=finStr)
         else: self._removeEntity(self.games, gameData['ID'])
+        if not adjust: return
         sides = self._getGameSidesFromData(gameData)
         self._finishGameForTeams(sides)
 
     @noisy
-    def _deleteGameByID(self, gameID):
-        self._deleteGame(self._fetchGameData(gameID))
+    def _deleteGameByID(self, gameID, preserve=True, adjust=True):
+        self._deleteGame(self._fetchGameData(gameID), preserve, adjust)
 
     @classmethod
     def _getGameSidesFromData(cls, gameData, processFn=str):
@@ -2648,10 +2649,12 @@ class League(object):
         for game in gamesToCheck:
             try:
                 self._updateGame(game, gamesToCheck[game]['ID'],
-                                gamesToCheck[game]['Created'])
+                                 gamesToCheck[game]['Created'])
             except (SheetErrors.SheetError, SheetErrors.DataError):
                 self.parent.log("Failed to update game: " + str(game),
                                 league=self.name, error=True)
+            except ValueError:
+                self._deleteGameByID(gamesToCheck[game]['ID'], True, False)
 
     @noisy
     def _checkExcess(self, playerCount):

@@ -246,7 +246,7 @@ class LeagueManager(object):
             'AUTHORIZED INTERFACES', self.TITLE_LG: league})
         if not len(authorized): return False
         authorized = authorized[0][self.TITLE_ARG].split(self.SEP_CMD)
-        return (str(agent) in authorized)
+        return (str(agent) in authorized or str(self.LG_ALL) in authorized)
 
     def fetchLeague(self, league, threadName=None, orders=None):
         """
