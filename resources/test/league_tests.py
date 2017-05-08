@@ -2268,6 +2268,11 @@ class TestLeague(TestCase):
                                                     {'value': 'ID',
                                                      'type': 'positive'}})
         assert_equals(self.games.updateMatchingEntities.call_count, old+1)
+        self.league._deleteGame({'ID': "OtherNewID"}, False)
+        self.games.removeMatchingEntities.assert_called_with({'ID':
+                                                    {'value': 'OtherNewID',
+                                                     'type': 'positive'}})
+        assert_equals(self.games.updateMatchingEntities.call_count, old+1)
 
     @patch('resources.league.League._fetchGameData')
     def test_getGameSidesFromData(self, fetch):
@@ -2472,9 +2477,10 @@ class TestLeague(TestCase):
         assert_equals(self.league._getTempSettings('tempID'), (4904,
             {'A': {'B': '490'}, 'SETTING': 314}, [('Bonus', 12),]))
 
+    @patch('resources.league.League._deleteGame')
     @patch('resources.league.datetime')
     @patch('resources.league.PlayerParser')
-    def test_createGame(self, parser, datetime):
+    def test_createGame(self, parser, datetime, delete):
         self.games.findEntities.return_value = [{'Template': '43',
             'Sides': '1/2', 'Vetos': '8', 'ID': 'gameID'},]
         self.templates.findEntities.return_value = [{'ID': 'tempID',
@@ -2493,8 +2499,8 @@ class TestLeague(TestCase):
         failStr = "Failed to make game with 1/2 on 43 because of IOError()"
         self.parent.log.assert_called_with(failStr, self.league.name,
                                            error=True)
-        self.games.removeMatchingEntities.assert_called_with({'ID':
-            {'value': 'gameID', 'type': 'positive'}})
+        delete.assert_called_once_with(self.games.findEntities.return_value[0],
+                                       False)
 
     @patch('resources.league.League._createGame')
     @patch('resources.league.League._updateHistories')

@@ -2174,8 +2174,8 @@ class League(object):
                                                    'type': 'positive'}})
 
     @noisy
-    def _deleteGame(self, gameData):
-        if self.preserveRecords:
+    def _deleteGame(self, gameData, preserve=True):
+        if self.preserveRecords and preserve:
             finStr = datetime.strftime(datetime.now(), self.TIMEFORMAT)
             self._updateEntityValue(self.games, gameData['ID'],
                                     Finished=finStr)
@@ -2488,7 +2488,7 @@ class League(object):
             sides = gameData['Sides']
             self.parent.log("Failed to make game with %s on %d because of %s" %
                             (sides, temp, repr(e)), self.name, error=True)
-            self._removeEntity(self.games, gameData['ID'])
+            self._deleteGame(gameData, False)
 
     @noisy
     def _createGame(self, gameID):
