@@ -421,7 +421,7 @@ class TestLeague(TestCase):
                       "https://docs.google.com/spreadsheets/d/ID")
 
     def test_rematchLimit(self):
-        mul = self.league.sideSize * self.league.gameSize
+        mul = (self.league.sideSize * self.league.gameSize - 1)
         processVal = lambda val: val * mul
         values = {self.league.KW_ALL: self.league.KW_ALL,
                   "10": processVal(10), "40": processVal(40),
@@ -2953,7 +2953,7 @@ class TestLeague(TestCase):
         assert_equals(self.league.teamsDict, {'5': {'rating': '1950',
             'count': 1, 'conflicts': {12, 13, 9, 4, 5}}})
         self._setProp(self.league.SET_REMATCH_LIMIT, "1")
-        self._setProp(self.league.SET_GAME_SIZE, "1")
+        self._setProp(self.league.SET_GAME_SIZE, "2")
         self._setProp(self.league.SET_TEAMS_PER_SIDE, "1")
         assert_equals(self.league.teamsDict, {'5': {'rating': '1950',
             'count': 1, 'conflicts': {9, 4, 5}}})
