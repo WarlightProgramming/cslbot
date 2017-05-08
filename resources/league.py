@@ -2927,14 +2927,14 @@ class League(object):
 
     @noisy
     def _makeGrouping(self, groupingDict, groupSize, groupSep,
-                     reverseParity):
+                      reverseParity):
         if reverseParity:
             score_fn = lambda *args: 1.0 - self._getParityScore(args)
         else:
             score_fn = lambda *args: self._getParityScore(args)
         groups = pair.group_teams(groupingDict, score_fn=score_fn,
-                                  game_size=groupSize)
-        return {groupSep.join([str(x) for x in group])
+                                  game_size=groupSize, scramble=True)
+        return {groupSep.join([str(x) for x in sorted(group)])
                 for group in groups}
 
     @noisy
