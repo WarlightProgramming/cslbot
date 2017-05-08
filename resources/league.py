@@ -551,7 +551,7 @@ class League(object):
     def rematchLimit(self):
         process_fn = (lambda val: val if val == self.KW_ALL else
                       int(val) if self.multischeme else
-                      (int(val) * self.sideSize * self.gameSize))
+                      (int(val) * (self.sideSize * self.gameSize - 1)))
         return self._fetchProperty(self.SET_REMATCH_LIMIT, 0, process_fn)
 
     @property
