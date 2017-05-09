@@ -3,9 +3,6 @@ credentials/*
 fake-credentials/*
 resources/constants.py
 
-# compute file
-compute.py
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
