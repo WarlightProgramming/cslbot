@@ -2289,7 +2289,7 @@ class League(object):
 
     @noisy
     def _getGameName(self, gameData, maxLen=50):
-        start = self.leagueAcronym + " | "
+        start = self.leagueAcronym + "|"
         nameData = list()
         for side in gameData['Sides'].split(self.SEP_SIDES):
             nameData.append(" vs ")

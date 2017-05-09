@@ -2365,10 +2365,10 @@ class TestLeague(TestCase):
         gameData = {'Sides': '1,2/3,4'}
         getTeamName.return_value = "Name"
         assert_equals(self.league._getGameName(gameData),
-                      'MDL | Name+Name vs Name+Name')
+                      'MDL|Name+Name vs Name+Name')
         getTeamName.return_value = "N..."
         assert_equals(self.league._getGameName(gameData, 28),
-                      'MDL | N...+N... vs N...+N...')
+                      'MDL|N...+N... vs N...+N...')
 
     def test_getPrettyRating(self):
         self._setProp(self.league.SET_SYSTEM, self.league.RATE_ELO)
