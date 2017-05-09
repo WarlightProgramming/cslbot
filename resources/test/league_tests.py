@@ -2625,6 +2625,7 @@ class TestLeague(TestCase):
         win.assert_called_once_with("gameID", (set(), set()))
         decline.assert_called_once_with("gameID", (set(), set()))
         veto.assert_called_once_with("gameID")
+        assert_equals(self.league._updateGame('wlID', '', createdTime), None)
 
     def test_wipeRank(self):
         self.league._wipeRank('teamID')

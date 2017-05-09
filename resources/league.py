@@ -874,7 +874,6 @@ class League(object):
     def cullingDisabled(self):
         return (self.minRating is None and self.maxRank is None)
 
-    @noisy
     def _restoreLeagueTeams(self):
         restPd = self.restorationPeriod
         if self.cullingDisabled: restPd = 0
@@ -2597,6 +2596,7 @@ class League(object):
 
     @noisy
     def _updateGame(self, warlightID, gameID, createdTime):
+        if gameID == '': return
         created = datetime.strptime(createdTime, self.TIMEFORMAT)
         status = self._fetchGameStatus(gameID, warlightID, created)
         if status is not None:
