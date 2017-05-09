@@ -2903,7 +2903,7 @@ class TestLeague(TestCase):
 
     def test_getHistory(self):
         assert_equals(self.league._getHistory({'History': '1,2,3,4,5'}),
-                      range(1, 6))
+                      [str(x) for x in xrange(1, 6)])
 
     def test_addToSetWithinDict(self):
         data = {4: {3, 2}, 5: set()}

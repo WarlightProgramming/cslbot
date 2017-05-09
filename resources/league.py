@@ -2867,7 +2867,7 @@ class League(object):
     @classmethod
     def _getHistory(cls, team):
         history = team['History'].split(cls.SEP_TEAMS)
-        return [int(t) for t in history if len(t)]
+        return [str(t) for t in history if len(t)]
 
     @staticmethod
     def _addToSetWithinDict(data, label, value):
