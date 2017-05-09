@@ -2506,7 +2506,7 @@ class TestLeague(TestCase):
         self.parent.log.assert_called_with(failStr, self.league.name,
                                            error=True)
         delete.assert_called_once_with(self.games.findEntities.return_value[0],
-                                       False)
+                                       False, False)
 
     @patch('resources.league.League._createGame')
     @patch('resources.league.League._updateHistories')
@@ -2683,9 +2683,9 @@ class TestLeague(TestCase):
                       oldCount+4) # not called for team 1
         self.league._getOfficialRating = oldOfficial
 
-    @patch('resources.league.League._deleteGameByID')
+    @patch('resources.league.League._createGame')
     @patch('resources.league.League._updateGame')
-    def test_updateGames(self, update, delete):
+    def test_updateGames(self, update, create):
         self.games.findEntities.return_value = {1: {'ID': '1', 'Created': 'c'},
             2: {'ID': '2', 'Created': 'r'}, 4: {'ID': '3', 'Created': 'e'},
             56: {'ID': '9', 'Created': 'a'}}
@@ -2698,8 +2698,8 @@ class TestLeague(TestCase):
             league=self.league.name, error=True)
         update.side_effect = ValueError
         self.league._updateGames()
-        delete.assert_called_with('3', True, False)
-        assert_equals(delete.call_count, 4)
+        create.assert_called_with('3')
+        assert_equals(create.call_count, 4)
 
     def test_checkExcess(self):
         self._setProp(self.league.SET_MAX_TEAMS, "")

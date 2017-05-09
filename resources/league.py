@@ -1733,11 +1733,11 @@ class League(object):
                     self.parent.log(str(e), self.name, error=True)
                 else:
                     self._logFailedOrder(order)
-        self._updateRanks()
 
     @runPhase
     def _executeOrders(self):
         self._runOrderExecution(self.orders, 'internal')
+        self._updateRanks()
 
     @property
     def unfinishedGames(self):
@@ -2489,7 +2489,7 @@ class League(object):
             sides = gameData['Sides']
             self.parent.log("Failed to make game with %s on %d because of %s" %
                             (sides, temp, repr(e)), self.name, error=True)
-            self._deleteGame(gameData, False)
+            self._deleteGame(gameData, False, False)
 
     @noisy
     def _createGame(self, gameID):
@@ -2654,7 +2654,7 @@ class League(object):
                 self.parent.log("Failed to update game: " + str(game),
                                 league=self.name, error=True)
             except ValueError:
-                self._deleteGameByID(gamesToCheck[game]['ID'], True, False)
+                self._makeGame(gamesToCheck[game]['ID'])
 
     @noisy
     def _checkExcess(self, playerCount):
