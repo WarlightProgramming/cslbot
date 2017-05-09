@@ -2,12 +2,3 @@ cron:
 - description: "run all clusters"
   url: /run
   schedule: every 15 minutes
-- description: "keepalive ping 3"
-  url: /address
-  schedule: every 3 minutes
-- description: "keepalive ping 7"
-  url: /address
-  schedule: every 7 minutes
-- description: "keepalive ping 11"
-  url: /address
-  schedule: every 11 minutes

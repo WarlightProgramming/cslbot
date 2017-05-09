@@ -1944,20 +1944,20 @@ class TestLeague(TestCase):
     def test_fetchGameStatus(self, finished, waiting, delete):
         self.handler.queryGame.side_effect = wl_api.APIError
         self.games.findEntities.return_value = range(3)
-        assert_equals(self.league._fetchGameStatus(3, 'created'), None)
+        assert_equals(self.league._fetchGameStatus(0, 3, 'created'), None)
         delete.assert_called_once_with(self.games.findEntities.return_value[0],
                                        True, True)
-        self.games.findEntities.assert_called_with({'ID': {'value': 3,
+        self.games.findEntities.assert_called_with({'ID': {'value': 0,
             'type': 'positive'}})
         self.handler.queryGame.side_effect = None
         self.handler.queryGame.return_value = {'state': 'Finished'}
-        assert_equals(self.league._fetchGameStatus(3, 'created'),
+        assert_equals(self.league._fetchGameStatus(0, 3, 'created'),
                       finished.return_value)
         self.handler.queryGame.return_value = {'state': 'WaitingForPlayers'}
-        assert_equals(self.league._fetchGameStatus(4, 'created'),
+        assert_equals(self.league._fetchGameStatus(1, 4, 'created'),
                       waiting.return_value)
         self.handler.queryGame.return_value = {'state': 'Massachusetts'}
-        assert_equals(self.league._fetchGameStatus(5, 'created'), None)
+        assert_equals(self.league._fetchGameStatus(1, 5, 'created'), None)
 
     def test_fetchDataByID(self):
         table = MagicMock()

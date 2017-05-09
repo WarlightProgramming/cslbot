@@ -1814,9 +1814,9 @@ class League(object):
             return self._handleWaiting(gameData, created)
 
     @noisy
-    def _fetchGameStatus(self, gameID, created):
+    def _fetchGameStatus(self, gameID, warlightID, created):
         try:
-            gameData = self.handler.queryGame(gameID)
+            gameData = self.handler.queryGame(warlightID)
             return self._fetchGameStatusFromData(gameData, created)
         except APIError:
             self._updateEntityValue(self.games, gameID, WarlightID='')
@@ -2598,7 +2598,7 @@ class League(object):
     @noisy
     def _updateGame(self, warlightID, gameID, createdTime):
         created = datetime.strptime(createdTime, self.TIMEFORMAT)
-        status = self._fetchGameStatus(warlightID, created)
+        status = self._fetchGameStatus(gameID, warlightID, created)
         if status is not None:
             updateWin = self._getOneArgFunc(self._updateWinners, status[1:])
             updateDecline = self._getOneArgFunc(self._updateDecline,
