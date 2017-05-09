@@ -8,7 +8,8 @@ import os
 import json
 from flask import Flask, Response, redirect, request
 from sheetDB import Credentials
-from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID
+from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID,\
+    CSL_VERSION
 from resources.league_manager import LeagueManager
 from resources.global_manager import GlobalManager
 from resources.utility import WLHandler
@@ -147,6 +148,11 @@ def address():
     """fetches the service e-mail associated with the cslbot instance"""
     with open(GOOGLE_CREDS, 'r*') as googleCreds: data = json.load(googleCreds)
     return data['client_email']
+
+@app.route('/version')
+def version():
+    """fetches the CSL standard version supported by this bot"""
+    return CSL_VERSION
 
 @app.route('/agentToken')
 def getAgentToken():

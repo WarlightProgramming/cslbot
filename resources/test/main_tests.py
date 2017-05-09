@@ -12,7 +12,7 @@ from main import AuthError, buildAuthURL, fetchLeagues,\
     fetchLeague, fetchCluster, packageDict, packageMessage, buildRoute,\
     leaguePath, clusterPath, verifyAgent, replicate, validateAuth,\
     fetchLeagueData, runLeagueOrder, runSimpleOrder, rule,\
-    creds, globalManager, badRequest, fixAppengine
+    creds, globalManager, badRequest, fixAppengine, version
 from resources.constants import OWNER_ID
 
 # tests
@@ -183,6 +183,14 @@ class TestMainApp(TestCase):
         r = self.app.get('/')
         assert_equals(r.status_code, 200)
         assert_equals(r.data, 'email')
+
+    @patch('main.CSL_VERSION')
+    def test_version(self, cslVersion):
+        main.CSL_VERSION = '1.0'
+        assert_equals(version(), '1.0')
+        r = self.app.get('/version')
+        assert_equals(r.status_code, 200)
+        assert_equals(r.data, '1.0')
 
     @patch('main.redirect')
     def test_getAgentToken(self, redir):
