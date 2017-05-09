@@ -2880,7 +2880,7 @@ class League(object):
         playerDict, clanDict = dict(), dict()
         for team in teams:
             players = self._getPlayers(team)
-            ID = int(team['ID'])
+            ID = str(team['ID'])
             for player in players:
                 self._addToSetWithinDict(playerDict, player, ID)
                 if self.forbidClanMatchups:
@@ -2893,7 +2893,7 @@ class League(object):
         results = set()
         for item in set(history):
             if history.count(item) >= self.rematchCap:
-                results.add(int(item))
+                results.add(str(item))
         return results
 
     @noisy
@@ -2977,7 +2977,7 @@ class League(object):
             sideDict = {'rating': self._getSideRating(side, teamsDict),
                         'conflicts': self._getSideConflicts(side, teamsDict,
                             teamsToSides),
-                        'count': 1}
+                        'count': teamsDict.get(side, {'count': 1})['count']}
             result[side] = sideDict
         return result
 

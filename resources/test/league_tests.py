@@ -2918,18 +2918,18 @@ class TestLeague(TestCase):
         self._setProp(self.league.SET_FORBID_CLAN_MATCHUPS, "FALSE")
         teams = [{'ID': 3, 'Players': '3,6,9'}, {'ID': 2, 'Players': '2,4,6'},
                  {'ID': 6, 'Players': '6,12,18'}]
-        assert_equals(self.league._makePlayersDict(teams), ({2: {2,}, 3: {3,},
-                      4: {2,}, 6: {2, 3, 6}, 9: {3,}, 12: {6,}, 18: {6,}},
-                      {}))
+        assert_equals(self.league._makePlayersDict(teams), ({2: {'2',},
+            3: {'3',}, 4: {'2',}, 6: {'2', '3', '6'}, 9: {'3',}, 12: {'6',},
+            18: {'6',}}, {}))
         self._setProp(self.league.SET_FORBID_CLAN_MATCHUPS, "TRUE")
-        assert_equals(self.league._makePlayersDict(teams), ({2: {2,}, 3: {3,},
-                      4: {2,}, 6: {2, 3, 6}, 9: {3,}, 12: {6,}, 18: {6,}},
-                      {8: {2, 3, 6}}))
+        assert_equals(self.league._makePlayersDict(teams), ({2: {'2',},
+            3: {'3',}, 4: {'2',}, 6: {'2', '3', '6'}, 9: {'3',}, 12: {'6',},
+            18: {'6',}}, {8: {'2', '3', '6'}}))
 
     def test_narrowHistory(self):
         self._setProp(self.league.SET_REMATCH_CAP, 3)
         assert_equals(self.league._narrowHistory([1,1,2,3,4,3,3,2,1,2,4,9,49]),
-                      {1, 2, 3})
+                      {'1', '2', '3'})
 
     @patch('resources.league.PlayerParser')
     def test_updateClanConflicts(self, parser):
@@ -2962,12 +2962,12 @@ class TestLeague(TestCase):
             'Ongoing': 2, 'Rating': '1950', 'Confirmations': 'TRUE,TRUE',
             'Players': '12,23,91', 'History': '12,13,9'}]
         assert_equals(self.league.teamsDict, {'5': {'rating': '1950',
-            'count': 1, 'conflicts': {12, 13, 9, 4, 5}}})
+            'count': 1, 'conflicts': {'12', '13', '9', '4', '5'}}})
         self._setProp(self.league.SET_REMATCH_LIMIT, "1")
         self._setProp(self.league.SET_GAME_SIZE, "2")
         self._setProp(self.league.SET_TEAMS_PER_SIDE, "1")
         assert_equals(self.league.teamsDict, {'5': {'rating': '1950',
-            'count': 1, 'conflicts': {9, 4, 5}}})
+            'count': 1, 'conflicts': {'9', '4', '5'}}})
 
     @patch('resources.league.League._getParityScore')
     def test_makeGrouping(self, score):
@@ -3011,6 +3011,15 @@ class TestLeague(TestCase):
             {'1,2,3': {'rating': '831', 'count': 1, 'conflicts': {'1,2,3'}},
              '4,5,6': {'rating': '1083', 'count': 1, 'conflicts': {'1,2,3',
              '4,5,6'}}})
+        assert_equals(self.league._makeSidesDict({'1', '4'},
+            {'1': {'rating': 102, 'count': 2, 'conflicts': set()},
+             '2': {'rating': 490, 'count': 1, 'conflicts': {'3'}},
+             '3': {'rating': 239, 'count': 8, 'conflicts': {'2'}},
+             '4': {'rating': 356, 'count': 3, 'conflicts': {'1'}},
+             '5': {'rating': 491, 'count': 4, 'conflicts': {'3','1','4'}},
+             '6': {'rating': 236, 'count': 2, 'conflicts': {'1','5'}}}),
+            {'1': {'rating': '102', 'count': 2, 'conflicts': {'1'}},
+             '4': {'rating': '356', 'count': 3, 'conflicts': {'1', '4'}}})
 
     def test_turnNoneIntoMutable(self):
         assert_equals(self.league._turnNoneIntoMutable(4, set), 4)
