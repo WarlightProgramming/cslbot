@@ -41,7 +41,7 @@ counterproductive.
 
 3. Create a spreadsheet and share it with the service account for your Google
    Sheets credentials. Get the ID of that spreadsheet (in the URL, between
-   /edit/ and /d/) and set GLOBAL\_MANAGER to that ID.
+   /d/ and /edit) and set GLOBAL\_MANAGER to that ID.
 
 4. Change the OWNER\_ID to your own Warlight ID.
 
