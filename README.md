@@ -26,6 +26,10 @@ See the [project wiki](https://github.com/knyte/cslbot/wiki) for an explanation
 for the CSL framework, the Interface API, and setting up cslbot instances and
 League Clusters.
 
+If you want to deploy your own cslbot instance, see the
+[INSTALLATION](https://github.com/knyte/cslbot/blob/master/INSTALLATION.md)
+file. Note that you do not need to deploy your own Bot just to run a Cluster.
+
 ## How to Contribute
 
 #### Ask Questions
