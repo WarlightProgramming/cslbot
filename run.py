@@ -9,4 +9,4 @@ if __name__ == '__main__':
     while True:
         try: run()
         except KeyboardInterrupt: break
-        except: continue
+        except Exception: continue
