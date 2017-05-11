@@ -842,13 +842,13 @@ class League(object):
     def _findRatingAtPercentile(self, percentile):
         if percentile == 0: return None
         ratings = self.teams.findValue({'ID': {'value': '',
-                                               'type': 'negative'}},
-                                       "Rating")
+                                               'type': 'negative'}}, "Rating")
+        if len(ratings) == 0: return None
         for i in xrange(len(ratings)):
             ratings[i] = int(self._prettifyRating(ratings[i]))
         ratings.sort()
         index = len(ratings) * float(Decimal(percentile) / Decimal(100.0))
-        index = min(int(index) + bool(index % 1), len(ratings) - 1)
+        index = max(min(int(index) + bool(index % 1), len(ratings) - 1), 0)
         return ratings[index]
 
     @property

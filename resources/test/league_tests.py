@@ -757,6 +757,8 @@ class TestLeague(TestCase):
         assert_equals(self.league._findRatingAtPercentile(99.5), 10)
         assert_equals(self.league._findRatingAtPercentile(1000), 10)
         assert_equals(self.league._findRatingAtPercentile(50), 6)
+        self.teams.findValue.return_value = list()
+        assert_equals(self.league._findRatingAtPercentile(61.3), None)
         self.league._prettifyRating = oldPrettify
 
     @patch('resources.league.League._findRatingAtPercentile')
