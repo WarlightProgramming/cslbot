@@ -45,6 +45,13 @@ counterproductive.
 
 4. Change the OWNER\_ID to your own Warlight ID.
 
+5. **If you're using Google App Engine:** using virtualenv and pip or some other tools, install the libraries in
+   requirements.txt to a folder within the cslbot top-level directory. Check
+   appengine\_config.py and make sure you're referring to that folder for
+   libraries. **If you're using another server solution**, make sure you've got
+   the libraries in requirements.txt installed somewhere that they can be used
+   by your application.
+
 ## Deploy
 
 1. Set up a server to host this web application and to frequently run all
