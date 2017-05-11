@@ -3313,7 +3313,7 @@ class TestLeague(TestCase):
                 409: {'confirmed': True}}, 'Rating': (2393, 391),
             'Vetos': dict(), 'Drops': set(), 'Rank': 1, 'History': [239,],
             'Finished': 1, 'Limit': 3, 'Ongoing': 0,
-            'Probation Start': datetime(2014, 3, 20, 4, 20)}
+            'Probation Start': '2014-03-20T04:20:00.000000Z'}
         self.teams.findEntities.return_value = [team1, team2]
         assert_equals(self.league.fetchTeam(434), team1_out)
         assert_equals(self.league.fetchAllTeams(), [team1_out, team2_out])
@@ -3323,8 +3323,8 @@ class TestLeague(TestCase):
             'Winners': '7,9', 'Vetos': '2', 'Vetoed': '12/13',
             'Template': '93'}
         game1_out = {'ID': 10, 'WarlightID': 94043094,
-            'Created': datetime(2015, 5, 25, 5, 5, 5),
-            'Finished': datetime(2015, 5, 30, 1, 2, 3), 'Ongoing': False,
+            'Created': '2015-05-25T05:05:05.000000Z',
+            'Finished': '2015-05-30T01:02:03.000000Z', 'Ongoing': False,
             'Sides': [{1, 5}, {7, 9}, {13, 15, 19}], 'Winners': {7, 9},
             'Declined': False, 'EndedInVeto': False, 'Vetos': 2,
             'Vetoed': [12, 13], 'Template': 93}
@@ -3334,7 +3334,7 @@ class TestLeague(TestCase):
             'Winners': '7,9!', 'Vetos': '1', 'Vetoed': '12',
             'Template': '93'}
         game2_out = {'ID': 11, 'WarlightID': 118999,
-            'Created': datetime(2015, 5, 25, 5, 5, 15),
+            'Created': '2015-05-25T05:05:15.000000Z',
             'Finished': '', 'Ongoing': True,
             'Sides': [{1, 9}, {7, 5}, {13, 19}], 'Winners': {7, 9},
             'Declined': True, 'EndedInVeto': False, 'Vetos': 1,
@@ -3345,8 +3345,8 @@ class TestLeague(TestCase):
             'Winners': '', 'Vetos': '2', 'Vetoed': '12/13',
             'Template': '930'}
         game3_out = {'ID': 12, 'WarlightID': 91197253,
-            'Created': datetime(2015, 5, 25, 5, 5, 25),
-            'Finished': datetime(2015, 5, 31, 1, 9, 3), 'Ongoing': False,
+            'Created': '2015-05-25T05:05:25.000000Z',
+            'Finished': '2015-05-31T01:09:03.000000Z', 'Ongoing': False,
             'Sides': [{1, 5}, {7, 9}], 'Winners': set(),
             'Declined': False, 'EndedInVeto': True, 'Vetos': 2,
             'Vetoed': [12, 13], 'Template': 930}

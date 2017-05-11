@@ -8,7 +8,7 @@ import math
 import time
 import random
 import pair
-from threading import Lock
+from threading import RLock
 from decimal import Decimal
 from elo import Elo
 from glicko2.glicko2 import Player
@@ -21,7 +21,7 @@ from resources.constants import TIMEFORMAT, DEBUG_KEY, LATEST_RUN
 from resources.utility import isInteger, WLHandler
 
 # global locks
-teamLock, tempLock = Lock(), Lock()
+teamLock, tempLock = RLock(), RLock()
 
 # decorators
 def makeFailStr(func, err):
@@ -3285,7 +3285,7 @@ class League(object):
                'Limit': int(team['Limit']),
                'Ongoing': int(team['Ongoing'])}
         if 'Probation Start' in team:
-            res['Probation Start'] = self._unpackDateTime(\
+            res['Probation Start'] = self._packDateTime(\
                                      team['Probation Start'])
         return res
 
@@ -3293,6 +3293,13 @@ class League(object):
     def _unpackDateTime(cls, val):
         if val == '': return val
         return datetime.strptime(val, cls.TIMEFORMAT)
+
+    @classmethod
+    def _packDateTime(cls, val):
+        unpacked, tf = cls._unpackDateTime(val), '%Y-%m-%dT%H:%M:%S.%fZ'
+        if isinstance(unpacked, datetime):
+            return datetime.strftime(unpacked, tf)
+        return ''
 
     @classmethod
     def _packageWinners(cls, winners):
@@ -3303,8 +3310,8 @@ class League(object):
     def _packageGame(self, game):
         return {'ID': int(game['ID']),
                 'WarlightID': self._unpackInt(game['WarlightID']),
-                'Created': self._unpackDateTime(game['Created']),
-                'Finished': self._unpackDateTime(game['Finished']),
+                'Created': self._packDateTime(game['Created']),
+                'Finished': self._packDateTime(game['Finished']),
                 'Ongoing': not(len(game['Finished'])),
                 'Sides': self._getGameSidesFromData(game, int),
                 'Winners': self._packageWinners(game['Winners']),

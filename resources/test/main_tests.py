@@ -258,6 +258,10 @@ class TestMainApp(TestCase):
         assert_equals(r.status_code, 200)
         assert_equals(r.data, json.dumps({'commands': 'data'}))
         fetchFn.assert_called_once_with('clusterID')
+        r = self.app.get('/clusterID')
+        assert_equals(r.status_code, 200)
+        assert_equals(r.data, json.dumps({'commands': 'data'}))
+        assert_equals(fetchFn.call_count, 2)
 
     def test_authorize(self):
         r = self.app.get('/someOtherClusterID/authorize')
@@ -410,6 +414,18 @@ class TestMainApp(TestCase):
         assert_equals(r.data, json.dumps(dict()))
         fetch.return_value.executeOrders.assert_called_once_with('token',
             [{u'this': u'is'}, {u'a': list()}, {u'of': u'orders'}])
+
+    @patch('main.fetchCluster')
+    @patch('main.verifyAgent')
+    def test_setCommand(self, verify, fetch):
+        r = self.app.get('/clusterID/leagueID/setCommand?agent=4903' +
+                         '&token=12&command=A&value=B')
+        assert_equals(r.status_code, 200)
+        assert_equals(r.data, json.dumps({'message':
+            'Successfully set command', 'error': False}))
+        fetch.assert_called_once_with('clusterID')
+        fetch.return_value.setCommand.assert_called_once_with('4903',
+            'leagueID', 'A', 'B')
 
     @patch('main.fetchCluster')
     @patch('main.verifyAgent')

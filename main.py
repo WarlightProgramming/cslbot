@@ -6,6 +6,7 @@
 # imports
 import os
 import json
+from threading import Thread
 from flask import Flask, Response, redirect, request
 from sheetDB import Credentials
 from resources.constants import GOOGLE_CREDS, GLOBAL_MANAGER, OWNER_ID,\
@@ -140,6 +141,19 @@ def _getOrderList(req):
         index += 1
     return results
 
+def _runSingleCluster(cluster, globalMgr, events):
+    """runs a single cluster (helper for run function)"""
+    manager = LeagueManager(cluster, globalMgr)
+    manager.run()
+    for event in manager.events['events']:
+        events.append(event)
+
+def _fetchAgentAndCluster(req, clusterID):
+    verifyAgent(req)
+    cluster = fetchCluster(clusterID)
+    agent = req.args.get('agent')
+    return agent, cluster
+
 # [START app]
 ## toplevel
 @app.route('/')
@@ -192,13 +206,13 @@ def run():
     globalMgr = globalManager()
     for cluster in clusters:
         if cluster.sheet.ID == globalMgr.database.sheet.ID: continue
-        manager = LeagueManager(cluster, globalMgr)
-        manager.run()
-        events += manager.events['events']
+        clusterThread = Thread(target=_runSingleCluster,
+            args=(cluster, globalMgr, events))
+        clusterThread.start()
     return packageDict({'events': events, 'error': False})
 
 ## cluster operations
-@app.route(clusterPath())
+@app.route(clusterPath(), strict_slashes=False)
 @app.route(clusterPath('/commands'))
 def clusterCommands(clusterID):
     """fetches commands for all leagues in the cluster"""
@@ -218,7 +232,7 @@ def runCluster(clusterID):
     return packageDict(cluster.events)
 
 ## league operations
-@app.route(leaguePath())
+@app.route(leaguePath(), strict_slashes=False)
 def showLeague(clusterID, leagueName):
     league = fetchLeague(clusterID, leagueName)
     teams = league.fetchAllTeams()
@@ -300,11 +314,17 @@ def executeOrders(clusterID, leagueName):
     league.executeOrders(request.args.get('agent'), orderList)
     return packageDict(league.parent.events)
 
+@app.route(leaguePath('/setCommand'), methods=['GET', 'POST'])
+def setCommand(clusterID, leagueName):
+    """sets a command to a particular value"""
+    agent, cluster = _fetchAgentAndCluster(request, clusterID)
+    cluster.setCommand(agent, leagueName, request.args.get('command'),
+        request.args.get('value'))
+    return packageMessage("Successfully set command", error=False)
+
 @app.route(leaguePath('/run'), methods=['GET', 'POST'])
 def runLeague(clusterID, leagueName):
-    verifyAgent(request)
-    agent = request.args.get('agent')
-    cluster = fetchCluster(clusterID)
+    agent, cluster = _fetchAgentAndCluster(request, clusterID)
     cluster.runLeague(agent, leagueName)
     return packageDict(cluster.events)
 

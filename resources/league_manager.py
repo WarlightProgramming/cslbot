@@ -53,6 +53,7 @@ class LeagueManager(object):
 
     def __init__(self, database, manager):
         """takes a sheetDB Database object and a GlobalManager object"""
+        self.events = {'error': False, 'events': list()}
         self.database = database
         self.manager = manager
         self.commands = self.database.fetchTable(self.COMMANDS_TITLE,
@@ -61,7 +62,6 @@ class LeagueManager(object):
                                 constraints=self.LOG_CONSTRAINTS)
         self.leagues = self._fetchLeagueNames()
         self.admin = self._validateAdmin(self._getAdmin())
-        self.events = {'error': False, 'events': list()}
 
     def _fetchLeagueNames(self):
         matches = self.commands.findEntities({self.TITLE_CMD: {'type':
@@ -70,7 +70,7 @@ class LeagueManager(object):
         else: return list()
 
     def _validateAdmin(self, adminID):
-        adminID = int(adminID)
+        adminID = int(adminID) if adminID is not None else adminID
         if not (self.manager.verifyAdmin(adminID, self.database.sheet.ID) and
                 PlayerParser(adminID).isMember):
             self.log("League admin is not authorized", error=True)
