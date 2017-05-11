@@ -6,4 +6,6 @@ from main import run
 
 # run everything
 if __name__ == '__main__':
-    while True: run()
+    while True:
+        try: run()
+        except KeyboardInterrupt: break
