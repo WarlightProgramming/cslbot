@@ -1436,7 +1436,7 @@ class League(object):
         if len(teamName) > self.nameLength:
             if self.constrainName: return teamName[:self.nameLength]
             raise ImproperInput("Team name %s is too long" % (teamName))
-        return teamName
+        return teamName.encode('ascii', 'replace')
 
     @classmethod
     def _getMembersAndConfirms(cls, temp):
