@@ -2367,7 +2367,7 @@ class League(object):
     @property
     def adminName(self):
         parser = PlayerParser(self.admin)
-        return str(parser.name)
+        return str(parser.name).encode('ascii', 'replace')
 
     @staticmethod
     def _adaptMessage(message, replaceDict):
