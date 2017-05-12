@@ -62,8 +62,9 @@ class TestLeagueManager(TestCase):
         assert_equals(self.manager.validationStr, "!validate_league ID")
 
     def test_getUniqueAuthors(self):
-        posts = [{'author': '12'}, {'author': '13'}, {'author': '14'},
-                 {'author': '15'}, {'author': '21'}, {'author': '13'}]
+        posts = [{'author': {'ID': '12'}}, {'author': {'ID': '13'}},
+                 {'author': {'ID': '14'}}, {'author': {'ID': '15'}},
+                 {'author': {'ID': '21'}}, {'author': {'ID': '13'}}]
         assert_equals(self.manager._getUniqueAuthors(posts),
                       {'12', '13', '14', '15', '21'})
         assert_equals(self.manager._getUniqueAuthors(list()), set())
@@ -72,12 +73,13 @@ class TestLeagueManager(TestCase):
         parser = MagicMock()
         self.manager.ABUSE_THRESHOLD = 5
         self.database.sheet.ID = "ID"
-        parser.getPosts.return_value = [{'author': '192', 'message': '',
+        parser.getPosts.return_value = [{'author': {'ID': '192'},
+            'message': '',
             'title': 'Some title that does not contain [CSL] at the start'},
-            {'author': '12'}, {'author': '90'}, {'author': '12'},
-            {'author': '3'}]
+            {'author': {'ID': '12'}}, {'author': {'ID': '90'}},
+            {'author': {'ID': '12'}}, {'author': {'ID': '3'}}]
         assert_raises(ThreadError, self.manager._validateThread, parser)
-        parser.getPosts.return_value.append({'author': '390'})
+        parser.getPosts.return_value.append({'author': {'ID': '390'}})
         assert_raises(ThreadError, self.manager._validateThread, parser)
         parser.getPosts.return_value[0]['message'] = '!validate_league ID'
         assert_raises(ThreadError, self.manager._validateThread, parser)
@@ -113,12 +115,14 @@ class TestLeagueManager(TestCase):
         self.commands.findEntities.return_value = [{'Command': 'THREAD',
             'Args': '4309340840'},]
         parser.return_value.getPosts.return_value = [{'message':
-            '!validate_league ID', 'title': '[CSL] Some Thread', 'author': 0},
-            {'author': 1}, {'author': 2}, {'author': 3}, {'author': 2}]
+            '!validate_league ID', 'title': '[CSL] Some Thread',
+            'author': {'ID': 0}}, {'author': {'ID': 1}},
+            {'author': {'ID': 2}}, {'author': {'ID': 3}},
+            {'author': {'ID': 2}}]
         self.manager._fetchLeagueThread()
         failStr = "Thread must have posts by at least 5 unique authors"
         log.assert_called_once_with(failStr, error=True)
-        parser.return_value.getPosts.return_value.append({'author': 4})
+        parser.return_value.getPosts.return_value.append({'author': {'ID': 4}})
         assert_equals(self.manager._fetchLeagueThread(),
                       parser.return_value)
         parser.assert_called_with(4309340840)

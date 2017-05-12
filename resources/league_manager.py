@@ -85,7 +85,7 @@ class LeagueManager(object):
     @staticmethod
     def _getUniqueAuthors(posts):
         authors = set()
-        for post in posts: authors.add(post['author'])
+        for post in posts: authors.add(post['author']['ID'])
         return authors
 
     def _validateThread(self, parser):
