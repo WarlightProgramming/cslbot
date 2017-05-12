@@ -1865,7 +1865,7 @@ class TestLeague(TestCase):
                       self.games.findEntities.return_value)
 
     def test_isAbandoned(self):
-        players = [{'state': 'VotedToEnd'}, {'state': 'Waiting'},
+        players = [{'state': 'EndedByVote'}, {'state': 'Waiting'},
                    {'state': 'Declined'}, {'state': 'Wyoming'}]
         assert_true(self.league._isAbandoned(players))
         players = [{'state': 'Declined'}, {'state': 'Won'},
@@ -2177,11 +2177,12 @@ class TestLeague(TestCase):
         self.league._finishGameForTeams(({1, 2}, {3, 4, 5}, {6}))
         assert_equals(adj.call_count, 6)
 
+    @patch('resources.league.League._updateVeto')
     @patch('resources.league.League._finishGameForTeams')
     @patch('resources.league.League._updateRatings')
     @patch('resources.league.League._getNewRatings')
     @patch('resources.league.League._setWinners')
-    def test_updateResults(self, setWin, getNew, update, finish):
+    def test_updateResults(self, setWin, getNew, update, finish, veto):
         self.league._updateResults(3, [{1, 2}, {3, 4}], 0)
         setWin.assert_called_once_with(3, {1, 2}, False)
         update.assert_called_once_with(getNew.return_value)
@@ -2190,6 +2191,8 @@ class TestLeague(TestCase):
         setWin.assert_called_with(12, {3,}, False)
         assert_equals(update.call_count, 1)
         finish.assert_called_with([{1,}, {3,}])
+        self.league._updateResults(3, [{1, 2}, {3, 4}], None)
+        veto.assert_called_once_with(3)
 
     @patch('resources.league.League._updateResults')
     @patch('resources.league.League._findTeamsFromData')
@@ -2208,7 +2211,8 @@ class TestLeague(TestCase):
         self.teams.updateMatchingEntities.assert_called_with({'ID':
             {'value': 7, 'type': 'positive'}}, {'Limit': 0})
         get.return_value = list()
-        assert_raises(NameError, self.league._updateWinners, 1, ([43,44], []))
+        self.league._updateWinners(1, ([43,44], []))
+        update.assert_called_with(1, get.return_value, None)
 
     @patch('resources.league.League._changeLimit')
     @patch('resources.league.League._updateGameVetos')

@@ -842,7 +842,8 @@ class League(object):
     def _findRatingAtPercentile(self, percentile):
         if percentile == 0: return None
         ratings = self.teams.findValue({'ID': {'value': '',
-                                               'type': 'negative'}}, "Rating")
+            'type': 'negative'}, 'Limit': {'value': '0', 'type': 'negative'}},
+            "Rating")
         if len(ratings) == 0: return None
         for i in xrange(len(ratings)):
             ratings[i] = int(self._prettifyRating(ratings[i]))
@@ -1746,7 +1747,7 @@ class League(object):
     @staticmethod
     def _isAbandoned(players):
         for player in players:
-            if player['state'] == 'VotedToEnd': return True
+            if player['state'] == 'EndedByVote': return True
             elif player['state'] == 'Won': return False
         return False
 
@@ -2103,6 +2104,9 @@ class League(object):
     @noisy
     def _updateResults(self, gameID, sides, winningSide, adj=True,
                       declined=False):
+        if winningSide is None:
+            self._updateVeto(gameID)
+            return
         adj = (adj and self.retentionRange is None)
         self._setWinners(gameID, sides[winningSide], declined)
         if adj:
@@ -2127,7 +2131,7 @@ class League(object):
     @noisy
     def _updateWinners(self, gameID, groups):
         winners, gameData = self._handleBooted(gameID, groups)
-        sides = self._getGameSidesFromData(gameData)
+        sides, winningSide = self._getGameSidesFromData(gameData), None
         winningTeams = self._findTeamsFromData(gameData, winners)
         for i in xrange(len(sides)):
             side = sides[i]
