@@ -3473,7 +3473,7 @@ class League(object):
 
     def _assembleAddOrder(self, order, templateName, warlightID):
         orders = [templateName, warlightID]
-        if self.multischeme: orders.append(order['scheme'])
+        if self.multischeme: orders.append(order['schemes'])
         orders += self._disassembleSettings(order.get('settings', dict()))
         orders += self._disassembleOverrides(order.get('overrides', dict()))
         return orders
@@ -3481,7 +3481,7 @@ class League(object):
     @checkAgent
     def addTemplate(self, order):
         author, tempName, warlightID = self._depackageOrder(order, 'author',
-                                           'templateName', 'warlightID')
+            'templateName', 'warlightID')
         orders = self._assembleAddOrder(order, tempName, warlightID)
         self._addTemplate(self._makeDummy('add_template', author, *orders))
 
